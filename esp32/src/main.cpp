@@ -125,8 +125,8 @@ void setup() {
     // ---- BLE HID：以标准键盘+鼠标复合设备被主机发现 ----
     // 关键：GAP Appearance = 0x03C1 (HID Keyboard)，这是 iOS 外设做不到、
     // 而 ESP32 可以做的。键盘类设备在 Windows / iPadOS 上的配对流程最成熟。
+    // 注意：1.4.3 的 Appearance 只能设在广播对象上，NimBLEDevice 没有对应静态方法。
     NimBLEDevice::init("PT-Pad");
-    NimBLEDevice::setAppearance(0x03C1);
     // 不强制配对（bonding/mitm/secure 全 false）。Windows 可能仍弹出配对提示，配对一次即可。
     NimBLEDevice::setSecurityAuth(false, false, false);
 
