@@ -10,6 +10,23 @@ struct ContentView: View {
             ScrollView {
                 VStack(spacing: 18) {
 
+                    // 诊断卡片：显示上次运行最后到达的阶段（异常闪退时用于定位）
+                    if let stage = hid.lastStage, !stage.hasPrefix("7") {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("上次运行记录")
+                                .font(.caption.weight(.semibold))
+                            Text(stage)
+                                .font(.system(size: 11, design: .monospaced))
+                            Text("若每次都停在同一步，把这段文字发回即可定位。")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(12)
+                        .background(Color.orange.opacity(0.15),
+                                    in: RoundedRectangle(cornerRadius: 12))
+                    }
+
                     // 状态卡片
                     VStack(alignment: .leading, spacing: 10) {
                         HStack {
@@ -27,6 +44,11 @@ struct ContentView: View {
                         Text("iPad 上打开 设置 > 蓝牙，在「其他设备」里选择 PT-Pad 完成配对。")
                             .font(.caption)
                             .foregroundStyle(.secondary)
+                        if !hid.isAdvertising {
+                            Text("打开 App 后请先点下方「开始广播」启动蓝牙。")
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                        }
 
                         HStack(spacing: 10) {
                             Button {

@@ -13,7 +13,9 @@ struct PocketTrackpadApp: App {
                 .onAppear {
                     // 锁屏后 iOS 会停止 BLE 广播，因此使用期间保持屏幕常亮。
                     UIApplication.shared.isIdleTimerDisabled = true
-                    hid.start()
+                    // 不自动启动蓝牙，改由界面上的「开始广播」按钮触发。
+                    // 万一某一步仍触发系统异常，App 至少能停在界面上显示上次
+                    // 运行到哪个阶段，而不是一打开就被杀掉、什么线索都看不到。
                 }
                 .onDisappear {
                     UIApplication.shared.isIdleTimerDisabled = false

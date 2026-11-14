@@ -26,10 +26,8 @@
 	<string>用于把本机虚拟成蓝牙触控板，向 iPad 发送指针移动、点击与滚动数据。</string>
 	<key>NSBluetoothPeripheralUsageDescription</key>
 	<string>用于把本机虚拟成蓝牙触控板，向 iPad 发送指针移动、点击与滚动数据。</string>
-	<key>UIBackgroundModes</key>
-	<array>
-		<string>bluetooth-peripheral</string>
-	</array>
+	<!-- 刻意不声明 UIBackgroundModes：本 App 必须前台常亮运行，
+	     免费 Apple ID 侧载时某些后台模式会被内核校验拒绝、导致点开即闪退。 -->
 	<key>UILaunchScreen</key>
 	<dict>
 		<key>UIColorName</key>

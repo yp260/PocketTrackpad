@@ -43,7 +43,7 @@ PocketTrackpad/
     ├── TrackpadSurface.swift         UIKit 手势识别（单指移动、双指滚动、轻点、长按）
     ├── HIDPeripheral.swift           CoreBluetooth 外设 + HOGP GATT 数据库 + 报告上报
     ├── HIDDescriptor.swift           UUID 定义、HID Report Descriptor、报告打包
-    └── Info.plist                    蓝牙权限、后台 bluetooth-peripheral
+    └── Info.plist                    蓝牙权限（不含后台模式）
 ```
 
 ### GATT 结构
@@ -103,7 +103,7 @@ open PocketTrackpad.xcodeproj
 2. Product Name 填 `PocketTrackpad`，Interface 选 SwiftUI，Language 选 Swift。
 3. 删除自动生成的 `ContentView.swift` 和 App 入口文件。
 4. 把本目录 `PocketTrackpad/` 下的 5 个 `.swift` 文件拖进工程（勾选 Copy items if needed）。
-5. 用本目录的 `Info.plist` 替换自动生成的，或在 Target → Info 里补齐 `NSBluetoothAlwaysUsageDescription` 与 `UIBackgroundModes = bluetooth-peripheral`。
+5. 用本目录的 `Info.plist` 替换自动生成的，或在 Target → Info 里补齐 `NSBluetoothAlwaysUsageDescription`（不要加后台模式，见第十三节）。
 6. Build Settings → Swift Language Version 设为 Swift 5，Deployment Target 设为 iOS 16.0。
 7. 真机运行。
 
@@ -160,7 +160,7 @@ open PocketTrackpad.xcodeproj
 | --- | --- |
 | 非公开行为 | 128 位 UUID 绕过不在任何 Apple 文档中，属于实现细节，iOS 大版本更新后必须回归验证 |
 | App Store 审核 | 未使用私有 API，全部是公开 CoreBluetooth 接口；但功能定位可能被审查质疑。Bluetouch、Tracepad、AirBoard 已上架，说明不是绝对禁止，但不构成通过保证 |
-| 后台限制 | `UIBackgroundModes: bluetooth-peripheral` 只保证有限后台，锁屏后广播大概率停止，不能当常驻鼠标用 |
+| 后台限制 | App 必须前台、屏幕常亮；锁屏或切后台后 iOS 会停止 BLE 广播，不能当常驻鼠标用 |
 | 手势上限 | 只能发标准 HID 鼠标事件（位移 / 三键 / 滚轮），无法发送 iPadOS 的三指、四指系统手势 |
 | GAP Appearance | CoreBluetooth 不公开设置 Appearance，本项目未声明 Mouse(0x03C2)。若某台 iPad 因此拒绝接管，只能改走硬件桥 |
 | 测试状态 | 本工程在 Windows 上编写，未编译、未真机验证，需你在 Mac 上完成首次构建与联调 |
@@ -292,7 +292,7 @@ https://github.com/<owner>/<repo>/releases/download/<tag>/PocketTrackpad-unsigne
 
 ### 对这个 App 的适配结论
 
-- `NSBluetoothAlwaysUsageDescription` 和 `UIBackgroundModes: bluetooth-peripheral` 都在 `Info.plist`，重签不会丢失，BLE 外设功能不受影响。
+- 蓝牙用途说明（`NSBluetoothAlwaysUsageDescription` / `NSBluetoothPeripheralUsageDescription`）都在 `Info.plist`，重签不会丢失，BLE 外设功能不受影响；`Info.plist` 刻意不声明 `UIBackgroundModes`，避免免费账号侧载的 entitlement 校验冲突（见第十三节）。
 - 本工程没有使用推送、App Group、关联域名、Keychain Sharing 等付费 entitlement，所以免费账号重签**不会导致功能缺失**。
 - Sideloadly 可能改写 Bundle ID，对蓝牙 HID 功能无影响。
 - 后台限制依旧：锁屏或切后台后广播会停，与签名方式无关。
@@ -519,3 +519,34 @@ $env:HTTPS_PROXY = "http://127.0.0.1:7898"
 ### 比一键更省事的选择
 
 如果只是想让 iPhone 立刻变成 iPad 的鼠标，不需要自研包：在 iPhone 的 App Store 搜 **Bluetouch**、**Tracepad** 或 **AirBoard**，点安装即可，iPad 端不用装任何东西。这是唯一连电脑都不用开的做法。
+
+## 十三、启动闪退修复（v0.0.2）
+
+首个可用包 `v0.0.1-9c0ebf3` 在真机上「点开即退」。根因已定位并修复，不是签名问题。
+
+**CoreBluetooth 的硬规则**：用 `CBMutableCharacteristic(type:properties:value:permissions:)` 创建特征时，只要 `value` 不是 `nil`，该特征就是「缓存值特征」，系统强制它只能只读。若同时声明 `.notify` 或 `.write`，`CBPeripheralManager.add(service)` 会抛
+
+```
+NSInternalInconsistencyException: "Characteristics with cached values must be read-only"
+```
+
+这是 Objective-C 异常，Swift 捕获不到，进程直接终止。v0.0.1 里 Report(2A4D)、Boot Report(2A33)、Protocol Mode(2A4E)、Control Point(2A4C) 以及 Device Info / Battery 的特征全都既传了 `value` 又带 notify/write；而 `.onAppear` 里自动调用 `hid.start()`，蓝牙一进 `poweredOn` 就注册服务，所以一打开就闪退。
+
+| 修复项 | 做法 |
+| --- | --- |
+| 特征值 | `makeChar` 一律 `value: nil`，所有值由 `peripheralManager(_:didReceiveRead:)` 动态提供（已覆盖全部 10 个可读特征，Report Map 的 offset 分段读取也保留） |
+| 启动方式 | 去掉 `.onAppear` 里的自动 `hid.start()`，改由界面「开始广播」按钮触发；即使某一步再出异常，App 也能停在界面上显示线索 |
+| 诊断 | 每推进一个阶段就写入 `UserDefaults`，下次启动在顶部显示「上次运行记录」（阶段 1～7）；若每次都停在同一步，把那段文字发回即可定位 |
+| 后台模式 | 从 `Info.plist` 删除 `UIBackgroundModes`。本 App 必须前台常亮，后台模式无用，且免费 Apple ID 侧载时某些后台模式会触发 entitlement 校验导致秒退 |
+
+> 升级安装时建议先删掉旧 App 再装新包，避免旧的阶段记录干扰判断。
+
+### 如果新包仍然闪退
+
+优先拿系统崩溃日志，这是唯一能确定原因的证据：
+
+1. iPhone：设置 → 隐私与安全性 → 分析与改进 → 分析数据，找以 `PocketTrackpad` 开头的 `.ips` 文件，点右上角分享导出。
+2. Windows 端 Sideloadly 的高级选项里有 **View Device System Logs**，可实时查看终止原因。
+3. 把 `.ips` 文件发回来即可解析（内含异常类型、终止原因与调用栈）。
+
+同时确认三件事：开发者模式已开启、设置 → 通用 → VPN 与设备管理里证书已信任、签名未超过 7 天。

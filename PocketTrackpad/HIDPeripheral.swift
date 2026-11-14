@@ -18,6 +18,11 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
     @Published var scrollSensitivity: Double = 1.0
     @Published var naturalScrolling = true
 
+    private static let stageKey = "PocketTrackpad.lastStage"
+    /// 上次运行最后到达的阶段。App 若被异常杀掉，下次启动可直接看到卡在哪一步。
+    @Published private(set) var lastStage: String? =
+        UserDefaults.standard.string(forKey: HIDPeripheral.stageKey)
+
     // MARK: - CoreBluetooth
     private var manager: CBPeripheralManager?
     private var inputReport: CBMutableCharacteristic?
@@ -41,6 +46,7 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
     // MARK: - 生命周期
 
     func start() {
+        mark("1 调用 start()")
         if manager == nil {
             // 所有 delegate 回调都落在主线程，避免 UI 状态跨线程写入。
             manager = CBPeripheralManager(
@@ -48,6 +54,7 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
                 queue: .main,
                 options: [CBPeripheralManagerOptionShowPowerAlertKey: true]
             )
+            mark("2 已创建 CBPeripheralManager")
             note("已创建 CBPeripheralManager")
         }
         if link == nil {
@@ -75,14 +82,21 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
 
     // MARK: - GATT 数据库
 
+    /// value 必须是 nil。
+    ///
+    /// CoreBluetooth 规定：初始化时带缓存值（cached value）的特征只能设为只读。
+    /// 若同时声明 .notify / .write，manager.add(service) 会抛
+    /// NSInternalInconsistencyException:
+    ///   "Characteristics with cached values must be read-only"
+    /// Swift 捕获不到 Objective-C 异常，表现就是 App 一打开立刻闪退。
+    /// 因此所有特征值改由 peripheralManager(_:didReceiveRead:) 动态提供。
     private func makeChar(_ uuid: CBUUID,
                           properties: CBCharacteristicProperties,
                           permissions: CBAttributePermissions,
-                          value: Data?,
                           descriptors: [CBMutableDescriptor]? = nil) -> CBMutableCharacteristic {
         let c = CBMutableCharacteristic(type: uuid,
                                         properties: properties,
-                                        value: value,
+                                        value: nil,
                                         permissions: permissions)
         if let descriptors = descriptors { c.descriptors = descriptors }
         return c
@@ -96,27 +110,26 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
 
         // ---- HID Service 0x1812 ----
         let info = makeChar(HIDSpec.hidInformation, properties: [.read],
-                            permissions: encRead, value: HIDSpec.hidInformationValue)
+                            permissions: encRead)
         let control = makeChar(HIDSpec.hidControlPoint,
                                properties: [.write, .writeWithoutResponse],
-                               permissions: [.writeable, .writeEncryptionRequired],
-                               value: Data([0x00]))
+                               permissions: [.writeable, .writeEncryptionRequired])
         let map = makeChar(HIDSpec.reportMap, properties: [.read],
-                           permissions: encRead, value: HIDSpec.activeReportMap)
+                           permissions: encRead)
         let mode = makeChar(HIDSpec.protocolMode, properties: [.read, .write],
-                            permissions: encRW, value: Data([0x01]))
+                            permissions: encRW)
 
+        // Descriptor 是静态元数据，允许带值；Characteristic 不允许。
         let reportRef = CBMutableDescriptor(type: HIDSpec.reportReference,
                                             value: HIDSpec.reportReferenceValue)
         let report = makeChar(HIDSpec.report, properties: [.read, .notify],
                               permissions: encRead,
-                              value: HIDSpec.emptyReport(),
                               descriptors: [reportRef])
         inputReport = report
 
         // Boot Mouse Input Report：iOS 在 Boot Protocol 下会走这个特征，必须提供。
         let boot = makeChar(HIDSpec.bootMouseInputReport, properties: [.read, .notify],
-                            permissions: encRead, value: Data([0x00, 0x00, 0x00]))
+                            permissions: encRead)
         bootReport = boot
 
         let hid = CBMutableService(type: HIDSpec.hidService, primary: true)
@@ -125,14 +138,10 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         // ---- Device Information 0x180A ----
         let dis = CBMutableService(type: HIDSpec.deviceInformation, primary: true)
         dis.characteristics = [
-            makeChar(HIDSpec.manufacturerName, properties: [.read], permissions: plainRead,
-                     value: Data("PocketTrackpad".utf8)),
-            makeChar(HIDSpec.modelNumber, properties: [.read], permissions: plainRead,
-                     value: Data("PT-01".utf8)),
-            makeChar(HIDSpec.firmwareRevision, properties: [.read], permissions: plainRead,
-                     value: Data("1.0.0".utf8)),
-            makeChar(HIDSpec.pnpID, properties: [.read], permissions: plainRead,
-                     value: HIDSpec.pnpIDValue)
+            makeChar(HIDSpec.manufacturerName, properties: [.read], permissions: plainRead),
+            makeChar(HIDSpec.modelNumber, properties: [.read], permissions: plainRead),
+            makeChar(HIDSpec.firmwareRevision, properties: [.read], permissions: plainRead),
+            makeChar(HIDSpec.pnpID, properties: [.read], permissions: plainRead)
         ]
 
         // ---- Battery Service 0x180F ----
@@ -140,7 +149,7 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         let bas = CBMutableService(type: HIDSpec.batteryService, primary: true)
         bas.characteristics = [
             makeChar(HIDSpec.batteryLevel, properties: [.read, .notify],
-                     permissions: plainRead, value: Data([100]))
+                     permissions: plainRead)
         ]
 
         return [hid, dis, bas]
@@ -150,7 +159,9 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         guard !databaseBuilt, let manager = manager, manager.state == .poweredOn else { return }
         databaseBuilt = true
         serviceFailed = false
+        mark("3 蓝牙 poweredOn，构建 GATT 数据库")
         servicesToAdd = makeServices()
+        mark("4 已构造 3 个 CBMutableService")
         note("开始注册 GATT 服务（HID / Device Info / Battery）")
         addNextService()
     }
@@ -165,11 +176,13 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
             return
         }
         let s = servicesToAdd.removeFirst()
+        mark("5 调用 add() 注册服务 \(HIDSpec.short(s.uuid))")
         manager?.add(s)
     }
 
     private func advertise() {
         guard let manager = manager, manager.state == .poweredOn, !isAdvertising else { return }
+        mark("6 全部服务注册完成，准备广播")
         // 广播包只有 31 字节，设备名必须短；128 位 UUID 单独占 18 字节。
         // 这里只放 HID Service，不放 Device Info，避免被系统截断。
         manager.startAdvertising([
@@ -222,6 +235,7 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         } else {
             isAdvertising = true
             statusText = "等待 iPad 配对"
+            mark("7 运行中（广播正常）")
             note("请在 iPad：设置 > 蓝牙 > 其他设备 > 选择 PT-Pad")
         }
     }
@@ -398,6 +412,12 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         f.dateFormat = "HH:mm:ss"
         return f
     }()
+
+    /// 每次推进都落盘，异常杀进程后下次启动能回看最后停在哪个阶段。
+    private func mark(_ stage: String) {
+        UserDefaults.standard.set(stage, forKey: HIDPeripheral.stageKey)
+        lastStage = stage
+    }
 
     private func note(_ text: String) {
         let line = "\(timeFormatter.string(from: Date()))  \(text)"
