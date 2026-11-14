@@ -280,7 +280,7 @@ struct SettingsView: View {
                 LabeledRow(title: "三指上滑", detail: "回桌面（Command + H）")
                 LabeledRow(title: "全键盘", detail: "两页键位 + 下方小触控区（可移动指针）")
                 LabeledRow(title: "输入报告",
-                           detail: hid.compositeDevice ? "12 字节（鼠标 4 + 键盘 8）" : "4 字节（纯鼠标）")
+                           detail: hid.compositeDevice ? "12 字节（键盘 8 + 鼠标 4）" : "4 字节（纯鼠标）")
             } header: {
                 Text("实验功能 · 全键盘与回桌面")
             } footer: {
@@ -296,7 +296,7 @@ struct SettingsView: View {
             } header: {
                 Text("硬件桥（ESP32）")
             } footer: {
-                Text("iOS 的蓝牙外设无法设置 GAP Appearance，Windows 因此搜不到本机虚拟键鼠；ESP32 可以，所以把「被主机发现」交给它。开启后本机不再广播，改为把输入通过 WiFi 发给 ESP32，由 ESP32 以标准 BLE HID（Appearance 0x03C2）连上 Windows / Android。需要一台 ESP32-C3 开发板并烧录本仓库 esp32/ 目录的固件，详见 README。")
+                Text("iOS 的蓝牙外设无法设置 GAP Appearance，Windows 因此搜不到本机虚拟键鼠；ESP32 可以，所以把「被主机发现」交给它。开启后本机不再广播，改为把输入通过 WiFi 发给 ESP32，由 ESP32 以标准 BLE HID（Appearance 0x03C1 键盘，键盘描述符在前）连上 Windows / Android / iPad。需要一台 ESP32-C3 开发板并烧录本仓库 esp32/ 目录的固件，详见 README。")
                     .font(.caption)
             }
 

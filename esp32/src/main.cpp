@@ -1,15 +1,19 @@
-// PocketTrackpad 硬件桥固件（ESP32-C3）
+// PocketTrackpad 硬件桥固件（ESP32-C3，NimBLE-Arduino 1.4.3）
 //
 // 角色：iPhone 把 12 字节复合 HID 报告通过 WiFi UDP 发给本设备，
-// 本设备以「标准 BLE HID（带正确 GAP Appearance = 0x03C2）」转发给 Windows / Android。
+// 本设备以「标准 BLE HID」转发给 Windows / Android / iPad。
 //
 // 为什么需要它：iOS 的 CoreBluetooth 外设无法设置 GAP Appearance，
 // Windows 等主机因此搜不到 / 配对失败。ESP32 能在广播里设置 Appearance，
 // 所以把「被主机发现」这一步交给它，iPhone 只负责采集输入。
 //
-// 报告布局（12 字节，与 iOS 端 HIDSpec.compositeReportMap 逐字节对应）：
-//   [buttons, dx, dy, wheel, modifier, reserved, key1..key6]
+// 报告布局（12 字节，与 iOS 端 HIDSpec.compositeReportMap 逐字节对应，
+// v0.0.18 起键盘字段在前——与实体键鼠一体键盘的描述符排列一致）：
+//   [modifier, reserved, key1..key6, buttons, dx, dy, wheel]
 // 其中 buttons: bit0=左 bit1=右 bit2=中；dx/dy/wheel 为有符号 8 位相对量。
+//
+// Appearance = HID Keyboard (0x03C1)：让主机把设备当键盘对待。
+// iPad 上这样才可能隐藏软键盘、候选词带数字；Windows 上键盘类配对最成熟。
 //
 // 配套 iPhone 端：PocketTrackpad/HIDDescriptor.swift 的 compositeReportMap，
 // 以及 PocketTrackpad/BridgeTransport.swift 的 UDP 协议（hello 0x5054 / welcome 0x5450）。
@@ -27,39 +31,11 @@ static const uint16_t UDP_PORT = 5000;
 static WiFiUDP udp;
 
 // ---- BLE HID 描述符 ----
-// 与 iOS 端 compositeReportMap（Mouse Collection + Keyboard Collection，无 Report ID）完全一致：
-//   Mouse:   按钮(3bit)+填充(5bit) + X(8) + Y(8) + Wheel(8)
+// 与 iOS 端 compositeReportMap（Keyboard Collection + Mouse Collection，无 Report ID）完全一致：
 //   Keyboard: modifier(8) + reserved(8) + 6 个键码(各 8)
+//   Mouse:   按钮(3bit)+填充(5bit) + X(8) + Y(8) + Wheel(8)
 static const uint8_t reportMap[] = {
-    // ---------- Mouse Collection ----------
-    0x05, 0x01,        // Usage Page (Generic Desktop)
-    0x09, 0x02,        // Usage (Mouse)
-    0xA1, 0x01,        // Collection (Application)
-    0x09, 0x01,        //   Usage (Pointer)
-    0xA1, 0x00,        //   Collection (Physical)
-    0x05, 0x09,        //     Usage Page (Button)
-    0x19, 0x01,        //     Usage Minimum (Button 1)
-    0x29, 0x03,        //     Usage Maximum (Button 3)
-    0x15, 0x00,        //     Logical Minimum (0)
-    0x25, 0x01,        //     Logical Maximum (1)
-    0x75, 0x01,        //     Report Size (1)
-    0x95, 0x03,        //     Report Count (3)
-    0x81, 0x02,        //     Input (Data, Var, Abs)  -> 3 个按键位
-    0x75, 0x05,        //     Report Size (5)
-    0x95, 0x01,        //     Report Count (1)
-    0x81, 0x03,        //     Input (Const, Var, Abs) -> 5 位填充
-    0x05, 0x01,        //     Usage Page (Generic Desktop)
-    0x09, 0x30,        //     Usage (X)
-    0x09, 0x31,        //     Usage (Y)
-    0x09, 0x38,        //     Usage (Wheel)
-    0x15, 0x81,        //     Logical Minimum (-127)
-    0x25, 0x7F,        //     Logical Maximum (127)
-    0x75, 0x08,        //     Report Size (8)
-    0x95, 0x03,        //     Report Count (3)
-    0x81, 0x06,        //     Input (Data, Var, Rel)  -> X / Y / Wheel
-    0xC0,              //   End Collection (Physical)
-    0xC0,              // End Collection (Application)
-    // ---------- Keyboard Collection ----------
+    // ---------- Keyboard Collection（在前，v0.0.18）----------
     0x05, 0x01,        // Usage Page (Generic Desktop)
     0x09, 0x06,        // Usage (Keyboard)
     0xA1, 0x01,        // Collection (Application)
@@ -91,22 +67,51 @@ static const uint8_t reportMap[] = {
     0x75, 0x03,        //   Report Size (3)
     0x95, 0x01,        //   Report Count (1)
     0x91, 0x03,        //   Output (Const) -> 3 位填充
+    0xC0,              // End Collection (Application)
+    // ---------- Mouse Collection ----------
+    0x05, 0x01,        // Usage Page (Generic Desktop)
+    0x09, 0x02,        // Usage (Mouse)
+    0xA1, 0x01,        // Collection (Application)
+    0x09, 0x01,        //   Usage (Pointer)
+    0xA1, 0x00,        //   Collection (Physical)
+    0x05, 0x09,        //     Usage Page (Button)
+    0x19, 0x01,        //     Usage Minimum (Button 1)
+    0x29, 0x03,        //     Usage Maximum (Button 3)
+    0x15, 0x00,        //     Logical Minimum (0)
+    0x25, 0x01,        //     Logical Maximum (1)
+    0x75, 0x01,        //     Report Size (1)
+    0x95, 0x03,        //     Report Count (3)
+    0x81, 0x02,        //     Input (Data, Var, Abs)  -> 3 个按键位
+    0x75, 0x05,        //     Report Size (5)
+    0x95, 0x01,        //     Report Count (1)
+    0x81, 0x03,        //     Input (Const, Var, Abs) -> 5 位填充
+    0x05, 0x01,        //     Usage Page (Generic Desktop)
+    0x09, 0x30,        //     Usage (X)
+    0x09, 0x31,        //     Usage (Y)
+    0x09, 0x38,        //     Usage (Wheel)
+    0x15, 0x81,        //     Logical Minimum (-127)
+    0x25, 0x7F,        //     Logical Maximum (127)
+    0x75, 0x08,        //     Report Size (8)
+    0x95, 0x03,        //     Report Count (3)
+    0x81, 0x06,        //     Input (Data, Var, Rel)  -> X / Y / Wheel
+    0xC0,              //   End Collection (Physical)
     0xC0               // End Collection (Application)
 };
 
+// NimBLE 1.4.3 的 HID 外设对象；inputReportChar 在 setup 里一次性创建并缓存。
 static NimBLEHIDDevice* hid = nullptr;
+static NimBLECharacteristic* inputReportChar = nullptr;
 
-// 把一条 HID 报告发给已订阅的主机（Windows / Android）。
+// 把一条 HID 报告发给已订阅的主机。
 static void sendHidReport(const uint8_t* data, size_t len) {
-    NimBLECharacteristic* chr = hid->inputReport();
-    if (chr == nullptr) return;
-    chr->setValue((uint8_t*)data, len);
-    chr->notify();
+    if (inputReportChar == nullptr) return;
+    inputReportChar->setValue((uint8_t*)data, len);
+    inputReportChar->notify();
 }
 
 void setup() {
     Serial.begin(115200);
-    Serial.println("\nPocketTrackpad ESP32 硬件桥启动");
+    Serial.println("\nPocketTrackpad ESP32 硬件桥启动（键盘在前 / Appearance=Keyboard）");
 
     // ---- WiFi 热点：iPhone 连上来后通过 UDP 发输入报告 ----
     WiFi.softAP(AP_SSID, AP_PASS);
@@ -117,23 +122,30 @@ void setup() {
     udp.begin(UDP_PORT);
     Serial.printf("UDP 监听端口: %u\n", UDP_PORT);
 
-    // ---- BLE HID：以标准鼠标+键盘复合设备被主机发现 ----
-    // 关键：设置 GAP Appearance = 0x03C2 (Mouse)，这是 iOS 外设做不到、而 ESP32 可以做的。
+    // ---- BLE HID：以标准键盘+鼠标复合设备被主机发现 ----
+    // 关键：GAP Appearance = 0x03C1 (HID Keyboard)，这是 iOS 外设做不到、
+    // 而 ESP32 可以做的。键盘类设备在 Windows / iPadOS 上的配对流程最成熟。
     NimBLEDevice::init("PT-Pad");
-    NimBLEDevice::setAppearance(0x03C2);
+    NimBLEDevice::setAppearance(0x03C1);
     // 不强制配对（bonding/mitm/secure 全 false）。Windows 可能仍弹出配对提示，配对一次即可。
     NimBLEDevice::setSecurityAuth(false, false, false);
 
     NimBLEServer* pServer = NimBLEDevice::createServer();
     hid = new NimBLEHIDDevice(pServer);
+    hid->manufacturer("PocketTrackpad");
+    hid->pnp(0x02 /*USB*/, 0x1234 /*VID*/, 0x0100 /*PID*/, 0x0100 /*版本*/);
+    hid->hidInfo(0x00 /*国家码*/, 0x02 /*Normally Connectable*/);
     hid->reportMap((uint8_t*)reportMap, sizeof(reportMap));
     hid->startServices();
+    // 我们的描述符不带 Report ID，因此 Report Reference 里写 0（与 iOS 端一致）。
+    inputReportChar = hid->inputReport(0);
+    hid->setBatteryLevel(100);
 
     NimBLEAdvertising* pAdv = NimBLEDevice::getAdvertising();
-    pAdv->setAppearance(0x03C2);
-    pAdv->addServiceUUID((uint16_t)0x1812);  // HID Service
+    pAdv->setAppearance(0x03C1);
+    pAdv->addServiceUUID(NimBLEUUID((uint16_t)0x1812));  // HID Service
     pAdv->start();
-    Serial.println("BLE HID 广播中：PT-Pad（鼠标 + 键盘）");
+    Serial.println("BLE HID 广播中：PT-Pad（键盘 + 鼠标，Appearance=Keyboard）");
 }
 
 void loop() {
@@ -153,7 +165,7 @@ void loop() {
             udp.write(0x50);
             udp.endPacket();
         } else if (n == 12) {
-            // 12 字节复合 HID 报告，原样转发给主机。
+            // 12 字节复合 HID 报告（键盘在前），原样转发给主机。
             sendHidReport(buf, 12);
         }
     }

@@ -830,7 +830,7 @@ Apple 开发者论坛（thread 72343）的官方回复：当外设同时有这�
 | Report Map | Mouse 一个 Application Collection | Mouse + Keyboard 两个 Application Collection |
 | Report ID | 无 | 无（HID 1.11 允许多顶层 Collection 共用一条报告） |
 | 2A4D 输入报告长度 | 4 字节 | 12 字节 |
-| 报告内容 | `[buttons, dx, dy, wheel]` | `[buttons, dx, dy, wheel, modifier, reserved, k1..k6]` |
+| 报告内容 | `[buttons, dx, dy, wheel]` | `[modifier, reserved, k1..k6, buttons, dx, dy, wheel]`（v0.0.18 起键盘字段在前） |
 | 2A33 Boot Mouse | 3 字节 | 3 字节（不变） |
 | GATT 结构 | 3 服务 / 6 特征 | **完全不变** |
 
@@ -934,8 +934,9 @@ Apple 开发者论坛（thread 72343）的官方回复：当外设同时有这�
 ### HID 链路
 
 `KeyboardPanel` 只负责把按键解析成 `(keycode, modifier)`，交给
-`HIDPeripheral.sendKey(_:modifiers:label:)`。报告仍是复合模式的 12 字节：
-`[buttons, dx, dy, wheel, modifier, reserved, k1..k6]`，键盘部分只占第 5、7 字节。
+`HIDPeripheral.sendKey(_:modifiers:label:)`。报告仍是复合模式的 12 字节（v0.0.18
+起键盘字段在前）：
+`[modifier, reserved, k1..k6, buttons, dx, dy, wheel]`，键盘部分占第 1、3 字节。
 每次按键按下约 0.06 秒，由 60Hz `tick()` 合帧发出，到期连发空键盘帧完成释放；
 连按同一个键前先补一帧「全松开」，避免漏字。鼠标点击插入的报告会保留当前按下的键，
 不会把键盘键提前松开。三指上滑的 `Command + H` 走同一条 `sendKey` 链路，
@@ -1378,13 +1379,13 @@ iPhone（PocketTrackpad App）
         │  WiFi UDP（连 ESP32 的 PT-Bridge 热点，端口 5000）
         ▼
 ESP32-C3（本仓库 esp32/ 固件）
-  收到 12 字节  →  以标准 BLE HID（Appearance=0x03C2）notify 给主机
+  收到 12 字节  →  以标准 BLE HID（Appearance=0x03C1 HID Keyboard）notify 给主机
         │  BLE HID over GATT
         ▼
-Windows / Android（标准蓝牙鼠标 + 键盘）
+Windows / Android / iPad（标准蓝牙键盘 + 鼠标）
 ```
 
-关键点：**iPhone 端那 12 字节复合报告的布局，与 ESP32 端 HID 描述符逐字节对应**（都源自 `HIDSpec.compositeReportMap`：鼠标 4 字节 + 键盘 8 字节）。App 里手势、键盘、三指上滑、粘滞修饰键等逻辑**完全不用改**，只是 `flush()` 在桥模式下改走 UDP 而不是本地 BLE。
+关键点：**iPhone 端那 12 字节复合报告的布局，与 ESP32 端 HID 描述符逐字节对应**（都源自 `HIDSpec.compositeReportMap`：v0.0.18 起键盘 8 字节在前 + 鼠标 4 字节）。App 里手势、键盘、三指上滑、粘滞修饰键等逻辑**完全不用改**，只是 `flush()` 在桥模式下改走 UDP 而不是本地 BLE。
 
 协议（见 `esp32/src/main.cpp` 与 `BridgeTransport.swift`）：
 
@@ -1408,8 +1409,8 @@ Windows / Android（标准蓝牙鼠标 + 键盘）
 | `PocketTrackpad/ContentView.swift` | 右上角按钮在桥模式下变为「连接/断开硬件桥」；引导页与设置新增桥模式指引；设置新增「硬件桥（ESP32）」分组 |
 | `PocketTrackpad/TrackpadSurface.swift` | 三指上滑提示在桥模式下也显示（Command+H 同样有效） |
 | `PocketTrackpad/Info.plist` | 新增 `NSLocalNetworkUsageDescription`（iOS 14+ 局域网 UDP 必需，弹窗需点允许） |
-| `esp32/src/main.cpp` | 新增：ESP32-C3 固件，WiFi AP + UDP 服务 + BLE HID 复合设备（Appearance 0x03C2） |
-| `esp32/platformio.ini` | 新增：PlatformIO 构建配置（board=esp32-c3-devkitm-1） |
+| `esp32/src/main.cpp` | 新增：ESP32-C3 固件，WiFi AP + UDP 服务 + BLE HID 复合设备（v0.0.18 改为键盘在前、Appearance 0x03C1、inputReport(0)、补 manufacturer/PnP/HID Info） |
+| `esp32/platformio.ini` | 新增：PlatformIO 构建配置（board=esp32-c3-devkitm-1）；v0.0.18 补 `lib_deps = h2zero/NimBLE-Arduino@1.4.3`（此前 CI 编译失败的原因） |
 | `.github/workflows/esp32-build.yml` | 新增：ESP32 固件编译并上传 `firmware.bin` 产物 |
 | `README.md` | 新增本节 |
 
@@ -1420,3 +1421,78 @@ Windows / Android（标准蓝牙鼠标 + 键盘）
 - **Windows 配对**：首次连接 Windows 可能弹蓝牙配对提示，配对一次即可；之后即插即用。
 - **报告布局必须保持一致**：若以后改了 iOS 端 `compositeReportMap`，ESP32 端 `reportMap[]` 要同步改，否则按键/位移错位。
 - 本机（Windows）无 ESP32 工具链，固件**未实机烧录验证**，仅靠 PlatformIO CI 编译通过；iPhone↔ESP32↔Windows 的端到端链路待你拿到开发板后真机确认。
+
+## 三十二、选词修复：让 iPad 把本设备当实体键盘（本轮新增）
+
+### 用户实测（v0.0.17）
+
+- 按 1-9 / 空格**仍然不能选词**。
+- 对比实体蓝牙键盘：连接 iPad 后**屏幕软键盘自动隐藏**，候选词上**带数字角标**，
+  直接按数字或空格就能选词。本 App 没有这个行为。
+
+### 根因分析
+
+能打字母说明 HID 键盘链路本身是通的，问题出在 iPadOS **对设备的归类**上：
+
+1. Apple DTS 论坛（developer.apple.com/forums/thread/773065）确认：**iPadOS 会审查
+   HID 配置，只有匹配它直接支持的类别（Keyboard / Mouse）的设备才被完整接管**。
+2. iPadOS 判定「硬件键盘在场」后才会隐藏软键盘、让输入法候选条进入键盘选词模式
+   （候选词带数字）。归类为「鼠标」的设备不会触发这套行为——数字键被当成文本上屏。
+3. 本 App 的复合描述符里 **Mouse Collection 排在 Keyboard Collection 之前**。
+   实体键鼠一体键盘（Magic Keyboard 等）都是**键盘 Collection 在最前**。
+   主机很可能按第一个顶层 Collection 判定设备主角色，于是本设备被归为「鼠标」。
+4. 实体键盘的 GATT 还有两样本 App 此前没提供的东西：
+   - **GAP Appearance**（广播包里 iOS 不允许 App 设置）；
+   - **Boot Keyboard Input / Output Report (0x2A22 / 0x2A23)**。
+
+### 三项改动（v0.0.18）
+
+| 改动 | 文件 | 说明 |
+| --- | --- | --- |
+| 键盘 Collection 提到描述符最前 | `HIDDescriptor.swift` | 复合报告字节序对调为 `[modifier, reserved, k1..k6, buttons, dx, dy, wheel]`，`makeReport` 同步；ESP32 端 `reportMap[]` 镜像更新 |
+| 补 Boot Keyboard 特征 | `HIDPeripheral.swift` / `HIDDescriptor.swift` | 新增 0x2A22（read+notify）/ 0x2A23（read+write）挂到 HID 服务；Report Protocol 下键盘输入仍走 2A4D，这两个特征只影响归类 |
+| 补 GAP Appearance 特征 | `HIDPeripheral.swift` / `HIDDescriptor.swift` | 以 128 位形式注册 0x1800 服务，内含 2A01 = `0x03C1`（HID Keyboard，小端 `C1 03`）。广播包放不了 Appearance，但主机绑定阶段会读 2A01。注册失败仅日志报错，不影响主链路 |
+
+键盘 UI 的选词提示同步改写：iPad 隐藏软键盘后按 1-9 / 空格选词；若软键盘仍显示，
+退回小触控区点顶部候选条（v0.0.17 主路径，始终可用）。
+
+### 预期与验证步骤
+
+1. 安装新版 IPA 后，iPad「设置 > 蓝牙」里**忽略此设备**（缓存的旧 Report Map 必须刷新）。
+2. App 里点「开始广播」，重新配对。
+3. 打开任意输入框：若 **iPad 软键盘不再弹出**（和插实体键盘一样的表现），说明归类成功，
+   拼音候选词应带数字角标，按 1-9 / 空格即可选词。
+4. 若软键盘仍弹出，键盘选词大概率仍不可用，继续用小触控区点候选条（稳定可用）。
+
+### 回退
+
+- 新描述符万一导致 iPad 拒绝接管（指针 / 键盘全失效）：设置里关掉「键鼠复合模式」→
+  iPad 忽略此设备 → 重新广播配对，即回纯鼠标（与 v0.0.7 相同的 4 字节报告）。
+- 若纯鼠标也失效（说明当前 iPadOS 版本拒绝新 GATT 结构），回退安装上一版 IPA。
+
+### ESP32 固件同步修复
+
+上一轮 ESP32 CI 编译失败（`NimBLEDevice.h: No such file or directory`），本轮修复：
+
+- `platformio.ini` 补 `lib_deps = h2zero/NimBLE-Arduino@1.4.3`
+  （锁定 1.4.3，避免 2.x API 破坏性改动）；
+- `inputReport()` 无参调用在 1.4.3 不存在，改为 `inputReport(0)`（描述符无 Report ID，
+  Report Reference 写 0，与 iOS 端一致）并缓存特征指针；
+- `addServiceUUID((uint16_t)0x1812)` 改为显式 `NimBLEUUID` 构造；
+- Appearance 从 0x03C2（Mouse）改为 **0x03C1（HID Keyboard）**，描述符同样键盘在前——
+  键盘类设备在 Windows / iPadOS 的配对流程最成熟；
+- 补 `manufacturer` / `pnp` / `hidInfo` / `setBatteryLevel`，向实体键盘的 GATT 形态看齐。
+
+### 本轮改动文件
+
+| 文件 | 改动 |
+| --- | --- |
+| `PocketTrackpad/HIDDescriptor.swift` | `compositeReportMap` 键盘 Collection 提前；`makeReport` 复合分支字节序对调；新增 0x1800 / 2A01 / 2A22 / 2A23 常量与 `appearanceValue` |
+| `PocketTrackpad/HIDPeripheral.swift` | GATT 数据库补 Generic Access 服务（Appearance=Keyboard）与 Boot Keyboard Input/Output 特征；`readValue` 补 2A01 / 2A22 / 2A23；日志文案更新 |
+| `PocketTrackpad/KeyboardView.swift` | 选词提示改写：软键盘隐藏则按数字选词，否则触控区点候选条 |
+| `PocketTrackpad/ContentView.swift` / `BridgeTransport.swift` | 桥说明与输入报告描述同步新布局 / 新 Appearance |
+| `esp32/src/main.cpp` | 描述符键盘在前；`inputReport(0)`；Appearance 0x03C1；补 manufacturer/PnP/HIDInfo/电量 |
+| `esp32/platformio.ini` | 补 `lib_deps`（NimBLE-Arduino 1.4.3） |
+| `esp32/README.md` | Appearance、报告布局、定位说明同步 |
+| `preview/ui-preview.html` | 选词提示与设置页输入报告描述同步 |
+| `README.md` | 更新第三十一节 Appearance/布局引用，新增本节 |

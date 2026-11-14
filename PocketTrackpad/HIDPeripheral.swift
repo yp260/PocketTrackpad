@@ -89,7 +89,7 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
     // MARK: - 硬件桥（ESP32）模式
     //
     // 开启后，本 App 不再作为 BLE HID 外设广播，而是把采集到的输入通过 WiFi UDP
-    // 发给 ESP32，由 ESP32 以标准 BLE HID（带正确 GAP Appearance = 0x03C2）连上
+    // 发给 ESP32，由 ESP32 以标准 BLE HID（带正确 GAP Appearance = 0x03C1 Keyboard）连上
     // Windows / Android。原因：iOS 的 CoreBluetooth 外设无法设置 GAP Appearance，
     // 导致 Windows 搜不到 / 配对失败；ESP32 可以，因此把「被主机发现」这件事交给它。
     private static let bridgeKey = "PocketTrackpad.bridgeMode.v1"
@@ -124,7 +124,8 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         disconnect()
         if compositeDevice {
             statusText = "已启用键鼠复合，请重新广播并配对"
-            note("已开启键鼠复合模式：输入报告 12 字节 = 鼠标 4 + 键盘 8")
+            note("已开启键鼠复合模式：输入报告 12 字节 = 键盘 8 + 鼠标 4（键盘字段在前）")
+            note("本版描述符键盘 Collection 排最前，iPad 更可能按实体键盘对待（隐藏软键盘）")
             note("三指上滑会发送 Command+H；iPad 可能把本设备识别为键盘而弹出配对验证")
             note("若鼠标失效：关掉本开关 → iPad 忽略此设备 → 重新广播配对，即回到纯鼠标")
         } else {
@@ -323,8 +324,19 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
                             permissions: encRead)
         bootReport = boot
 
+        // Boot Keyboard Input / Output Report：Apple DTS 论坛确认 iPadOS 只完整
+        // 接管匹配「Keyboard」配置的设备；实体键盘都带这两个特征（v0.0.18 补齐）。
+        // Report Protocol 下键盘输入仍走上面的 2A4D，这两个特征只用于让 iPadOS
+        // 把本设备归类为键盘（隐藏软键盘、候选词带数字）。
+        let bootKbdIn = makeChar(HIDSpec.bootKeyboardInput,
+                                 properties: [.read, .notify],
+                                 permissions: encRead)
+        let bootKbdOut = makeChar(HIDSpec.bootKeyboardOutput,
+                                  properties: [.read, .write],
+                                  permissions: encRW)
+
         let hid = CBMutableService(type: HIDSpec.hidService, primary: true)
-        hid.characteristics = [info, control, map, mode, report, boot]
+        hid.characteristics = [info, control, map, mode, report, boot, bootKbdIn, bootKbdOut]
 
         // ---- Device Information 0x180A ----
         let dis = CBMutableService(type: HIDSpec.deviceInformation, primary: true)
@@ -343,7 +355,17 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
                      permissions: plainRead)
         ]
 
-        return [hid, dis, bas]
+        // ---- Generic Access 0x1800（v0.0.18：补 Appearance = Keyboard）----
+        // iOS 不允许 App 在广播包里放 Appearance AD Type，但 0x1800 服务可用
+        // 128 位形式注册。主机绑定阶段会读 2A01，读到 Keyboard (0x03C1) 后
+        // 更可能把本设备当实体键盘对待。若当前 iOS 版本拒绝注册 0x1800，
+        // 只在日志报错，不影响 HID 主链路（didAdd 对失败服务逐个放行）。
+        let gap = CBMutableService(type: HIDSpec.genericAccess, primary: false)
+        gap.characteristics = [
+            makeChar(HIDSpec.appearance, properties: [.read], permissions: plainRead)
+        ]
+
+        return [hid, dis, bas, gap]
     }
 
     private func buildDatabaseIfNeeded() {
@@ -352,8 +374,8 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         serviceFailed = false
         mark("3 蓝牙 poweredOn，构建 GATT 数据库")
         servicesToAdd = makeServices()
-        mark("4 已构造 3 个 CBMutableService")
-        note("开始注册 GATT 服务（HID / Device Info / Battery）")
+        mark("4 已构造 4 个 CBMutableService（HID / Device Info / Battery / Generic Access）")
+        note("开始注册 GATT 服务（HID / Device Info / Battery / Generic Access）")
         note(compositeDevice
              ? "当前模式：键鼠复合（输入报告 12 字节，三指上滑 = Command+H）"
              : "当前模式：纯鼠标（输入报告 4 字节，与 v0.0.7 相同）")
@@ -561,6 +583,9 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         case "2A26": return Data("1.0.0".utf8)
         case "2A50": return HIDSpec.pnpIDValue
         case "2A19": return Data([100])
+        case "2A01": return HIDSpec.appearanceValue      // Keyboard 0x03C1
+        case "2A22": return Data(repeating: 0, count: 8)  // Boot Keyboard Input
+        case "2A23": return Data([0])                     // Boot Keyboard Output (LED)
         default:     return nil
         }
     }

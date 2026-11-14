@@ -46,11 +46,29 @@ enum HIDSpec {
         CBUUID(string: "180A")    // Device Information
     ]
 
-    // 注意：标准 HID 设备还会在广播里带 GAP Appearance = 0x03C2 (Mouse)。
+    // 注意：标准 HID 设备还会在广播里带 GAP Appearance（Keyboard 0x03C1 / Mouse 0x03C2）。
     // iOS 的 startAdvertising 只支持 LocalName 与 ServiceUUIDs 两个键，
     // App 无法设置 Appearance AD Type / Class of Device / 厂商数据，
-    // 也无法改写整机共享外设的 GAP 服务。这是本方案的固有天花板：
-    // 16 位 HID UUID 能让主机「看见」，但能否被归类为鼠标仍取决于系统实现。
+    // 也无法改写整机共享外设的 GAP 服务。补救通道见上方 genericAccess/2A01：
+    // 广播里放不了，就在 GATT 的 0x1800 服务里提供 Appearance 特征。
+    // 若主机仍不买账，ESP32 硬件桥可在广播里直接设置 Appearance。
+
+    // MARK: - Generic Access 与 Boot Keyboard（v0.0.18 补齐的「实体键盘要件」）
+    //
+    // Apple DTS 论坛确认：iPadOS 审查 HID 配置，只有匹配它直接支持的
+    // 「Keyboard / Mouse」配置的设备才被完整接管。实体蓝牙键盘在 GATT 上
+    // 还有两样 App 此前没提供的东西：
+    //   1. Generic Access 0x1800 的 Appearance 特征 (0x2A01) —— 广播包里
+    //      iOS 不允许 App 放 Appearance AD Type，但 0x1800 服务可用 128 位
+    //      形式注册，主机绑定阶段会读 2A01；
+    //   2. Boot Keyboard Input / Output Report (0x2A22 / 0x2A23)。
+    static let genericAccess      = sig("1800")
+    static let appearance         = sig("2A01")
+    static let bootKeyboardInput  = sig("2A22")
+    static let bootKeyboardOutput = sig("2A23")
+
+    /// GAP Appearance = HID Keyboard (0x03C1)，小端两字节。
+    static let appearanceValue = Data([0xC1, 0x03])
 
     // MARK: - HID Characteristics
     static let hidInformation       = sig("2A4A")
@@ -217,11 +235,17 @@ enum HIDSpec {
         0xC0               // End Collection (Application)
     ]
 
-    /// Mouse Collection + Keyboard Collection，共用一条不带 Report ID 的输入报告。
-    /// 复合报告固定 12 字节：
-    ///   [buttons, dx, dy, wheel, modifier, reserved, key1, key2, key3, key4, key5, key6]
+    /// Keyboard Collection + Mouse Collection，共用一条不带 Report ID 的输入报告。
+    /// 复合报告固定 12 字节（v0.0.18 起键盘字段在前）：
+    ///   [modifier, reserved, key1, key2, key3, key4, key5, key6, buttons, dx, dy, wheel]
+    ///
+    /// 键盘放前面的原因：实体键鼠一体键盘（Magic Keyboard 等）的描述符都是键盘
+    /// Collection 排最前。iPadOS 审查 HID 配置时很可能按第一个顶层 Collection 判定
+    /// 设备主角色——鼠标在前会被归为「鼠标」，iPad 因此不隐藏屏幕软键盘，输入法
+    /// 候选条也不进入键盘选词模式（数字键直接上屏而不选词）。键盘在前则有机会被
+    /// 当成实体键盘对待：软键盘隐藏、候选词带数字、1-9 / 空格直接选词。
     static let compositeReportMap: Data =
-        Data([UInt8](mouseReportMap) + keyboardCollection)
+        Data(keyboardCollection + [UInt8](mouseReportMap))
 
     static func reportMap(composite: Bool) -> Data {
         if composite { return compositeReportMap }
@@ -262,7 +286,9 @@ enum HIDSpec {
             var slots = Array(keycodes.prefix(keyboardReportBytes - 2))
             slots += Array(repeating: 0,
                            count: (keyboardReportBytes - 2) - slots.count)
-            return Data([buttons, bx, by, bw, modifier, 0x00] + slots)
+            // 键盘字段在前（与 compositeReportMap 的 Collection 顺序一致）：
+            // [modifier, reserved, key1..key6, buttons, dx, dy, wheel]
+            return Data([modifier, 0x00] + slots + [buttons, bx, by, bw])
         }
         return useReportID ? Data([0x01, buttons, bx, by, bw])
                            : Data([buttons, bx, by, bw])

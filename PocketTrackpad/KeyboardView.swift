@@ -238,12 +238,13 @@ struct KeyboardPanel: View {
             .padding(.bottom, 6)
     }
 
-    /// 选词提示：iPad 系统自带拼音输入法的候选条，对「BLE 复合键鼠外设」的
-    /// 数字 / 空格选词经常不触发（输入法把这类设备的键盘事件路由到文本而非候选 UI）。
-    /// 最稳的选词方式是用下方小触控区把 iPad 系统指针移到屏幕顶部的候选条上点一下；
-    /// 备选是 ←/→ 移动高亮 + 空格 / 回车确认。提示只一行、次级色，不打断键区布局。
+    /// 选词提示（v0.0.18 改写）：本版把键盘 Collection 排到描述符最前、补齐
+    /// Boot Keyboard 特征与 Appearance，目标是让 iPad 把本设备当实体键盘——
+    /// 屏幕软键盘隐藏、候选词带数字，1-9 / 空格直接选词。
+    /// 若 iPad 仍显示软键盘（未识别为键盘），退回小触控区点顶部候选条。
+    /// 提示只一行、次级色，不打断键区布局。
     private var imeHint: some View {
-        Text("选词：用下方小触控区移动指针，点 iPad 顶部候选条最稳；或 ←/→ + 空格/回车")
+        Text("选词：iPad 隐藏屏幕键盘后，按 1-9 / 空格即可选词；若仍显示软键盘，用小触控区点顶部候选条")
             .font(.caption2)
             .foregroundStyle(.secondary)
             .frame(maxWidth: .infinity, alignment: .leading)

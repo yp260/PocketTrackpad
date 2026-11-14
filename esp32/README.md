@@ -1,7 +1,11 @@
 # PocketTrackpad 硬件桥固件（ESP32）
 
 把 iPhone 采集到的触控板/键盘输入，通过 WiFi UDP 收进来，再以**标准 BLE HID**（带正确 GAP
-Appearance = `0x03C2`）转发给 Windows / Android。解决的是 iOS 蓝牙外设无法被 Windows 发现的问题。
+Appearance = `0x03C1` HID Keyboard，v0.0.18 起键盘 Collection 排描述符最前）转发给
+Windows / Android / iPad。解决两个 iOS 蓝牙外设的硬限制：
+1. Windows 搜不到 / 配对失败（iOS 无法设置 GAP Appearance）；
+2. iPad 不把复合设备当实体键盘（软键盘不隐藏、输入法候选词不能用数字选词）——
+   描述符排列与 Appearance 都由 ESP32 补齐后，行为与实体键鼠一体键盘一致。
 
 ## 硬件
 
@@ -40,7 +44,7 @@ esptool.py --chip esp32c3 --port COMx write_flash 0x0 firmware.bin
 ## 与 iPhone 端的协议
 
 - iPhone 每约 16ms 发送一条 **12 字节复合 HID 报告**，布局与 App 内 `HIDSpec.compositeReportMap`
-  逐字节对应：`[buttons, dx, dy, wheel, modifier, reserved, key1..key6]`。
+  逐字节对应（v0.0.18 起键盘字段在前）：`[modifier, reserved, key1..key6, buttons, dx, dy, wheel]`。
 - 连接建立前，iPhone 先发 2 字节 hello `[0x50,0x54]`（"PT"），本固件回 `[0x54,0x50]`（"TP"），
   iPhone 收到后判定为「已连接」。
 

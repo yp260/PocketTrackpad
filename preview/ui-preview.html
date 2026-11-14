@@ -728,7 +728,7 @@ body.shot .phone { margin:0; }
         "<div class=\"kb-seg\">" + seg + "</div>" + badge +
       "</div>" + warn +
       "<div class=\"kb-rows top" + (compact ? " compact" : "") + "\">" + rows + "</div>" +
-      "<div class=\"kb-imehint\" data-code=\"KeyboardView.swift:244-252\">选词：用下方小触控区移动指针，点 iPad 顶部候选条最稳；或 ←/→ + 空格/回车</div>" +
+      "<div class=\"kb-imehint\" data-code=\"KeyboardView.swift:241-252\">选词：iPad 隐藏屏幕键盘后，按 1-9 / 空格即可选词；若仍显示软键盘，用小触控区点顶部候选条</div>" +
       miniPadHTML() +
       "</div>";
   }
@@ -767,7 +767,7 @@ body.shot .phone { margin:0; }
           "<button class=\"toggle" + (s.compositeDevice ? " on" : "") + "\" data-act=\"composite\" aria-label=\"键鼠复合模式\"></button></div>" +
         row("三指上滑", "回桌面（Command + H）") +
         row("全键盘", "两页键位 + 下方小触控区（可移动指针）") +
-        row("输入报告", s.compositeDevice ? "12 字节（鼠标 4 + 键盘 8）" : "4 字节（纯鼠标）") +
+        row("输入报告", s.compositeDevice ? "12 字节（键盘 8 + 鼠标 4）" : "4 字节（纯鼠标）") +
       "</div>" +
       "<div class=\"form-footer\" data-code=\"ContentView.swift:250-252\">开启后本设备同时声明为鼠标和键盘，全键盘与三指上滑都依赖这个开关。iPad 可能弹出键盘配对验证，也可能拒绝接管整个设备导致鼠标失效。切换开关会自动断开并移除 GATT 服务：请在 iPad 蓝牙里「忽略此设备」，回到主页面点「开始广播」，再重新配对。若指针或点击失效，关掉本开关、同样忽略设备重新配对即可回到纯鼠标，不需要重装 App。Command + H 只对 iPadOS 有效；Windows 显示桌面是 Win + D，macOS 是 F11。</div>" +
       "<div class=\"sec-head\" data-code=\"ContentView.swift:255\">切换设备</div>" +

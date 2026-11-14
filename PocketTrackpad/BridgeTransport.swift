@@ -2,7 +2,7 @@ import Foundation
 import Network
 
 /// 硬件桥传输层：iPhone 把 12 字节复合 HID 报告通过 UDP 发给 ESP32，
-/// 由 ESP32 以标准 BLE HID（带正确 GAP Appearance = 0x03C2）转发给 Windows / Android。
+/// 由 ESP32 以标准 BLE HID（带正确 GAP Appearance = 0x03C1 HID Keyboard）转发给 Windows / Android。
 ///
 /// 为什么需要这一层：iOS 的 CoreBluetooth 外设无法设置 GAP Appearance，
 /// 导致 Windows 等主机搜不到 / 配对失败（详见 README「硬件桥（ESP32）」一节）。
