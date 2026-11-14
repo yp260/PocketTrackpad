@@ -145,12 +145,83 @@ enum HIDSpec {
         0xC0
     ])
 
-    static var activeReportMap: Data { useReportID ? mouseReportMapWithID : mouseReportMap }
+    // MARK: - 键鼠复合设备（选项 B，实验性）
+    //
+    // 目标：三指上滑时发 Command + H（modifier 0x08 + keycode 0x0B），
+    // 让 iPadOS 回到主屏幕。为此 Report Map 里要有 Keyboard Application Collection。
+    //
+    // 这里刻意 **不引入 Report ID、也不新增第二个 Report 特征**：
+    // HID 1.11 允许一个描述符里有多个顶层 Collection 且不带 Report ID，
+    // 此时所有 Input 字段按顺序拼成一条报告。这样做的三个好处：
+    //   1. 鼠标部分前 4 字节与纯鼠标模式逐字节相同，主机即使不认键盘
+    //      Collection，鼠标解析也和 v0.0.7 完全一致；
+    //   2. GATT 结构（3 个服务 / 6 个特征）一行不用动，也不用处理
+    //      两个同 UUID 的 2A4D 特征在订阅 / 读取时的歧义；
+    //   3. 运行时关掉开关即可回到纯鼠标，无需重装 IPA。
+    // Boot Mouse 0x2A33 仍是 3 字节；Boot Protocol 下键盘报告不可用。
+    static let mouseReportBytes = 4
+    static let keyboardReportBytes = 8
+    static let compositeReportBytes = mouseReportBytes + keyboardReportBytes
+
+    /// Command(Left GUI) 位与 H 键的 HID 键码。
+    static let commandModifier: UInt8 = 0x08
+    static let homeKeycode: UInt8 = 0x0B
+
+    /// 标准 Boot Keyboard 输入报告定义：modifier(1) + reserved(1) + 6 个键码。
+    private static let keyboardCollection: [UInt8] = [
+        0x05, 0x01,        // Usage Page (Generic Desktop)
+        0x09, 0x06,        // Usage (Keyboard)
+        0xA1, 0x01,        // Collection (Application)
+        0x05, 0x07,        //   Usage Page (Keyboard/Keypad)
+        0x19, 0xE0,        //   Usage Minimum (Left Control)
+        0x29, 0xE7,        //   Usage Maximum (Right GUI)
+        0x15, 0x00,        //   Logical Minimum (0)
+        0x25, 0x01,        //   Logical Maximum (1)
+        0x75, 0x01,        //   Report Size (1)
+        0x95, 0x08,        //   Report Count (8)
+        0x81, 0x02,        //   Input (Data, Var, Abs) -> modifier 位图
+        0x75, 0x08,        //   Report Size (8)
+        0x95, 0x01,        //   Report Count (1)
+        0x81, 0x03,        //   Input (Const) -> 保留字节
+        0x15, 0x00,        //   Logical Minimum (0)
+        0x25, 0x65,        //   Logical Maximum (101)
+        0x19, 0x00,        //   Usage Minimum (0)
+        0x29, 0x65,        //   Usage Maximum (101)
+        0x95, 0x06,        //   Report Count (6)
+        0x81, 0x00,        //   Input (Data, Array) -> 6 个键码
+        0x05, 0x08,        //   Usage Page (LEDs)
+        0x19, 0x01,        //   Usage Minimum (Num Lock)
+        0x29, 0x05,        //   Usage Maximum (Kana)
+        0x15, 0x00,        //   Logical Minimum (0)
+        0x25, 0x01,        //   Logical Maximum (1)
+        0x75, 0x01,        //   Report Size (1)
+        0x95, 0x05,        //   Report Count (5)
+        0x91, 0x02,        //   Output (Data, Var, Abs) -> LED 位
+        0x75, 0x03,        //   Report Size (3)
+        0x95, 0x01,        //   Report Count (1)
+        0x91, 0x03,        //   Output (Const) -> 3 位填充
+        0xC0               // End Collection (Application)
+    ]
+
+    /// Mouse Collection + Keyboard Collection，共用一条不带 Report ID 的输入报告。
+    /// 复合报告固定 12 字节：
+    ///   [buttons, dx, dy, wheel, modifier, reserved, key1, key2, key3, key4, key5, key6]
+    static let compositeReportMap: Data =
+        Data([UInt8](mouseReportMap) + keyboardCollection)
+
+    static func reportMap(composite: Bool) -> Data {
+        if composite { return compositeReportMap }
+        return useReportID ? mouseReportMapWithID : mouseReportMap
+    }
+
+    /// 兼容旧的纯鼠标调用点。
+    static var activeReportMap: Data { reportMap(composite: false) }
 
     /// HID Information: bcdHID 1.11 / Country 0 / Flags 0x02 (Normally Connectable)
     static let hidInformationValue = Data([0x11, 0x01, 0x00, 0x02])
 
     /// Report Reference Descriptor: [Report ID, Report Type=Input(0x01)]
+    /// 复合模式也不带 Report ID，因此这里始终是 0x00。
     static var reportReferenceValue: Data {
         Data([useReportID ? 0x01 : 0x00, 0x01])
     }
@@ -158,15 +229,22 @@ enum HIDSpec {
     /// PnP ID: Vendor ID Source = USB(0x02), VID/PID/Version 为自定义占位值
     static let pnpIDValue = Data([0x02, 0x34, 0x12, 0x01, 0x00, 0x00, 0x01])
 
-    static func emptyReport() -> Data {
-        useReportID ? Data([0x01, 0x00, 0x00, 0x00, 0x00])
-                    : Data([0x00, 0x00, 0x00, 0x00])
+    static func emptyReport(composite: Bool = false) -> Data {
+        if composite { return Data(repeating: 0, count: compositeReportBytes) }
+        return useReportID ? Data([0x01, 0x00, 0x00, 0x00, 0x00])
+                           : Data([0x00, 0x00, 0x00, 0x00])
     }
 
-    static func makeReport(buttons: UInt8, x: Int8, y: Int8, wheel: Int8) -> Data {
+    static func makeReport(buttons: UInt8, x: Int8, y: Int8, wheel: Int8,
+                           composite: Bool = false,
+                           modifier: UInt8 = 0, keycode: UInt8 = 0) -> Data {
         let bx = UInt8(bitPattern: x)
         let by = UInt8(bitPattern: y)
         let bw = UInt8(bitPattern: wheel)
+        if composite {
+            return Data([buttons, bx, by, bw,
+                         modifier, 0x00, keycode, 0x00, 0x00, 0x00, 0x00, 0x00])
+        }
         return useReportID ? Data([0x01, buttons, bx, by, bw])
                            : Data([buttons, bx, by, bw])
     }

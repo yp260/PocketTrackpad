@@ -57,8 +57,18 @@ struct TrackpadSurface: UIViewRepresentable {
         longPress.delegate = context.coordinator
         view.addGestureRecognizer(longPress)
 
+        // 三指上滑：与 1 指平移 / 2 指滚动靠触点数硬隔离。
+        // 用 pan 而不是 swipe，可以自己定 80pt 阈值并防止一次手势重复触发。
+        let homeSwipe = UIPanGestureRecognizer(target: context.coordinator,
+                                               action: #selector(Coordinator.handleHomeSwipe(_:)))
+        homeSwipe.minimumNumberOfTouches = 3
+        homeSwipe.maximumNumberOfTouches = 3
+        homeSwipe.cancelsTouchesInView = false
+        homeSwipe.delegate = context.coordinator
+        view.addGestureRecognizer(homeSwipe)
+
         let hint = UILabel()
-        hint.text = "单指移动指针  ·  轻点左键  ·  双击左键\n双指滚动  ·  长按右键"
+        hint.text = Self.hintText(composite: hid.compositeDevice)
         hint.numberOfLines = 0
         hint.textAlignment = .center
         hint.font = UIFont.preferredFont(forTextStyle: .footnote)
@@ -78,7 +88,13 @@ struct TrackpadSurface: UIViewRepresentable {
 
     func updateUIView(_ uiView: UIView, context: Context) {
         context.coordinator.hid = hid
+        context.coordinator.hint?.text = Self.hintText(composite: hid.compositeDevice)
         Self.applyStyle(uiView, edgeToEdge: edgeToEdge)
+    }
+
+    private static func hintText(composite: Bool) -> String {
+        let base = "单指移动指针  ·  轻点左键  ·  双击左键\n双指滚动  ·  长按右键"
+        return composite ? base + "\n三指上滑回桌面（Command+H）" : base
     }
 
     private static func applyStyle(_ view: UIView, edgeToEdge: Bool) {
@@ -101,6 +117,8 @@ struct TrackpadSurface: UIViewRepresentable {
         private var residualY: CGFloat = 0
         private var residualWheel: CGFloat = 0
         private var didHideHint = false
+        private var homeStartY: CGFloat = 0
+        private var homeFired = false
 
         init(hid: HIDPeripheral) { self.hid = hid }
 
@@ -183,6 +201,27 @@ struct TrackpadSurface: UIViewRepresentable {
             hideHint()
             hid.click(0x02)
             UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
+        }
+
+        /// 三指上滑 80pt：发送 Command+H（回主屏幕）。
+        /// homeFired 保证一次手势只触发一次，抬手后复位。
+        @objc func handleHomeSwipe(_ g: UIPanGestureRecognizer) {
+            switch g.state {
+            case .began:
+                homeStartY = g.translation(in: g.view).y
+                homeFired = false
+            case .changed:
+                guard !homeFired else { return }
+                let dy = g.translation(in: g.view).y - homeStartY
+                if dy <= -80 {
+                    homeFired = true
+                    hideHint()
+                    hid.goHome()
+                    UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
+                }
+            default:
+                homeFired = false
+            }
         }
     }
 }

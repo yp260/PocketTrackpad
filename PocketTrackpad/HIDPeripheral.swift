@@ -49,6 +49,35 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
             didSet { UserDefaults.standard.set(naturalScrolling, forKey: HIDPeripheral.naturalKey) }
         }
 
+    // MARK: - 键鼠复合模式（选项 B，实验性）
+    //
+    // 打开后 Report Map 里多一个 Keyboard Collection，三指上滑可发 Command+H。
+    // 主机在配对时会缓存 Report Map，无法热更新：切换开关必须移除整个 GATT
+    // 数据库、重新广播，并由用户在主机侧「忽略此设备」重新配对。
+    private static let compositeKey = "PocketTrackpad.compositeDevice.v1"
+
+    @Published var compositeDevice: Bool =
+        (UserDefaults.standard.object(forKey: HIDPeripheral.compositeKey) as? Bool) ?? true {
+            didSet {
+                UserDefaults.standard.set(compositeDevice, forKey: HIDPeripheral.compositeKey)
+                applyCompositeModeChange()
+            }
+        }
+
+    private func applyCompositeModeChange() {
+        disconnect()
+        if compositeDevice {
+            statusText = "已启用键鼠复合，请重新广播并配对"
+            note("已开启键鼠复合模式：输入报告 12 字节 = 鼠标 4 + 键盘 8")
+            note("三指上滑会发送 Command+H；iPad 可能把本设备识别为键盘而弹出配对验证")
+            note("若鼠标失效：关掉本开关 → iPad 忽略此设备 → 重新广播配对，即回到纯鼠标")
+        } else {
+            statusText = "已回退纯鼠标，请重新广播并配对"
+            note("已回退为纯鼠标模式：输入报告恢复 4 字节，与 v0.0.7 完全一致")
+            note("需在 iPad 蓝牙里忽略此设备再重新配对，缓存的旧 Report Map 才会刷新")
+        }
+    }
+
     private static let stageKey = "PocketTrackpad.lastStage"
     /// 上次运行最后到达的阶段。App 若被异常杀掉，下次启动可直接看到卡在哪一步。
     @Published private(set) var lastStage: String? =
@@ -72,6 +101,10 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
     private var pendingX = 0
     private var pendingY = 0
     private var pendingWheel = 0
+    /// 键盘状态由 tick() 统一合进 60Hz 报告流：按下期间持续带键码，到期自动释放。
+    /// 这样按下与释放走同一条链路，不会被 queuedPacket 覆盖导致按键卡住。
+    private var pendingKeycode: UInt8 = 0
+    private var keyReleaseAt: Date?
     private var readyToUpdate = true
     private var queuedPacket: (Data, CBMutableCharacteristic)?
     private var link: CADisplayLink?
@@ -140,6 +173,8 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         pendingX = 0
         pendingY = 0
         pendingWheel = 0
+        pendingKeycode = 0
+        keyReleaseAt = nil
         queuedPacket = nil
         readyToUpdate = true
         statusText = "已断开连接"
@@ -231,6 +266,9 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         servicesToAdd = makeServices()
         mark("4 已构造 3 个 CBMutableService")
         note("开始注册 GATT 服务（HID / Device Info / Battery）")
+        note(compositeDevice
+             ? "当前模式：键鼠复合（输入报告 12 字节，三指上滑 = Command+H）"
+             : "当前模式：纯鼠标（输入报告 4 字节，与 v0.0.7 相同）")
         addNextService()
     }
 
@@ -366,6 +404,9 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
                 if let v = r.value?.first {
                     protocolMode = (v == 0x00) ? 0 : 1
                     note("主机切换协议模式: \(protocolMode == 0 ? "Boot" : "Report")")
+                    if protocolMode == 0 {
+                        note("Boot Protocol 下报告固定 3 字节，滚轮与键盘（含三指上滑）均不可用")
+                    }
                 }
             case "2A4C":   // HID Control Point (Suspend / Exit Suspend)
                 note("主机写入 HID Control Point")
@@ -415,9 +456,9 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
     private func readValue(for uuid: CBUUID) -> Data? {
         switch HIDSpec.short(uuid) {
         case "2A4A": return HIDSpec.hidInformationValue
-        case "2A4B": return HIDSpec.activeReportMap
+        case "2A4B": return HIDSpec.reportMap(composite: compositeDevice)
         case "2A4E": return Data([protocolMode])
-        case "2A4D": return HIDSpec.emptyReport()
+        case "2A4D": return HIDSpec.emptyReport(composite: compositeDevice)
         case "2A33": return Data([0x00, 0x00, 0x00])
         case "2A29": return Data("PocketTrackpad".utf8)
         case "2A24": return Data("PT-01".utf8)
@@ -438,7 +479,41 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
     }
 
     @objc private func tick() {
-        flush(force: false)
+        var modifier: UInt8 = 0
+        var keycode: UInt8 = 0
+        var keyReleased = false
+        if pendingKeycode != 0 {
+            if let t = keyReleaseAt, Date() < t {
+                modifier = HIDSpec.commandModifier
+                keycode = pendingKeycode
+            } else {
+                pendingKeycode = 0
+                keyReleaseAt = nil
+                keyReleased = true
+            }
+        }
+        flush(force: false, modifier: modifier, keycode: keycode, keyReleased: keyReleased)
+    }
+
+    /// 三指上滑：发一次 Command + H，让 iPadOS 回主屏幕。
+    /// 键盘状态由 tick() 统一合进 60Hz 报告流，按下和释放都走同一条链路，
+    /// 避免被 queuedPacket 覆盖导致某个键一直处于按下状态。
+    func goHome() {
+        guard compositeDevice else {
+            note("三指上滑未生效：当前是纯鼠标模式，请到设置里开启「键鼠复合模式」")
+            return
+        }
+        guard protocolMode != 0 else {
+            note("三指上滑未生效：主机处于 Boot Protocol，键盘报告不可用")
+            return
+        }
+        guard inputSubscribed else {
+            note("三指上滑未生效：主机尚未订阅 2A4D 输入报告")
+            return
+        }
+        pendingKeycode = HIDSpec.homeKeycode
+        keyReleaseAt = Date().addingTimeInterval(0.08)
+        note("三指上滑 → 发送 Command + H（回主屏幕）")
     }
 
     /// 按住 / 松开某个按键。mask: 1=左键, 2=右键, 4=中键
@@ -470,7 +545,8 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         return nil
     }
 
-    private func flush(force: Bool) {
+    private func flush(force: Bool, modifier: UInt8 = 0, keycode: UInt8 = 0,
+                       keyReleased: Bool = false) {
         guard manager?.state == .poweredOn else { return }
         let x = Int8(clamping: pendingX)
         let y = Int8(clamping: pendingY)
@@ -479,15 +555,20 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         pendingY = 0
         pendingWheel = 0
 
-        guard force || x != 0 || y != 0 || w != 0 else { return }
+        // 键盘按下 / 释放这两帧即使没有鼠标位移也必须发报告，
+        // 否则按键会被当成一直按住（或一直没按）。
+        let keyboardPending = modifier != 0 || keyReleased
+        guard force || x != 0 || y != 0 || w != 0 || keyboardPending else { return }
         guard let characteristic = activeReport else { return }
 
         let packet: Data
         if characteristic === bootReport {
-            // Boot Mouse 报告固定 3 字节，没有滚轮。
+            // Boot Mouse 报告固定 3 字节，没有滚轮，也没有键盘字段。
             packet = Data([buttonBits, UInt8(bitPattern: x), UInt8(bitPattern: y)])
         } else {
-            packet = HIDSpec.makeReport(buttons: buttonBits, x: x, y: y, wheel: w)
+            packet = HIDSpec.makeReport(buttons: buttonBits, x: x, y: y, wheel: w,
+                                        composite: compositeDevice,
+                                        modifier: modifier, keycode: keycode)
         }
         send(packet, on: characteristic)
     }

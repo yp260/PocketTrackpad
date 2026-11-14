@@ -220,6 +220,18 @@ struct SettingsView: View {
             }
 
             Section {
+                Toggle("键鼠复合模式", isOn: $hid.compositeDevice)
+                LabeledRow(title: "三指上滑", detail: "回桌面（Command + H）")
+                LabeledRow(title: "输入报告",
+                           detail: hid.compositeDevice ? "12 字节（鼠标 4 + 键盘 8）" : "4 字节（纯鼠标）")
+            } header: {
+                Text("实验功能 · 回桌面")
+            } footer: {
+                Text("开启后本设备同时声明为鼠标和键盘，iPad 可能弹出键盘配对验证，也可能拒绝接管整个设备导致鼠标失效。切换开关会自动断开并移除 GATT 服务：请在 iPad 蓝牙里「忽略此设备」，回到主页面点「开始广播」，再重新配对。若指针或点击失效，关掉本开关、同样忽略设备重新配对即可回到纯鼠标，不需要重装 App。Command + H 只对 iPadOS 有效；Windows 显示桌面是 Win + D，macOS 是 F11。")
+                    .font(.caption)
+            }
+
+            Section {
                 LabeledRow(title: "广播名称", detail: "PT-Pad")
                 LabeledRow(title: "iPad 显示名称", detail: "跟随 iPhone 整机名")
                 LabeledRow(title: "连接方式", detail: "蓝牙 HID over GATT")
