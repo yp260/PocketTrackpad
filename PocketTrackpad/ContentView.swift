@@ -273,13 +273,16 @@ private struct ButtonBar: View {
 
     private func keys(width: CGFloat) -> some View {
         let w = keyWidths(for: width)
+        // width 属于 frame(width:height:) 重载，maxHeight 属于
+        // frame(minWidth:...:maxHeight:) 重载，两者不能混用（编译报 extra argument 'width'）。
+        // 这里全部用第二个重载，把宽度钉死、高度撑满 HStack。
         return HStack(spacing: ButtonBar.spacing) {
             HoldButton(title: "左键", mask: 0x01)
-                .frame(width: w.0, maxHeight: .infinity)
+                .frame(minWidth: w.0, idealWidth: w.0, maxWidth: w.0, maxHeight: .infinity)
             WheelButton()
-                .frame(width: w.1, maxHeight: .infinity)
+                .frame(minWidth: w.1, idealWidth: w.1, maxWidth: w.1, maxHeight: .infinity)
             HoldButton(title: "右键", mask: 0x02)
-                .frame(width: w.2, maxHeight: .infinity)
+                .frame(minWidth: w.2, idealWidth: w.2, maxWidth: w.2, maxHeight: .infinity)
         }
     }
 
