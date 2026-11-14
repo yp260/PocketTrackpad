@@ -236,7 +236,7 @@ struct SettingsView: View {
             Section {
                 Toggle("键鼠复合模式", isOn: $hid.compositeDevice)
                 LabeledRow(title: "三指上滑", detail: "回桌面（Command + H）")
-                LabeledRow(title: "全键盘", detail: "主键位（含 F 键 / 方向键）与符号，共两页")
+                LabeledRow(title: "全键盘", detail: "两页键位 + 下方小触控区（可移动指针）")
                 LabeledRow(title: "输入报告",
                            detail: hid.compositeDevice ? "12 字节（鼠标 4 + 键盘 8）" : "4 字节（纯鼠标）")
             } header: {

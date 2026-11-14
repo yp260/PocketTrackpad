@@ -49,7 +49,7 @@ PocketTrackpad/
 └── PocketTrackpad/
     ├── PocketTrackpadApp.swift       App 入口，保持屏幕常亮
     ├── ContentView.swift             主界面 / 设置子页面 / 底部按键条 / 滚轮键
-    ├── TrackpadSurface.swift         UIKit 手势识别（单指移动、双指滚动、轻点、长按），支持全屏样式
+    ├── TrackpadSurface.swift         UIKit 手势识别（单指移动、双指滚动、轻点、长按），支持全屏 / 紧凑两种样式
     ├── HIDPeripheral.swift           CoreBluetooth 外设 + HOGP GATT 数据库 + 报告上报 + 设置持久化
     ├── HIDDescriptor.swift           UUID 定义、HID Report Descriptor、报告打包
     └── Info.plist                    蓝牙权限（不含后台模式）
@@ -910,7 +910,8 @@ Apple 开发者论坛（thread 72343）的官方回复：当外设同时有这�
 | 主键位 | 7 行 | F1~F12 一整行、数字行、QWERTY 三行、Esc / Tab / Caps / Del / Home / End + 四向方向键、常驻控制行（Ctrl / Opt / Cmd / Shift / Space / 退格 / 回车） |
 | 符号 | 5 行 | 上档符号 `!@#$%^&*()`、US 标点两行、Ins / PrtSc / ScrLk / Pause / PgUp / PgDn / Menu、常驻控制行 |
 
-两页统一 42pt 键帽（主键位 7 行时行距略收紧），键宽按权重分配，键区在剩余空间里垂直居中。
+两页统一 42pt 键帽（主键位 7 行时行距略收紧），键宽按权重分配。键区靠上排列，
+底部另有一块 120pt 小触控区（见第二十五节）。
 功能键底色比字符键深，粘滞修饰键激活时变蓝。原「功能」页的所有键码都保留了，只是重新分配。
 
 ### 组合键：一次性粘滞修饰键
@@ -994,7 +995,8 @@ Usage Maximum = 101 边界内）。原功能页的 Esc / Tab / Caps / Del / Home
 
 主键位从 5 行变 7 行，`KeyboardPanel` 把行高做成可传参：两页统一 42pt，
 而不是让主键位缩到 38pt、符号页保持 44pt——那样切页时键帽会忽大忽小。
-`KeyRow` / `KeyCap` 新增 `height` 参数，行数只影响上下弹性间隔与行距，不再隐式决定键帽高度。
+`KeyRow` / `KeyCap` 新增 `height` 参数，行数不再隐式决定键帽高度。键区初期上下居中，
+第二十五节起改为靠上排列、下方留弹性间隔与小触控区。
 预览页用 `.kb-rows.compact` 收紧 7 行页面的行距与功能键字号，和 Swift 端保持一致。
 
 ### 未改动
@@ -1017,3 +1019,49 @@ HID 报告格式（12 字节复合报告）、`sendKey` 链路、粘滞修饰键
 ④ 主键位与符号页来回切换时键帽高度无跳变；⑤ 底部三键、返回触控板与三指上滑仍正常。
 若小屏上 7 行显得过挤，回退方式是把 `KeyboardPanel` 的 `rowHeight` 调到 38pt 再出包，
 不需要改键位表或 HID 链路。
+
+## 二十五、Esc / ↑ 移到 Z / M 两侧，键盘页下方加小触控区（本轮新增）
+
+### 键位调整
+
+主键位第 5 行原来左右各 1.5 权重的空白 spacer 换成按键：`Esc` 在 Z 左侧贴键区左边缘，
+`↑` 在 M 右侧贴键区右边缘；第 6 行去掉已移走的这两个键，剩
+`Tab` `Caps` `Del` `Home` `End` `←` `↓` `→`（8 键，键帽比原来宽）。
+键码不变（`Esc` = `0x29`、`↑` = `0x52`），四向方向键仍齐全，只是 ↑ 换了位置；
+符号页未动。
+
+### 键区上移与小触控区
+
+`KeyboardPanel` 去掉键区上方的弹性间隔，7 行键区紧跟粘滞状态条；下方用一个弹性间隔
+把 120pt 的小触控区推到底部 footer 之上。小触控区直接复用 `TrackpadSurface`，
+新增 `compact` 参数：提示文字精简为三行、圆角 22 → 12、字号 footnote → caption2。
+手势完全不变——单指移动、轻点左键、双击、长按右键、双指滚动、三指上滑 80pt 都能用，
+打字时也能移动指针和点击，不必来回切「触控板 / 全键盘」。
+全屏触控板仍用 `TrackpadSurface(edgeToEdge: true)`，`compact` 默认 false，行为不受影响。
+
+120pt 高度下三指上滑的 80pt 阈值仍可达但较局促；若真机上难触发，
+把 `miniTrackpad` 的 `frame(height:)` 调到 140pt 即可，不用改手势逻辑。
+
+### 预览与截图
+
+`preview/ui-preview.html` 同步两行键位、键区靠上布局，新增 `miniPadHTML()` 与
+`.kb-minipad` / `.pad-mini` 样式；方向键改用 14~15px 字号（真机单字符是 16px，
+预览原来按功能键压到 10px 会把 `←` `→` 显示成横线）；footer 缩短避免与卡片下缘重叠。
+元素清单新增第 24~25 项，`KeyboardView.swift` 与 `TrackpadSurface.swift` 的全部行号重新同步。
+5 张截图全部重新生成，主键位与符号页都能看到底部小触控区。
+
+### 真机验证
+
+① Esc 是否紧贴 Z 左侧、↑ 是否紧贴 M 右侧，字母键有没有被挤窄；
+② 第 6 行不再出现 Esc / ↑，`←` `↓` `→` 是否清晰可辨；
+③ 键区是否明显上移，底部小触控区能否拖动指针并点击；
+④ 小触控区里双指滚动与三指上滑是否仍触发；
+⑤ 切回触控板页后全屏样式（无圆角、无边框、无灰底）是否照旧。
+
+| 文件 | 改动 |
+| --- | --- |
+| `KeyboardView.swift` | 第 5 / 6 行键位重排；`body` 去掉上方 Spacer、键区靠上；新增 `miniTrackpad`（120pt）；footer 文案缩短 |
+| `TrackpadSurface.swift` | 新增 `compact` 参数：精简提示、小圆角、小字号；`hintText` / `applyStyle` 同步；全屏行为不变 |
+| `ContentView.swift` | 设置页「全键盘」说明改为「两页键位 + 下方小触控区（可移动指针）」 |
+| `preview/ui-preview.html` | 键位、布局、小触控区、方向键字号、元素清单 24~25、两个 Swift 文件全部行号同步 |
+| `README.md` | 第二十三 / 二十四节布局描述更新，新增本节 |

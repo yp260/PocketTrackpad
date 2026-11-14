@@ -9,6 +9,8 @@ struct TrackpadSurface: UIViewRepresentable {
     @EnvironmentObject var hid: HIDPeripheral
     /// 连接成功后触控区撑满屏幕：去掉圆角、边框和灰底，避免边缘留白。
     var edgeToEdge: Bool = false
+    /// 全键盘页下方的小范围触控区：提示文字精简、圆角缩小，手势逻辑完全不变。
+    var compact: Bool = false
 
     func makeCoordinator() -> Coordinator {
         Coordinator(hid: hid)
@@ -19,7 +21,7 @@ struct TrackpadSurface: UIViewRepresentable {
         view.isMultipleTouchEnabled = true
         view.layer.cornerCurve = .continuous
         view.layer.borderColor = UIColor.separator.cgColor
-        Self.applyStyle(view, edgeToEdge: edgeToEdge)
+        Self.applyStyle(view, edgeToEdge: edgeToEdge, compact: compact)
 
         let move = UIPanGestureRecognizer(target: context.coordinator,
                                           action: #selector(Coordinator.handleMove(_:)))
@@ -68,10 +70,10 @@ struct TrackpadSurface: UIViewRepresentable {
         view.addGestureRecognizer(homeSwipe)
 
         let hint = UILabel()
-        hint.text = Self.hintText(composite: hid.compositeDevice)
+        hint.text = Self.hintText(composite: hid.compositeDevice, compact: compact)
         hint.numberOfLines = 0
         hint.textAlignment = .center
-        hint.font = UIFont.preferredFont(forTextStyle: .footnote)
+        hint.font = UIFont.preferredFont(forTextStyle: compact ? .caption2 : .footnote)
         hint.textColor = UIColor.secondaryLabel
         hint.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(hint)
@@ -88,17 +90,21 @@ struct TrackpadSurface: UIViewRepresentable {
 
     func updateUIView(_ uiView: UIView, context: Context) {
         context.coordinator.hid = hid
-        context.coordinator.hint?.text = Self.hintText(composite: hid.compositeDevice)
-        Self.applyStyle(uiView, edgeToEdge: edgeToEdge)
+        context.coordinator.hint?.text = Self.hintText(composite: hid.compositeDevice, compact: compact)
+        Self.applyStyle(uiView, edgeToEdge: edgeToEdge, compact: compact)
     }
 
-    private static func hintText(composite: Bool) -> String {
+    private static func hintText(composite: Bool, compact: Bool) -> String {
+        if compact {
+            let base = "单指移动指针 · 轻点左键 · 双击左键\n双指滚动 · 长按右键"
+            return composite ? base + "\n三指上滑回桌面" : base
+        }
         let base = "单指移动指针  ·  轻点左键  ·  双击左键\n双指滚动  ·  长按右键"
         return composite ? base + "\n三指上滑回桌面（Command+H）" : base
     }
 
-    private static func applyStyle(_ view: UIView, edgeToEdge: Bool) {
-        view.layer.cornerRadius = edgeToEdge ? 0 : 22
+    private static func applyStyle(_ view: UIView, edgeToEdge: Bool, compact: Bool) {
+        view.layer.cornerRadius = edgeToEdge ? 0 : (compact ? 12 : 22)
         view.layer.borderWidth = edgeToEdge ? 0 : 1
         view.backgroundColor = edgeToEdge
             ? UIColor.systemBackground

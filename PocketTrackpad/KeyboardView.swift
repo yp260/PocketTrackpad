@@ -170,9 +170,10 @@ enum KeyboardLayout {
                 line("1234567890"),
                 letters("QWERTYUIOP"),
                 [.spacer(0.5)] + letters("ASDFGHJKL") + [.spacer(0.5)],
-                [.spacer(1.5)] + letters("ZXCVBNM") + [.spacer(1.5)],
-                functionLine(["Esc", "Tab", "Caps", "Del", "Home", "End",
-                              "←", "↓", "↑", "→"]),
+                // Esc / ↑ 顶掉原来的左右空白，分别贴住键区左右边缘。
+                functionLine(["Esc"]) + letters("ZXCVBNM") + functionLine(["↑"]),
+                functionLine(["Tab", "Caps", "Del", "Home", "End",
+                              "←", "↓", "→"]),
                 controlRow
             ]
         case .symbols:
@@ -210,9 +211,7 @@ struct KeyboardPanel: View {
             toolbar
             stickyBar
             if !hid.keyboardReady { warning }
-            // 上下各留一个弹性间隔，让键区在剩余空间里垂直居中，
-            // 避免小屏上键帽贴顶、下半屏全空。
-            Spacer(minLength: 0)
+            // 键区整体上移，紧跟状态条；下方空出来的区域改成小范围触控区。
             VStack(spacing: 6) {
                 // 用整数索引而不是 enumerated() 元组：后者配 id: \.offset
                 // 在部分 Swift 版本会报「key path 不能指向元组元素」。
@@ -221,12 +220,28 @@ struct KeyboardPanel: View {
                 }
             }
             .padding(.horizontal, 6)
-            .padding(.vertical, 6)
-            Spacer(minLength: 0)
+            .padding(.top, 8)
+            Spacer(minLength: 6)
+            miniTrackpad
             footer
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(.systemBackground))
+    }
+
+    /// 键盘下方的小范围触控区：打字时也能移动指针、点击、滚动，不必切回触控板页。
+    /// 复用 TrackpadSurface，手势与全屏触控板完全一致，只是提示更精简、圆角更小。
+    private var miniTrackpad: some View {
+        VStack(spacing: 4) {
+            Text("小触控区 · 手势与全屏触控板一致")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            TrackpadSurface(compact: true)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .frame(height: 120)
+        .padding(.horizontal, 10)
+        .padding(.bottom, 4)
     }
 
     // MARK: 顶部工具条
@@ -310,7 +325,7 @@ struct KeyboardPanel: View {
     }
 
     private var footer: some View {
-        Text("F1~F12 与方向键已并入主键位页，其余功能键在符号页。中文、emoji 由主机输入法决定；底部左键 / 滚轮 / 右键仍可用。")
+        Text("Esc / ↑ 贴 Z / M 两侧；下方小触控区可移动指针，底部三键仍可用。")
             .font(.caption2)
             .foregroundStyle(.tertiary)
             .multilineTextAlignment(.center)
