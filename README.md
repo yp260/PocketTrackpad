@@ -6,23 +6,24 @@
 
 ## 一、结论先行
 
-> **状态更新（2026-11-14，真机验证后）：可行性需要下调，不建议在纯软件路径上继续投入。**
-> 源码已在 macOS runner 编译通过并侧载安装到 iPhone，App 能正常打开并开始 BLE 广播，
-> 但 iPad 与 Windows 的蓝牙设置里都搜不到这台虚拟鼠标。广播 UUID 的具体错误已修复（第十四节），
-> 但 iOS 不允许 App 设置 GAP Appearance、也不向 App 暴露系统级 HID 外设能力，这是无法通过改代码绕过的平台限制。
-> 若要「马上能用」，请直接装 Bluetouch，或改走 ESP32-C3 硬件桥。
+> **状态更新（2026-11-14，真机验证通过）：iPhone 侧载本 App 后，iPad 能搜到并成功配对 `PT-Pad`，指针、点击、滚动均可用。**
+> 决定性修复是第十四节：广播包必须放 **16 位 SIG UUID `0x1812`**，不能用 128 位完整形式。
+> 也就是说，iOS 虽不向 App 暴露 GAP Appearance 和系统级 HID 外设能力，但只要广播身份正确，
+> iPadOS 的蓝牙 HID 主机栈仍会接管这套 HOGP GATT 数据库 —— 原先担心的「第二道天花板」在当前 iPadOS 上并未拦住。
+> **纯软件路径成立**，不需要 ESP32 硬件桥，iPad 端也不用装任何软件。
+> 保留风险：这是非公开通道，iOS / iPadOS 大版本升级后需重新回归验证。
 
-以下是立项时的原始判断，保留作为技术背景，其中「实际能否实现」一条已被真机结果推翻。
+以下是立项时的判断与真机结果的对照。
 
-**原始判断：可以走一条非公开通道，但不是苹果支持的官方能力。**
+**结论：可以走一条非公开通道，但不是苹果支持的官方能力。**
 
 | 判断 | 说明 | 真机验证 |
 | --- | --- | --- |
 | 官方 API 是否支持 | 不支持。Apple DTS 明确回复「Core Bluetooth doesn't expose HID peripheral service capabilities to apps」 | 已证实 |
-| 实际能否实现 | 原以为：用完整 128 位 Bluetooth Base UUID 注册 HID Service，绕开系统对 16 位 UUID 的封锁即可 | **未通过**：服务能注册、广播能发，但主机发现列表不显示 |
-| iPad 端是否需要装 App | 不需要。iPadOS 13.4+ 原生接管标准蓝牙 HID 鼠标 | 前提不成立，未能走到这一步 |
-| 是否系统级指针 | 是。配对成功后 iPad 出现圆形指针，可跨 App 使用 | 未验证 |
-| 主要风险 | 非公开行为，未来 iOS 版本可能封堵；App Store 审核存在不确定性 | 风险已实际发生 |
+| 实际能否实现 | 128 位完整 UUID 注册 HID Service 绕开 `add()` 封锁，广播改用 16 位 `0x1812` 让主机发现 | **已通过**：配对成功并可操控 |
+| iPad 端是否需要装 App | 不需要。iPadOS 13.4+ 原生接管标准蓝牙 HID 鼠标 | 已证实，对端零安装 |
+| 是否系统级指针 | 是。配对成功后 iPad 出现圆形指针，可跨 App 使用 | 已验证 |
+| 主要风险 | 非公开行为，未来 iOS 版本可能封堵；App Store 审核存在不确定性 | 当前版本可用，需按版本回归 |
 
 ### 技术依据
 
@@ -47,9 +48,9 @@ PocketTrackpad/
 ├── README.md                         本文件
 └── PocketTrackpad/
     ├── PocketTrackpadApp.swift       App 入口，保持屏幕常亮
-    ├── ContentView.swift             界面：状态 / 触控区 / 按键 / 参数 / 日志
-    ├── TrackpadSurface.swift         UIKit 手势识别（单指移动、双指滚动、轻点、长按）
-    ├── HIDPeripheral.swift           CoreBluetooth 外设 + HOGP GATT 数据库 + 报告上报
+    ├── ContentView.swift             主界面 / 设置子页面 / 底部按键条 / 滚轮键
+    ├── TrackpadSurface.swift         UIKit 手势识别（单指移动、双指滚动、轻点、长按），支持全屏样式
+    ├── HIDPeripheral.swift           CoreBluetooth 外设 + HOGP GATT 数据库 + 报告上报 + 设置持久化
     ├── HIDDescriptor.swift           UUID 定义、HID Report Descriptor、报告打包
     └── Info.plist                    蓝牙权限（不含后台模式）
 ```
@@ -119,11 +120,12 @@ open PocketTrackpad.xcodeproj
 
 ## 五、配对与使用
 
-1. iPhone 打开 App，看到状态变为「等待 iPad 配对」。
+1. iPhone 打开 App，点**右上角的小按钮「开始广播」**（左上角齿轮是设置）。
 2. iPad 打开 **设置 → 蓝牙**，保持蓝牙开启。
 3. 在「其他设备」里选择 **PT-Pad**，按提示完成配对。
-4. iPad 屏幕出现圆形指针即成功；App 状态变为「已连接 · 可以移动指针」。
-5. 首次配对若失败，在 iPad 上「忽略此设备」，App 里点「重新广播」后再试一次。
+4. iPad 屏幕出现圆形指针即成功；iPhone 上的触控区会**自动切换成全屏**，顶部显示「已连接」。
+5. 想断开点顶部小按钮「停止广播」；首次配对若失败，在 iPad 上「忽略此设备」，App 里点「重新广播」后再试一次。
+6. 指针速度、滚动速度、自然滚动在**左上角齿轮 → 设置**里调，设置会自动保存。
 
 ### iPad 侧推荐设置
 
@@ -143,7 +145,10 @@ open PocketTrackpad.xcodeproj
 | 单指双击 | 左键双击 |
 | 单指长按 0.5 秒 | 右键单击 |
 | 双指滑动 | 滚轮滚动 |
-| 底部「左键 / 中键 / 右键」按住 | 按键按下 / 抬起，可拖选 |
+| 底部「左键 / 右键」按住 | 按键按下 / 抬起，可拖选 |
+| 底部「滚轮」上下拖动 | 滚轮滚动，与双指滚动共用倍率和方向设置 |
+| 底部「滚轮」双击 | 按下滚轮键（中键 0x04）；单击刻意不动作，避免滚动时误触 |
+| 底部「滚轮」单击 | 无动作 |
 
 ---
 
@@ -187,7 +192,7 @@ open PocketTrackpad.xcodeproj
 | MFi / ExternalAccessory | 否 | 能，但要 MFi 认证与实体配件 | 高 | 高，不适合个人开发 |
 | 越狱 + 私有事件注入 | 否 | 能 | 0 | 不可分发，不建议 |
 
-**建议顺序**：先在 iPad 上装 Bluetouch 免费版，用你的 iPhone 花 5 分钟确认这台 iPad 的 iPadOS 是否接受软件模拟的 HID 鼠标；确认可行后再编译本工程做自研；如果 iPadOS 拒绝，再改走 ESP32 硬件桥（那是 100% 可靠的路径）。
+**建议顺序（按真机结果更新）**：本工程纯软件方案已验证可用，直接编译侧载即可；若你的 iPadOS 版本拒绝配对，先按第十四节核对广播 UUID 与日志，仍不行再改走 ESP32 硬件桥（100% 可靠的路径），或用 Bluetouch 现成 App 快速判断主机侧是否正常。
 
 ESP32 桥的固件侧可直接用 ESP32-BLE-Mouse 库（BLE HID 鼠标，iPadOS 13+ 免驱，通常需打开辅助触控才能点击），iPhone 侧把本工程的 `CBPeripheralManager` 换成 `CBCentralManager` 连接自定义 GATT 服务即可，改动集中在 `HIDPeripheral.swift` 一个文件。需要这条路径的完整工程我可以继续补。
 
@@ -586,21 +591,23 @@ v0.0.2 安装后能正常打开，点「开始广播」显示「等待 iPad 配�
 | 自动回退 | 若某 iOS 版本拒绝广播 16 位 SIG UUID，`didStartAdvertising` 收到 error 后自动改用 128 位重试，保证广播不中断 |
 | 日志 | 明确写出当前是「16 位标准模式」还是「128 位回退模式」，回退时直接提示主机大概率不会显示 |
 
-### 仍未消除的第二道天花板
+### 曾经担心的第二道天花板（真机未触发）
 
 标准 BLE HID 设备的广播包还带 **GAP Appearance = 0x03C2（Mouse）** 和 Class of Device。iOS 的 `startAdvertising(_:)` 只支持 `CBAdvertisementDataLocalNameKey` 与 `CBAdvertisementDataServiceUUIDsKey` 两个键，App 无法设置 Appearance、厂商数据、发射功率；CoreBluetooth 的 GATT 服务也只是整机共享外设的一部分，App 不控制 GAP。
 
 Apple 工程师在开发者论坛的正式回复是：**「Core Bluetooth doesn't expose HID peripheral service capabilities to apps.」** 系统 HID 主机栈由蓝牙守护进程管理，App 用户态提供的 GATT 服务未必会被注册成系统级 HID 设备。因此修复 16 位 UUID 能让主机「看见」，但能否被归类为鼠标，仍取决于系统实现，这一版没有真机把握。
 
-App Store 上的 Bluetouch 宣称「对端无需装软件、纯蓝牙直连」且 2026 年仍在更新，说明存在尚未复现的实现细节；本项目没有它的源码，无法反推。
+App Store 上的 Bluetouch 宣称「对端无需装软件、纯蓝牙直连」且 2026 年仍在更新，本项目没有它的源码，无法反推其实现细节。
 
-### 决定性诊断（出包后先做这一步）
+> **真机结果（2026-11-14）**：上述担心没有发生。v0.0.3 装上后，iPad 的蓝牙列表直接出现 `PT-Pad`，配对成功，系统级指针、点击、滚动均正常。说明当前 iPadOS 主要按广播里的 16 位服务 UUID 做发现与分类，App 无法设置 GAP Appearance 并不构成阻断。本小节保留作技术背景，不再作为方案否决依据。
+
+### 诊断手段（备查）
 
 用 **nRF Connect**（iOS / Android 免费，Windows 可用 nRF Connect for Desktop）扫描 `PT-Pad`，这是区分两类问题的唯一手段：
 
 | 扫描结果 | 结论 | 下一步 |
 | --- | --- | --- |
-| 扫得到，广播里能看到 `0x1812` | 广播正常，问题在系统类别识别（Appearance 缺失） | 纯软件方案基本走到头，转 ESP32 硬件桥 |
+| 扫得到，广播里能看到 `0x1812` | 广播正常（真机已验证 iPad 能接管） | 直接用；若某系统版本仍不显示，再考虑 ESP32 硬件桥 |
 | 扫得到，但只有 128 位 UUID | 触发了回退模式 | 看 App 日志里的拒绝原因，发回定位 |
 | 完全扫不到 | 广播没真正发出 | 检查 `didStartAdvertising` 的 error 与蓝牙权限 |
 
@@ -608,8 +615,31 @@ App Store 上的 Bluetouch 宣称「对端无需装软件、纯蓝牙直连」�
 
 | 路径 | 可靠性 | 代价 |
 | --- | --- | --- |
-| 继续调纯软件广播 | 不确定，受 iOS 系统 HID 栈限制，可能无解 | 每轮都要重新编译、重签、重装 |
-| ESP32-C3 硬件桥 | 可靠。固件可自由设置 Appearance `0x03C2`、16 位 `0x1812` 广播、标准 HOGP，iPad 当普通蓝牙鼠标识别 | 约 10～20 元硬件；iPhone 通过 BLE 中央或 Wi-Fi 把触摸数据发给 ESP32，需新写两端代码 |
+| 本工程纯软件方案 | **真机已验证可用**；属非公开通道，大版本升级后需回归 | 免费，自签侧载 7 天续签 |
+| ESP32-C3 硬件桥 | 最稳。固件可自由设置 Appearance `0x03C2`、16 位 `0x1812` 广播、标准 HOGP | 约 10～20 元硬件；iPhone 通过 BLE 中央或 Wi-Fi 把触摸数据发给 ESP32，需新写两端代码 |
 | 直接装 Bluetouch / Tracepad | 最省事，对端不用装软件 | 约 3 欧元去广告，代码不可控 |
 
-一句话：**广播搜不到这个具体 bug 已修好，但「iPhone 纯软件伪装成 iPad 系统级鼠标」这件事的可行性需要下调，不建议在纯软件路径上继续投入。** 若目标是「马上能用」，选现成 App 或 ESP32 硬件桥。
+一句话：**把广播 UUID 从 128 位改成 16 位 `0x1812` 之后，整条链路就通了。** 纯软件方案成立，硬件桥退为可选的高可靠性备选。
+
+---
+
+## 十五、界面改版（v0.0.4）
+
+真机可用后按实际使用习惯重排了界面，全部改动集中在 `ContentView.swift`、`TrackpadSurface.swift`、`HIDPeripheral.swift` 三个文件，蓝牙链路一行未动。
+
+| 需求 | 实现 |
+| --- | --- |
+| 指针速度、滚动速度移入设置子页面 | 主页面不再出现滑杆；左上角齿轮进入 `SettingsView`（`Form` 分页：指针 / 滚动 / 按键 / 关于）。自然滚动开关一并移入 |
+| 设置能记住 | 三项参数加 `UserDefaults` 持久化，`didSet` 写盘，重开 App 不用重调 |
+| 连接后触控区全屏 | 以 `hid.subscribers > 0` 判定连接；切换后隐藏状态卡片、日志、诊断与提示，`TrackpadSurface(edgeToEdge: true)` 用 `maxHeight: .infinity` 吃掉顶部栏与底部按键条之间的全部空间，并忽略左右安全区 |
+| 全屏样式 | `TrackpadSurface` 新增 `edgeToEdge` 参数：圆角 22 → 0、边框 1 → 0、灰底 → 系统背景色，避免边缘留白 |
+| 停止广播放在顶部且变小 | 移到导航栏右侧，`.font(.caption2)` + `.buttonStyle(.bordered)` + `.controlSize(.mini)`；文案随状态在「开始广播 / 停止广播」间切换，左侧显示绿色小圆点与「已连接」 |
+| 三个键固定在最下面 | `ButtonBar` 放在外层 `VStack` 最后一个元素，不随引导页 `ScrollView` 滚动，连接前后位置不变；底部背景延伸到 home indicator 安全区 |
+| 中键改成滚轮 | `WheelButton` 取代中键：上下拖动发送 `wheel` 事件，单击不动作，避免滚动时误触中键 |
+| 双击滚轮 = 按下滚轮键 | 双击（0.32 秒内两次轻点、位移小于 8pt）调用 `hid.click(0x04)`，产生一次中键按下/抬起，并给中等强度触感反馈 |
+
+滚轮键与触控区双指滚动共用 `scrollSensitivity` 和 `naturalScrolling`，方向定义一致，不会出现两种滚动方向相反的情况。单击滚轮刻意不发按键，按钮上用小字标注「拖动滚动 · 双击按下」。
+
+顺带修正了触控区提示文案里一处重复词的笔误（第二项应为「双击左键」）。
+
+**版本兼容性**：设置页和全屏布局用到的 `navigationDestination`、`Form`、`ToolbarItemGroup`、`.background { }` 均支持工程最低部署目标 iOS 16.0。

@@ -14,9 +14,31 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
     @Published private(set) var isAdvertising = false
     @Published private(set) var subscribers = 0
     @Published private(set) var logLines: [String] = []
-    @Published var sensitivity: Double = 1.4
-    @Published var scrollSensitivity: Double = 1.0
-    @Published var naturalScrolling = true
+
+    // 设置页的三项参数做本地持久化，重开 App 不需重调。
+    private static let sensKey = "PocketTrackpad.sensitivity"
+    private static let scrollKey = "PocketTrackpad.scrollSensitivity"
+    private static let naturalKey = "PocketTrackpad.naturalScrolling"
+
+    private static func savedDouble(_ key: String, fallback: Double) -> Double {
+        let v = UserDefaults.standard.double(forKey: key)
+        return v > 0 ? v : fallback
+    }
+
+    @Published var sensitivity: Double =
+        HIDPeripheral.savedDouble(HIDPeripheral.sensKey, fallback: 1.4) {
+            didSet { UserDefaults.standard.set(sensitivity, forKey: HIDPeripheral.sensKey) }
+        }
+
+    @Published var scrollSensitivity: Double =
+        HIDPeripheral.savedDouble(HIDPeripheral.scrollKey, fallback: 1.0) {
+            didSet { UserDefaults.standard.set(scrollSensitivity, forKey: HIDPeripheral.scrollKey) }
+        }
+
+    @Published var naturalScrolling: Bool =
+        (UserDefaults.standard.object(forKey: HIDPeripheral.naturalKey) as? Bool) ?? true {
+            didSet { UserDefaults.standard.set(naturalScrolling, forKey: HIDPeripheral.naturalKey) }
+        }
 
     private static let stageKey = "PocketTrackpad.lastStage"
     /// 上次运行最后到达的阶段。App 若被异常杀掉，下次启动可直接看到卡在哪一步。

@@ -7,6 +7,8 @@ import UIKit
 struct TrackpadSurface: UIViewRepresentable {
 
     @EnvironmentObject var hid: HIDPeripheral
+    /// 连接成功后触控区撑满屏幕：去掉圆角、边框和灰底，避免边缘留白。
+    var edgeToEdge: Bool = false
 
     func makeCoordinator() -> Coordinator {
         Coordinator(hid: hid)
@@ -14,12 +16,10 @@ struct TrackpadSurface: UIViewRepresentable {
 
     func makeUIView(context: Context) -> UIView {
         let view = UIView()
-        view.backgroundColor = UIColor.secondarySystemBackground
         view.isMultipleTouchEnabled = true
-        view.layer.cornerRadius = 22
         view.layer.cornerCurve = .continuous
-        view.layer.borderWidth = 1
         view.layer.borderColor = UIColor.separator.cgColor
+        Self.applyStyle(view, edgeToEdge: edgeToEdge)
 
         let move = UIPanGestureRecognizer(target: context.coordinator,
                                           action: #selector(Coordinator.handleMove(_:)))
@@ -58,7 +58,7 @@ struct TrackpadSurface: UIViewRepresentable {
         view.addGestureRecognizer(longPress)
 
         let hint = UILabel()
-        hint.text = "单指移动指针  ·  轻点左键  ·  双击双击\n双指滚动  ·  长按右键"
+        hint.text = "单指移动指针  ·  轻点左键  ·  双击左键\n双指滚动  ·  长按右键"
         hint.numberOfLines = 0
         hint.textAlignment = .center
         hint.font = UIFont.preferredFont(forTextStyle: .footnote)
@@ -78,6 +78,15 @@ struct TrackpadSurface: UIViewRepresentable {
 
     func updateUIView(_ uiView: UIView, context: Context) {
         context.coordinator.hid = hid
+        Self.applyStyle(uiView, edgeToEdge: edgeToEdge)
+    }
+
+    private static func applyStyle(_ view: UIView, edgeToEdge: Bool) {
+        view.layer.cornerRadius = edgeToEdge ? 0 : 22
+        view.layer.borderWidth = edgeToEdge ? 0 : 1
+        view.backgroundColor = edgeToEdge
+            ? UIColor.systemBackground
+            : UIColor.secondarySystemBackground
     }
 
     // MARK: - Coordinator
