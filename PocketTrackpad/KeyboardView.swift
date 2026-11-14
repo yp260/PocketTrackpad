@@ -238,11 +238,12 @@ struct KeyboardPanel: View {
             .padding(.bottom, 6)
     }
 
-    /// 极简选词提示：数字键 / 空格是最直接的选词方式，备选是用下方小触控区
-    /// 把 iPad 系统指针移到屏幕顶部的候选条上点选（不受输入法键盘处理差异影响）。
-    /// 仅一行、次级色，不打断键区紧凑布局。
+    /// 选词提示：iPad 系统自带拼音输入法的候选条，对「BLE 复合键鼠外设」的
+    /// 数字 / 空格选词经常不触发（输入法把这类设备的键盘事件路由到文本而非候选 UI）。
+    /// 最稳的选词方式是用下方小触控区把 iPad 系统指针移到屏幕顶部的候选条上点一下；
+    /// 备选是 ←/→ 移动高亮 + 空格 / 回车确认。提示只一行、次级色，不打断键区布局。
     private var imeHint: some View {
-        Text("选词：按 1-9 或空格；或移动下方触控区指针去点 iPad 顶部的候选条")
+        Text("选词：用下方小触控区移动指针，点 iPad 顶部候选条最稳；或 ←/→ + 空格/回车")
             .font(.caption2)
             .foregroundStyle(.secondary)
             .frame(maxWidth: .infinity, alignment: .leading)

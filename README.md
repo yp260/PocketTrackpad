@@ -1261,35 +1261,38 @@ Esc / ↑ 位置、GATT 服务、广播 UUID、三指上滑 80pt 阈值、所有
 ### 原因
 
 本 App 的键盘走标准 USB HID 键盘报告（12 字节复合报告的键盘部分：`modifier + reserved +
-6 键码`）。iPad 能正常接收字母/数字/空格说明键盘报告是被正确解析的——字母能打出来就是证据。
-选词按键在 HID 层没有任何特殊处理，和字母键走同一条 `sendKey` 链路，因此数字键 `1-9`、
-空格、回车在 HID 层都能正确送达 iPad。
+6 键码`），键码表与字母键完全相同——字母能打出来，证明键盘报告被正确解析，数字键 `1-9`、
+空格、回车在 HID 层都能正确送到 iPad。
 
-iPadOS 拼音输入法对选词有两套可靠机制，之前界面没告诉用户，导致「看起来选不了」：
+但 **iPadOS 系统自带拼音输入法的候选条，对「BLE 复合键鼠外设」的键盘选词经常不触发**：
+数字 `1-9`、空格、方向键虽然进了系统，却被输入法路由到了文本而不是候选 UI，表现为「按了没反应」。
+这是 iPadOS 对这类 HID 设备的输入法处理差异（非本 App 报告格式问题，也非键码错误）。
 
-1. **硬件键盘选词**：拼音组合态下按数字键 `1-9` 直接选对应候选词；按 `空格` 选第一个候选；
-   按 `↓` 展开候选列表后用 `←/→` 移动高亮、`⏎(回车)` 确认。
-2. **点选候选条**：本 App 在键盘页下方保留了一块小触控区（复用 `TrackpadSurface`），
-   它控制的就是 iPad 系统指针。把指针移到 iPad 屏幕**顶部/底部的候选条**上，用左键点一下
-   即可选词。这条路完全绕开输入法的键盘处理差异，任何机型都稳。
+**真正稳的选词路径只有一条——用鼠标链路点选候选条**：
+
+1. **点选候选条（推荐）**：键盘页下方那块小触控区（复用 `TrackpadSurface`）控制的就是
+   iPad 系统指针。单指移动指针到 iPad 屏幕**顶部/底部的候选条**上，轻点左键即选词。
+   这是指针事件，走鼠标链路，完全绕开输入法的键盘选词差异，任何输入法、任何机型都稳。
+2. 备选 `←/→` 移动高亮 + `空格`/`回车` 确认，与第 1 条共用同一套 IME 键盘路径，
+   在某些配置下可用，但不如点选可靠。
 
 另外，原 `sendKey` 把按键按住 60ms 就松键。iPad 中文输入法在组合态下对选词按键的采样更挑剔，
-过短的按下时间可能让 IME 漏掉该次击键。
+过短的按下时间可能让 IME 漏掉该次击键，故持续延长按住时长（0.06s → 0.09s → 0.12s）。
 
 ### 改动
 
 | 位置 | 处理 |
 | --- | --- |
-| `HIDPeripheral.swift` | `sendKey` 的 `keyReleaseAt` 由 0.06s 延长到 0.09s，确保 IME 能稳定收到选词按键 |
-| `KeyboardView.swift` | 键盘页键区与小触控区之间新增一行极简选词提示（单行、次级色）：`选词：按 1-9 或空格；或移动下方触控区指针去点 iPad 顶部的候选条` |
-| `preview/ui-preview.html` | 键盘渲染加 `.kb-imehint` 一行；元素清单新增第 29 项 |
+| `HIDPeripheral.swift` | `sendKey` 的 `keyReleaseAt` 由 0.09s 延长到 0.12s，进一步确保 IME 能稳定收到选词按键 |
+| `KeyboardView.swift` | 选词提示改写为以「触控区移动指针点候选条」为主路径：`选词：用下方小触控区移动指针，点 iPad 顶部候选条最稳；或 ←/→ + 空格/回车` |
+| `preview/ui-preview.html` | 键盘渲染 `.kb-imehint` 同步改写；元素清单第 29 项更新 |
 
 蓝牙链路、HID 报告格式、键码表、底部三键、小触控区手势一律未动。
 
 ### 真机验证（待用户反馈）
 
-重点看：① 拼音组合态下按 `1`/`2`/`3` 能否选词、按空格能否确认首词；② 键盘页下方那行
-选词提示是否显示且没挤乱布局；③ 用下方小触控区把指针移到 iPad 候选条、左键点选是否可用。
+重点看：① 拼音组合态下用**下方小触控区移动指针到 iPad 候选条、左键点选**能否稳定选词；
+② 键盘页下方那行选词提示是否显示且没挤乱布局；③ `←/→` + 空格/回车是否也能选词（作为备选）。
 
 ## 三十、断开后切换其他设备（Windows / Android）（本轮新增）
 
@@ -1306,14 +1309,36 @@ CoreBluetooth 既没有「断开指定中央」的公开接口，也不提供删
 结论：**要切到别的设备，必须先在 iPad 蓝牙里「忽略此设备」**，这是 iOS 限制，不是 App bug。
 本 App 侧能做的只是「断开后保持停止广播、让用户决定何时重新广播」，避免 iPad 立刻自动回连。
 
+### Windows 实测结论（硬平台限制）
+
+用户按上述流程（iPad 忽略本设备 → 回 App 点「开始广播」）后，**Windows 蓝牙「添加设备 → 蓝牙」
+窗口仍搜不到 PT-Pad**。根因不是操作问题，而是 **iOS HID 外设与 Windows BLE HID 配对流程不兼容**：
+
+- `CBPeripheralManager` 把 iPhone 注册成 BLE HID 外设，iPadOS / macOS / 多数 Android 能接管，
+  但 **Windows 的 BLE HID 配对（SMP 配对 / 服务发现）与 iOS 外设实现不匹配**，Nordic 官方论坛与
+  GitHub 实测均显示 Windows 连 iOS HID 外设时要么搜不到、要么连上后不做服务发现 / 卡在配对。
+- 这是系统级限制，**纯 iOS App 代码无法绕过**：广播包已是标准 16 位 `0x1812` HID UUID + 名称，
+  没有更多可调整的广播字段（`CBPeripheralManager` 只允许 LocalName 与 ServiceUUIDs 两项）。
+
+### 出路：ESP32 硬件桥（针对 Windows / 安卓）
+
+要让 Windows / 安卓稳定使用，可靠路径是 **ESP32 硬件桥**：
+
+1. iPhone 跑本 App 收集触摸/按键，通过 WiFi（或 BLE 串口）把指针位移、点击、键码发给 ESP32；
+2. ESP32 以**标准 BLE HID 外设**身份连接 Windows / 安卓（ESP32 的 HID 实现与 Windows 完全兼容）；
+3. 这样 iPhone 仍当「输入采集端」，ESP32 当「标准 HID 发射端」，Windows / 安卓把它当普通蓝牙键鼠。
+
+ESP32 固件与 iPhone 端透传是另一个独立子项目，代码里已在多处注释埋下该方向；需要的话可单开分支实现。
+
 ### 改动
 
 | 位置 | 处理 |
 | --- | --- |
 | `ContentView.swift` | 「断开」按钮点击后 `disconnect()`，再弹一次性「切换设备」指引：先在 iPad 蓝牙忽略本设备 → 目标设备搜索配对 PT-Pad → 回 App 点「开始广播」 |
-| `ContentView.swift` | 设置新增「切换设备」分组：iPad 自动重连 / 切到 Windows / 切到 Android / 本 App 操作，并注明 Android 对 BLE HID 支持因机型而异、Win+D / F11 回桌面 |
+| `ContentView.swift` | 设置新增「切换设备」分组：iPad 自动重连 / 切到 Windows / 切到 Android / 本 App 操作；并写明 **Windows 时序要点**（先开电脑添加窗口再点开始广播、发现窗口短）与局限（Windows / 部分 Android 与 iOS HID 外设配对不完全兼容，可能需 ESP32 硬件桥） |
+| `ContentView.swift` | 断开弹窗同步加入 Windows 时序要点与 ESP32 出路提示 |
 | `disconnect()` | 行为不变（停广播 + 移除 GATT 服务 + 释放 manager），只是这次把切换指引补进了提示与弹窗 |
-| `preview/ui-preview.html` | 断开时复刻真机弹窗；设置加「切换设备」分组；元素清单新增第 30 项 |
+| `preview/ui-preview.html` | 断开时复刻真机弹窗；设置加「切换设备」分组（含 Windows 时序）；元素清单第 30 项更新 |
 
 `disconnect()` 在 v0.0.7 起就是「停止广播 + 移除服务」的实现，本身不自动重连；
 之前日志里也写过「若 iPad 仍在附近且保留配对，可能自动重连」，只是用户没注意到，
@@ -1321,15 +1346,15 @@ CoreBluetooth 既没有「断开指定中央」的公开接口，也不提供删
 
 ### 真机验证（待用户反馈）
 
-重点看：① 断开后是否弹出切换指引；② 在 iPad 蓝牙「忽略此设备」后，本 App 重新广播，
-Windows/Android 能否搜索并配对 PT-Pad；③ 若 Android 旧机型仍不识别，确认是系统 BLE HID
-支持问题（非 App 缺陷）。
+重点看：① 断开后是否弹出切换指引；② iPad「忽略此设备」后本 App 重广播，Android 能否搜索并配对
+（iOS 外设对 Android 兼容性好于 Windows）；③ 若目标是 Windows，确认是否仍搜不到 —— 若是，
+走 ESP32 硬件桥方案，不要在本 App 内继续耗；④ 用下方小触控区点选 iPad 候选条能否稳定选词。
 
 | 文件 | 改动 |
 | --- | --- |
-| `ContentView.swift` | 断开弹窗 +「切换设备」设置分组；`DisconnectButton` 改为接收 `onDisconnected` 回调（alert 挂常驻视图，否则随 toolbar 一起被移除） |
-| `KeyboardView.swift` | 新增选词提示一行 |
-| `HIDPeripheral.swift` | 按键按住 0.06s → 0.09s |
-| `preview/ui-preview.html` | IME 提示、切换设备分组、断开弹窗复刻、元素清单 29/30 项 |
+| `ContentView.swift` | 断开弹窗 +「切换设备」设置分组（含 Windows 时序与 ESP32 出路）；`DisconnectButton` 改为接收 `onDisconnected` 回调（alert 挂常驻视图） |
+| `KeyboardView.swift` | 选词提示改写为触控区点选为主路径 |
+| `HIDPeripheral.swift` | 按键按住 0.09s → 0.12s |
+| `preview/ui-preview.html` | IME 提示、切换设备分组（Windows 时序）、断开弹窗复刻、元素清单 29/30 项 |
 | `preview/shot-3-settings.png` / `shot-4-keyboard.png` / `shot-5-keyboard-symbols.png` | 重新生成 |
-| `README.md` | 新增本节与第二十九节 |
+| `README.md` | 新增本节与第二十九节，并随本轮反馈修订 |

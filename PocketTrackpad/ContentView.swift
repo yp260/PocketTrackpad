@@ -76,7 +76,7 @@ struct ContentView: View {
             .alert("已断开", isPresented: $showSwitchHelp) {
                 Button("知道了", role: .cancel) {}
             } message: {
-                Text("要连接到其他设备（Windows / Android）：\n\n1. 在刚断开的设备（如 iPad）蓝牙设置里「忽略此设备」，否则它会因已配对而自动抢连。\n2. 打开目标设备蓝牙，搜索并配对 PT-Pad。\n3. 回到本 App 点右上角「开始广播」。\n\n提示：三指上滑（Command + H）只对 iPadOS 有效；Windows 回桌面用 Win + D，macOS 用 F11。")
+                Text("要连接到其他设备（Windows / Android）：\n\n1. 在刚断开的设备（如 iPad）蓝牙设置里「忽略此设备」，否则它会因已配对而自动抢连。\n2. Windows：先在电脑上打开 设置 → 蓝牙和其他设备 → 添加设备 → 蓝牙（保持窗口开着），再回本 App 点「开始广播」——Windows 对 BLE HID 外设发现窗口很短，两边要几乎同时操作。Android 同样先忽略旧配对再搜 PT-Pad。\n3. 搜到后配对；iPad 端若仍自动抢连，先去 iPad 忽略本设备。\n\n提示：三指上滑（Command + H）只对 iPadOS 有效；Windows 回桌面用 Win + D，macOS 用 F11。注意 Windows / 部分 Android 与 iOS HID 外设的配对流程不完全兼容，可能搜到却卡在配对，这类情况需改用 ESP32 硬件桥方案。")
             }
         }
     }
@@ -261,13 +261,13 @@ struct SettingsView: View {
 
             Section {
                 LabeledRow(title: "iPad 自动重连", detail: "已配对会主动回连")
-                LabeledRow(title: "切到 Windows", detail: "iPad 忽略本设备 → 配对 PT-Pad")
+                LabeledRow(title: "切到 Windows", detail: "先开电脑添加窗口，再点本 App 开始广播")
                 LabeledRow(title: "切到 Android", detail: "同样先忽略本设备再配对")
                 LabeledRow(title: "本 App", detail: "断开后点「开始广播」")
             } header: {
                 Text("切换设备")
             } footer: {
-                Text("蓝牙 HID 的配对信息存在主机侧：本 App 作为外设无法远程解除 iPad 的配对。要连 Windows / Android，请先在 iPad 蓝牙里「忽略此设备」，否则它会因已配对自动抢连。Android 对 BLE HID 的支持因机型而异，部分旧机型可能无法识别；Windows 回桌面是 Win + D，本 App 的三指上滑（Command + H）只对 iPadOS 有效。")
+                Text("蓝牙 HID 的配对信息存在主机侧：本 App 作为外设无法远程解除 iPad 的配对。切到 Windows / Android 前，请先在 iPad 蓝牙里「忽略此设备」，否则它会因已配对自动抢连。\n\nWindows 时序要点：先在电脑上打开 设置 → 蓝牙和其他设备 → 添加设备 → 蓝牙（保持此窗口开着），再回 iPhone 点「开始广播」。Windows 对 BLE HID 外设的发现窗口很短，两边要几乎同时操作；且 Windows 的 BLE HID 配对流程与 iOS 外设不完全兼容，部分电脑即使搜到也会卡在配对。Android 对 BLE HID 的支持因机型而异。Windows 回桌面用 Win + D，本 App 三指上滑（Command + H）只对 iPadOS 有效。")
                     .font(.caption)
             }
 

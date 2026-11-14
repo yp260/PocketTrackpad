@@ -574,9 +574,10 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         }
         pendingModifier = modifiers
         pendingKeycode = keycode
-        // 延长按住到 90ms：iPad 中文输入法在拼音组合态下对选词按键（数字 / 空格）
+        // 按住时长 120ms：iPad 中文输入法在拼音组合态下对选词按键（数字 / 空格）
         // 的采样更挑剔，过短的按下时间可能让 IME 漏掉该次击键，导致选词无反应。
-        keyReleaseAt = Date().addingTimeInterval(0.09)
+        // 120ms 比 90ms 更稳，又不至于触发系统按键重复（iOS 重复阈值约 500ms）。
+        keyReleaseAt = Date().addingTimeInterval(0.12)
         emptyKeyFramesLeft = 0
         let modHex = String(modifiers, radix: 16, uppercase: true)
         let keyHex = String(keycode, radix: 16, uppercase: true)

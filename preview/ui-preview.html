@@ -392,15 +392,15 @@ body.shot .phone { margin:0; }
             <tr><td>19</td><td>全键盘顶部工具条：「‹ 触控板」返回按钮 + 主键位 / 符号 两页分段控件（功能页已并入主键位）+ 粘滞生效时右侧的极短徽标</td><td>KeyboardView.swift:242-282</td></tr>
             <tr><td>20</td><td>粘滞状态改为工具条内短徽标（⌃ ⇧ ⌥ ⌘ + 清除），不再单独占一行；默认完全不显示，Ctrl / Opt / Cmd / Shift 仍为一次性粘滞</td><td>KeyboardView.swift:262-276<br>KeyboardView.swift:287-303</td></tr>
             <tr><td>21</td><td>键帽区：主键位 7 行（F1~F12 + 数字 + QWERTY 三行 + 导航/方向键 + 控制行）、符号页 5 行，两页统一 42pt 键帽</td><td>KeyboardView.swift:127-190</td></tr>
-            <tr><td>22</td><td>HID 键码解析与发送：US ANSI 布局，符号自带 Shift；一次按键 = 按下 0.09 秒（延长以兼容 iPad 中文输入法选词）+ 连发空帧松键</td><td>KeyboardView.swift:11-75<br>HIDPeripheral.swift:552-584</td></tr>
+            <tr><td>22</td><td>HID 键码解析与发送：US ANSI 布局，符号自带 Shift；一次按键 = 按下 0.12 秒（延长以兼容 iPad 中文输入法选词态）+ 连发空帧松键</td><td>KeyboardView.swift:11-75<br>HIDPeripheral.swift:552-584</td></tr>
             <tr><td>23</td><td>键盘不可用橙色警告（键鼠复合关闭 / Boot Protocol / 未订阅 2A4D 时显示，属于条件错误提示，予以保留）</td><td>KeyboardView.swift:305-319</td></tr>
             <tr><td>24</td><td>主键位第 5 行：Esc 贴 Z 左侧（键区左边缘）、↑ 贴 M 右侧（键区右边缘）；第 6 行剩 Tab / Caps / Del / Home / End / ← / ↓ / →</td><td>KeyboardView.swift:164-190</td></tr>
             <tr><td>25</td><td>键区整体上移；下方小触控区吃掉键区以下全部空间、紧贴键区，复用 TrackpadSurface（compact）且不显示提示文字</td><td>KeyboardView.swift:205-228<br>KeyboardView.swift:232-238<br>TrackpadSurface.swift:72-88</td></tr>
             <tr><td>26</td><td>底部三键高度 116pt → 76pt；键盘页上下四处说明文字删除（粘滞长句、小触控区标题、触控区内提示、底部 footer）</td><td>ContentView.swift:363-377<br>KeyboardView.swift:205-228<br>TrackpadSurface.swift:72-88</td></tr>
             <tr><td>27</td><td>键区再往上挪一点点：删掉工具条下方 24pt 空状态条，键区顶部间距 8pt → 2pt，小触控区顶部 6pt → 4pt；省下约 30pt 全部给小触控区，键盘页切页／粘滞时不再有垂直跳动</td><td>KeyboardView.swift:205-228<br>KeyboardView.swift:242-282<br>KeyboardView.swift:232-238</td></tr>
             <tr><td>28</td><td>引导页三张卡片统一显式通栏：状态卡片 / 指针与滚动 / 连接日志各加 maxWidth 无限宽约束；日志内层 VStack、ScrollView 也撑满。初始只有一行短日志时不再缩成窄卡片并居中</td><td>ContentView.swift:120-121<br>ContentView.swift:153<br>ContentView.swift:172-177</td></tr>
-            <tr><td>29</td><td>全键盘页新增极简选词提示（单行、次级色）：按 1-9 或空格选词，或移动下方小触控区指针去点 iPad 顶部候选条；键帽按住时长 60ms → 90ms 以兼容中文输入法组合态</td><td>KeyboardView.swift:244-252<br>HIDPeripheral.swift:579</td></tr>
-            <tr><td>30</td><td>断开后弹「切换设备」指引：要连 Windows / Android 须先在 iPad 蓝牙里「忽略此设备」，否则 iPad 已配对会自动抢连；设置新增「切换设备」分组说明（Android 支持因机型而异，Win+D / F11 回桌面）</td><td>ContentView.swift:76<br>ContentView.swift:513-525<br>ContentView.swift:255-278</td></tr>
+            <tr><td>29</td><td>全键盘页极简选词提示（单行、次级色）：以「下方小触控区移动指针点 iPad 顶部候选条」为主路径（BLE 复合键鼠外设的数字/空格选词在系统输入法下常不触发），备选 ←/→ + 空格/回车；键帽按住时长 90ms → 120ms 以兼容中文输入法组合态</td><td>KeyboardView.swift:241-252<br>HIDPeripheral.swift:579</td></tr>
+            <tr><td>30</td><td>断开后弹「切换设备」指引 + 设置「切换设备」分组：连 Windows / Android 须先在 iPad 蓝牙「忽略此设备」防自动抢连；并写明 Windows 时序要点（先开电脑添加窗口再点开始广播、发现窗口短）与局限（Windows / 部分 Android 与 iOS HID 外设配对不完全兼容，可能需 ESP32 硬件桥）</td><td>ContentView.swift:76<br>ContentView.swift:513-525<br>ContentView.swift:262-272</td></tr>
           </tbody>
         </table>
       </div>
@@ -728,7 +728,7 @@ body.shot .phone { margin:0; }
         "<div class=\"kb-seg\">" + seg + "</div>" + badge +
       "</div>" + warn +
       "<div class=\"kb-rows top" + (compact ? " compact" : "") + "\">" + rows + "</div>" +
-      "<div class=\"kb-imehint\" data-code=\"KeyboardView.swift:244-252\">选词：按 1-9 或空格；或移动下方触控区指针去点 iPad 顶部的候选条</div>" +
+      "<div class=\"kb-imehint\" data-code=\"KeyboardView.swift:244-252\">选词：用下方小触控区移动指针，点 iPad 顶部候选条最稳；或 ←/→ + 空格/回车</div>" +
       miniPadHTML() +
       "</div>";
   }
@@ -777,7 +777,7 @@ body.shot .phone { margin:0; }
         row("切到 Android", "同样先忽略本设备再配对") +
         row("本 App", "断开后点「开始广播」") +
       "</div>" +
-      "<div class=\"form-footer\" data-code=\"ContentView.swift:255-264\">蓝牙 HID 的配对信息存在主机侧：本 App 作为外设无法远程解除 iPad 的配对。要连 Windows / Android，请先在 iPad 蓝牙里「忽略此设备」，否则它会因已配对自动抢连。Android 对 BLE HID 的支持因机型而异，部分旧机型可能无法识别；Windows 回桌面是 Win + D，本 App 的三指上滑（Command + H）只对 iPadOS 有效。</div>" +
+      "<div class=\"form-footer\" data-code=\"ContentView.swift:262-272\">蓝牙 HID 的配对信息存在主机侧：本 App 作为外设无法远程解除 iPad 的配对。切到 Windows / Android 前，请先在 iPad 蓝牙里「忽略此设备」，否则它会因已配对自动抢连。\n\nWindows 时序要点：先在电脑上打开 设置 → 蓝牙和其他设备 → 添加设备 → 蓝牙（保持此窗口开着），再回 iPhone 点「开始广播」。Windows 对 BLE HID 外设的发现窗口很短，两边要几乎同时操作；且 Windows 的 BLE HID 配对流程与 iOS 外设不完全兼容，部分电脑即使搜到也会卡在配对。Android 对 BLE HID 的支持因机型而异。Windows 回桌面用 Win + D，本 App 三指上滑（Command + H）只对 iPadOS 有效。</div>" +
       "<div class=\"sec-head\" data-code=\"ContentView.swift:266\">关于</div>" +
       "<div class=\"group\" data-code=\"ContentView.swift:254-261\">" +
         row("广播名称", "PT-Pad") +
@@ -941,7 +941,7 @@ body.shot .phone { margin:0; }
       render();
       // 预览复刻真机的「切换设备」指引
       setTimeout(function () {
-        alert("已断开\n\n要连接到其他设备（Windows / Android）：\n\n1. 在刚断开的设备（如 iPad）蓝牙设置里「忽略此设备」，否则它会因已配对而自动抢连。\n2. 打开目标设备蓝牙，搜索并配对 PT-Pad。\n3. 回到本 App 点右上角「开始广播」。\n\n提示：三指上滑（Command + H）只对 iPadOS 有效；Windows 回桌面用 Win + D，macOS 用 F11。");
+        alert("已断开\n\n要连接到其他设备（Windows / Android）：\n\n1. 在刚断开的设备（如 iPad）蓝牙设置里「忽略此设备」，否则它会因已配对而自动抢连。\n2. Windows：先在电脑上打开 设置 → 蓝牙和其他设备 → 添加设备 → 蓝牙（保持窗口开着），再回本 App 点「开始广播」——Windows 对 BLE HID 外设发现窗口很短，两边要几乎同时操作。Android 同样先忽略旧配对再搜 PT-Pad。\n3. 搜到后配对；iPad 端若仍自动抢连，先去 iPad 忽略本设备。\n\n提示：三指上滑（Command + H）只对 iPadOS 有效；Windows 回桌面用 Win + D，macOS 用 F11。注意 Windows / 部分 Android 与 iOS HID 外设的配对流程不完全兼容，可能搜到却卡在配对，这类情况需改用 ESP32 硬件桥方案。");
       }, 60);
     }
     else if (act === "toggle") {
