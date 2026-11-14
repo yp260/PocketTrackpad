@@ -359,10 +359,10 @@ private struct ButtonBar: View {
             keys(width: geo.size.width)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(height: 116)   // 原 58pt 的 2 倍
+        .frame(height: 76)   // 从 116pt 降低，把高度让给键盘页的小触控区
         .padding(.horizontal, 12)
-        .padding(.top, 8)
-        .padding(.bottom, 10)
+        .padding(.top, 6)
+        .padding(.bottom, 8)
         .background {
             Color(.secondarySystemBackground)
                 .ignoresSafeArea(.container, edges: .bottom)

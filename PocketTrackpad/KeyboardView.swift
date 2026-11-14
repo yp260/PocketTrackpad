@@ -160,7 +160,7 @@ enum KeyboardLayout {
     }
 
     /// 主键位 7 行：顶部一整行 F1~F12，字母区下方一行导航键与四向方向键。
-    /// 行数变多后由 KeyboardPanel 把键帽高度从 44pt 降到 38pt，保证小屏放得下。
+    /// 两页统一 42pt 键帽，7 行主键位靠收紧行距容纳 F1~F12。
     static func rows(for page: KeyboardPage) -> [[KeyDef]] {
         switch page {
         case .letters:
@@ -211,7 +211,8 @@ struct KeyboardPanel: View {
             toolbar
             stickyBar
             if !hid.keyboardReady { warning }
-            // 键区整体上移，紧跟状态条；下方空出来的区域改成小范围触控区。
+            // 键区紧贴上方的状态条，下方剩余空间全部交给小触控区，
+            // 中间不再插入任何 Spacer 或说明文字，触控区直接贴住键区。
             VStack(spacing: 6) {
                 // 用整数索引而不是 enumerated() 元组：后者配 id: \.offset
                 // 在部分 Swift 版本会报「key path 不能指向元组元素」。
@@ -221,27 +222,20 @@ struct KeyboardPanel: View {
             }
             .padding(.horizontal, 6)
             .padding(.top, 8)
-            Spacer(minLength: 6)
             miniTrackpad
-            footer
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(.systemBackground))
     }
 
-    /// 键盘下方的小范围触控区：打字时也能移动指针、点击、滚动，不必切回触控板页。
-    /// 复用 TrackpadSurface，手势与全屏触控板完全一致，只是提示更精简、圆角更小。
+    /// 键盘下方的小范围触控区：吃掉键区以下的全部空间，紧贴键区。
+    /// 复用 TrackpadSurface，手势与全屏触控板完全一致；compact 下不显示任何提示文字。
     private var miniTrackpad: some View {
-        VStack(spacing: 4) {
-            Text("小触控区 · 手势与全屏触控板一致")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-            TrackpadSurface(compact: true)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-        .frame(height: 120)
-        .padding(.horizontal, 10)
-        .padding(.bottom, 4)
+        TrackpadSurface(compact: true)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(.horizontal, 10)
+            .padding(.top, 6)
+            .padding(.bottom, 6)
     }
 
     // MARK: 顶部工具条
@@ -277,26 +271,26 @@ struct KeyboardPanel: View {
 
     private var stickyBar: some View {
         HStack(spacing: 6) {
-            Image(systemName: "keyboard")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-            Text(sticky == 0
-                 ? "修饰键：点一下临时按住，随下一次按键自动释放"
-                 : "粘滞：\(stickyNames)（下一次按键后自动清除）")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
+            // 默认不放任何说明文字：激活的键帽本身已变蓝。
+            // 只有粘滞键生效时才显示一行简短状态，不再重复解释用法。
+            if sticky != 0 {
+                Text(stickyNames)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
             Spacer(minLength: 0)
-            Button("清除") { sticky = 0 }
-                .font(.caption2)
-                .buttonStyle(.bordered)
-                .controlSize(.mini)
-                .fixedSize()
-                .disabled(sticky == 0)
+            if sticky != 0 {
+                Button("清除") { sticky = 0 }
+                    .font(.caption2)
+                    .buttonStyle(.bordered)
+                    .controlSize(.mini)
+                    .fixedSize()
+            }
         }
         .padding(.horizontal, 12)
-        .frame(height: 28)
+        .frame(height: 24)
     }
 
     private var stickyNames: String {
@@ -322,15 +316,6 @@ struct KeyboardPanel: View {
         .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
         .padding(.horizontal, 10)
         .padding(.top, 4)
-    }
-
-    private var footer: some View {
-        Text("Esc / ↑ 贴 Z / M 两侧；下方小触控区可移动指针，底部三键仍可用。")
-            .font(.caption2)
-            .foregroundStyle(.tertiary)
-            .multilineTextAlignment(.center)
-            .padding(.horizontal, 14)
-            .padding(.bottom, 8)
     }
 
     // MARK: 按键分发

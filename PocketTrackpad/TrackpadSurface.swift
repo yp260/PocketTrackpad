@@ -9,7 +9,7 @@ struct TrackpadSurface: UIViewRepresentable {
     @EnvironmentObject var hid: HIDPeripheral
     /// 连接成功后触控区撑满屏幕：去掉圆角、边框和灰底，避免边缘留白。
     var edgeToEdge: Bool = false
-    /// 全键盘页下方的小范围触控区：提示文字精简、圆角缩小，手势逻辑完全不变。
+    /// 全键盘页下方的小范围触控区：不显示提示文字、圆角缩小，手势逻辑完全不变。
     var compact: Bool = false
 
     func makeCoordinator() -> Coordinator {
@@ -70,10 +70,12 @@ struct TrackpadSurface: UIViewRepresentable {
         view.addGestureRecognizer(homeSwipe)
 
         let hint = UILabel()
-        hint.text = Self.hintText(composite: hid.compositeDevice, compact: compact)
+        hint.text = Self.hintText(composite: hid.compositeDevice)
+        // 键盘页的小触控区不显示任何提示文字；全屏触控板保留手势说明。
+        hint.isHidden = compact
         hint.numberOfLines = 0
         hint.textAlignment = .center
-        hint.font = UIFont.preferredFont(forTextStyle: compact ? .caption2 : .footnote)
+        hint.font = UIFont.preferredFont(forTextStyle: .footnote)
         hint.textColor = UIColor.secondaryLabel
         hint.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(hint)
@@ -90,15 +92,12 @@ struct TrackpadSurface: UIViewRepresentable {
 
     func updateUIView(_ uiView: UIView, context: Context) {
         context.coordinator.hid = hid
-        context.coordinator.hint?.text = Self.hintText(composite: hid.compositeDevice, compact: compact)
+        context.coordinator.hint?.text = Self.hintText(composite: hid.compositeDevice)
+        context.coordinator.hint?.isHidden = compact
         Self.applyStyle(uiView, edgeToEdge: edgeToEdge, compact: compact)
     }
 
-    private static func hintText(composite: Bool, compact: Bool) -> String {
-        if compact {
-            let base = "单指移动指针 · 轻点左键 · 双击左键\n双指滚动 · 长按右键"
-            return composite ? base + "\n三指上滑回桌面" : base
-        }
+    private static func hintText(composite: Bool) -> String {
         let base = "单指移动指针  ·  轻点左键  ·  双击左键\n双指滚动  ·  长按右键"
         return composite ? base + "\n三指上滑回桌面（Command+H）" : base
     }
