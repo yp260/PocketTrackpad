@@ -172,7 +172,7 @@ if (-not $SkipGitHub) {
     # ------------------------------------------------------------ Phase 4 ---
     Write-Phase "4/6  Cloud build (macOS runner, about 10 minutes)"
 
-    $Before = Get-GhJson @("run", "list", "--workflow", "unsigned-ipa.yml", "--limit", "1", "--json", "databaseId")
+    $Before = Get-GhJson -Arguments @("run", "list", "--workflow", "unsigned-ipa.yml", "--limit", "1", "--json", "databaseId")
     $BeforeId = [int64]0
     if ($Before.Count -gt 0) { $BeforeId = [int64]$Before[0].databaseId }
 
@@ -185,7 +185,7 @@ if (-not $SkipGitHub) {
     $RunId = [int64]0
     $Conclusion = ""
     while ((Get-Date) -lt $Deadline) {
-        $Runs = Get-GhJson @("run", "list", "--workflow", "unsigned-ipa.yml", "--limit", "1", "--json", "databaseId,status,conclusion,url")
+        $Runs = Get-GhJson -Arguments @("run", "list", "--workflow", "unsigned-ipa.yml", "--limit", "1", "--json", "databaseId,status,conclusion,url")
         if ($Runs.Count -gt 0) {
             $R = $Runs[0]
             if ([int64]$R.databaseId -gt $BeforeId) {
@@ -208,7 +208,7 @@ if (-not $SkipGitHub) {
     # ------------------------------------------------------------ Phase 5 ---
     Write-Phase "5/6  Download IPA and verify"
 
-    $Releases = Get-GhJson @("release", "list", "--limit", "5", "--json", "tagName,isPrerelease")
+    $Releases = Get-GhJson -Arguments @("release", "list", "--limit", "5", "--json", "tagName,isPrerelease")
     if ($Releases.Count -eq 0) { throw "No Release found. Check the workflow run logs." }
     $Tag = $Releases[0].tagName
     Write-Host ("  Latest release: {0}" -f $Tag)
