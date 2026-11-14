@@ -117,6 +117,8 @@ struct ContentView: View {
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
                 }
+                // 显式撑满：VStack 默认按最宽子视图定宽，内容短时会缩成窄卡片并居中。
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(14)
                 .background(Color(.secondarySystemBackground),
                             in: RoundedRectangle(cornerRadius: 14))
@@ -148,11 +150,12 @@ struct ContentView: View {
                         Slider(value: $hid.scrollSensitivity, in: 0.3...3.0, step: 0.1)
                     }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(14)
                 .background(Color(.secondarySystemBackground),
                             in: RoundedRectangle(cornerRadius: 14))
 
-                // 连接日志
+                // 连接日志：初始只有一行短日志，若不限宽会明显比其他卡片窄。
                 VStack(alignment: .leading, spacing: 6) {
                     Text("连接日志")
                         .font(.caption.weight(.semibold))
@@ -166,9 +169,12 @@ struct ContentView: View {
                                     .frame(maxWidth: .infinity, alignment: .leading)
                             }
                         }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
+                    .frame(maxWidth: .infinity)
                     .frame(height: 108)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(12)
                 .background(Color(.secondarySystemBackground),
                             in: RoundedRectangle(cornerRadius: 14))
