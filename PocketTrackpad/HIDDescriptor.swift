@@ -163,9 +163,23 @@ enum HIDSpec {
     static let keyboardReportBytes = 8
     static let compositeReportBytes = mouseReportBytes + keyboardReportBytes
 
-    /// Command(Left GUI) 位与 H 键的 HID 键码。
-    static let commandModifier: UInt8 = 0x08
+    /// 标准 Boot Keyboard 的 modifier 位图（第 5 字节）。可按需按位或组合。
+    static let modLeftControl: UInt8  = 0x01
+    static let modLeftShift: UInt8    = 0x02
+    static let modLeftAlt: UInt8      = 0x04   // iPad 上的 Option
+    static let modLeftGUI: UInt8      = 0x08   // iPad / Mac 上的 Command
+    static let modRightControl: UInt8 = 0x10
+    static let modRightShift: UInt8   = 0x20
+    static let modRightAlt: UInt8     = 0x40
+    static let modRightGUI: UInt8     = 0x80
+
+    /// Command(Left GUI) 位与 H 键的 HID 键码（三指上滑回桌面用）。
+    static let commandModifier: UInt8 = modLeftGUI
     static let homeKeycode: UInt8 = 0x0B
+
+    /// Report Map 里键盘字段声明的 Usage Maximum = 101 (0x65)。
+    /// 超过这个范围的键码主机不会解析，全键盘布局只使用 0x00...0x65 内的键。
+    static let maxKeyboardKeycode: UInt8 = 0x65
 
     /// 标准 Boot Keyboard 输入报告定义：modifier(1) + reserved(1) + 6 个键码。
     private static let keyboardCollection: [UInt8] = [
@@ -235,15 +249,20 @@ enum HIDSpec {
                            : Data([0x00, 0x00, 0x00, 0x00])
     }
 
+    /// 组装一条输入报告。
+    /// - keycodes: 最多 6 个同时按下的键码（6KRO），不足补 0。
+    ///   全键盘界面一次只发一个键，但接口保留多键能力，便于以后做组合键。
     static func makeReport(buttons: UInt8, x: Int8, y: Int8, wheel: Int8,
                            composite: Bool = false,
-                           modifier: UInt8 = 0, keycode: UInt8 = 0) -> Data {
+                           modifier: UInt8 = 0, keycodes: [UInt8] = []) -> Data {
         let bx = UInt8(bitPattern: x)
         let by = UInt8(bitPattern: y)
         let bw = UInt8(bitPattern: wheel)
         if composite {
-            return Data([buttons, bx, by, bw,
-                         modifier, 0x00, keycode, 0x00, 0x00, 0x00, 0x00, 0x00])
+            var slots = Array(keycodes.prefix(keyboardReportBytes - 2))
+            slots += Array(repeating: 0,
+                           count: (keyboardReportBytes - 2) - slots.count)
+            return Data([buttons, bx, by, bw, modifier, 0x00] + slots)
         }
         return useReportID ? Data([0x01, buttons, bx, by, bw])
                            : Data([buttons, bx, by, bw])

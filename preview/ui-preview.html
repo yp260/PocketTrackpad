@@ -187,6 +187,76 @@ input[type=range] { width:100%; accent-color:var(--accent); margin:10px 0 2px; c
   width:134px; height:5px; border-radius:3px; background:var(--ios-text); opacity:.85; pointer-events:none;
 }
 
+/* ---------- 触控区顶部切换栏 ---------- */
+.input-view { display:flex; flex-direction:column; height:100%; }
+.pad-flex { flex:1 1 auto; min-height:0; }
+.topbar {
+  flex:0 0 46px; display:flex; align-items:center; gap:8px; padding:0 12px;
+  background:var(--ios-bg); border-bottom:.5px solid var(--ios-sep);
+  font-size:12px; color:var(--ios-2);
+}
+.topbar .tb-title { white-space:nowrap; }
+.topbar .tb-warn { font-size:10px; color:var(--ios-orange); white-space:nowrap; }
+.tb-primary {
+  font:inherit; font-size:12px; font-weight:600; color:#fff; background:var(--accent);
+  border:0; border-radius:7px; padding:6px 10px; cursor:pointer; margin-left:auto;
+  white-space:nowrap;
+}
+.tb-primary:active { opacity:.65; }
+
+/* ---------- 全键盘 ---------- */
+.kb-wrap { display:flex; flex-direction:column; height:100%; background:var(--ios-card); }
+.kb-toolbar {
+  flex:0 0 auto; display:flex; align-items:center; gap:8px; padding:6px 10px;
+  background:var(--ios-bg); border-bottom:.5px solid var(--ios-sep);
+}
+.kb-back {
+  font:inherit; font-size:12px; color:var(--accent); background:var(--ios-card);
+  border:.5px solid var(--ios-sep); border-radius:7px; padding:5px 8px;
+  cursor:pointer; white-space:nowrap;
+}
+.kb-seg {
+  display:flex; flex:1 1 auto; background:rgba(120,120,128,.12);
+  border-radius:7px; padding:2px; gap:2px;
+}
+.kb-seg button {
+  flex:1; font:inherit; font-size:11px; padding:5px 2px; border:0; border-radius:5px;
+  background:transparent; color:var(--ios-text); cursor:pointer;
+}
+.kb-seg button.on { background:var(--ios-card); box-shadow:0 1px 3px rgba(0,0,0,.12); font-weight:600; }
+.kb-sticky {
+  flex:0 0 28px; display:flex; align-items:center; gap:6px; padding:0 12px;
+  font-size:10px; color:var(--ios-2);
+}
+.kb-sticky .txt { flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.kb-clear {
+  font:inherit; font-size:10px; border:.5px solid var(--ios-sep); border-radius:5px;
+  background:var(--ios-card); color:var(--accent); padding:2px 6px; cursor:pointer;
+}
+.kb-clear:disabled { opacity:.4; cursor:default; }
+.kb-warn {
+  flex:0 0 auto; margin:4px 10px 0; padding:8px; border-radius:8px;
+  background:rgba(255,159,10,.12); color:var(--ios-orange); font-size:10px; line-height:1.5;
+}
+.kb-rows { padding:6px; }
+.kb-gap { flex:1 1 auto; min-height:0; }
+.kb-row { display:flex; gap:4px; margin-bottom:6px; }
+.kb-key {
+  font:inherit; font-size:16px; font-weight:500; height:44px; border:0; border-radius:6px;
+  background:var(--ios-btn); color:var(--ios-text);
+  box-shadow:0 0 0 .5px rgba(60,60,67,.18); cursor:pointer;
+  overflow:hidden; white-space:nowrap; padding:0 2px; min-width:0;
+}
+.kb-key.fn { background:rgba(120,120,128,.22); font-size:11px; }
+.kb-key.wide { font-size:12px; }
+.kb-key.spacer { background:transparent; box-shadow:none; pointer-events:none; }
+.kb-key.sticky-on { background:var(--accent); color:#fff; box-shadow:none; }
+.kb-key:active { filter:brightness(.88); }
+.kb-footer {
+  flex:0 0 auto; padding:0 14px 8px; text-align:center;
+  font-size:10px; color:var(--ios-3); line-height:1.5;
+}
+
 /* ---------- 标注 ---------- */
 body.annotate [data-code] { outline:1px dashed var(--accent); outline-offset:1px; cursor:crosshair; }
 body.annotate [data-code]:hover { background:rgba(0,122,255,.10); }
@@ -230,8 +300,8 @@ body.shot .phone { margin:0; }
 <div class="page">
   <h1>PocketTrackpad 界面预览</h1>
   <p class="lead">
-    按 <b>ContentView.swift / TrackpadSurface.swift</b> 当前代码 1:1 近似还原，<b>不是 Xcode 渲染截图</b>，仅用于看布局和讨论修改。
-    四种状态可切换，滑块、开关、三个按键、触控区都能操作。打开「元素标注」后点手机里的任意元素，会显示它对应的代码行，你可以直接说「把第 N 项改成…」。
+    按 <b>ContentView.swift / TrackpadSurface.swift / KeyboardView.swift</b> 当前代码 1:1 近似还原，<b>不是 Xcode 渲染截图</b>，仅用于看布局和讨论修改。
+    五种状态可切换，滑块、开关、三个按键、触控区、全键盘按键都能操作。打开「元素标注」后点手机里的任意元素，会显示它对应的代码行，你可以直接说「把第 N 项改成…」。
   </p>
 
   <div class="stage">
@@ -242,6 +312,7 @@ body.shot .phone { margin:0; }
           <button class="chip" data-screen="setup">未启动</button>
           <button class="chip" data-screen="adv">广播中待配对</button>
           <button class="chip" data-screen="connected">已连接 · 全屏</button>
+          <button class="chip" data-screen="keyboard">已连接 · 全键盘</button>
           <button class="chip" data-screen="settings">设置子页面</button>
         </div>
         <div class="opts">
@@ -285,23 +356,29 @@ body.shot .phone { margin:0; }
         <table>
           <thead><tr><th>#</th><th>位置 / 当前内容</th><th>代码位置</th></tr></thead>
           <tbody>
-            <tr><td>1</td><td>顶部标题：未连接「口袋触控板」／已连接「PT-Pad」</td><td>ContentView.swift:26</td></tr>
-            <tr><td>2</td><td>左上角设置齿轮</td><td>ContentView.swift:29-38</td></tr>
-            <tr><td>3</td><td>连接状态：绿点 +「已连接」</td><td>ContentView.swift:40-47</td></tr>
-            <tr><td>4</td><td>右上角「开始广播／停止广播」小按钮</td><td>ContentView.swift:49-57</td></tr>
-            <tr><td>5</td><td>状态卡片：状态文字、订阅数、两行引导（已删「重新广播」按钮）</td><td>ContentView.swift:89-110</td></tr>
-            <tr><td>6</td><td>引导页「指针与滚动」卡片：指针速度 / 滚动速度（连接前可调）</td><td>ContentView.swift:112-141</td></tr>
+            <tr><td>1</td><td>顶部标题：未连接「口袋触控板」／已连接「PT-Pad」</td><td>ContentView.swift:38</td></tr>
+            <tr><td>2</td><td>左上角设置齿轮</td><td>ContentView.swift:41-50</td></tr>
+            <tr><td>3</td><td>连接状态：绿点 +「已连接」</td><td>ContentView.swift:52-60</td></tr>
+            <tr><td>4</td><td>右上角「开始广播／停止广播」小按钮</td><td>ContentView.swift:61-69</td></tr>
+            <tr><td>5</td><td>状态卡片：状态文字、订阅数、两行引导（已删「重新广播」按钮）</td><td>ContentView.swift:100-123</td></tr>
+            <tr><td>6</td><td>引导页「指针与滚动」卡片：指针速度 / 滚动速度（连接前可调）</td><td>ContentView.swift:124-153</td></tr>
             <tr><td>7</td><td>触控区中央提示：单指移动 · 轻点左键 · 双击左键 · 双指滚动 · 长按右键；复合模式下多一行「三指上滑回桌面」</td><td>TrackpadSurface.swift:62-84</td></tr>
-            <tr><td>8</td><td>连接日志卡片（108pt，等宽字体）</td><td>ContentView.swift:144-162</td></tr>
-            <tr><td>9</td><td>底部按键条高度 116pt（原 58pt 的 2 倍）、宽度比 左键:滚轮:右键 = 3:2:3、间距 10pt</td><td>ContentView.swift:273-316</td></tr>
-            <tr><td>10</td><td>左键／右键：按住变蓝，松手复原</td><td>ContentView.swift:319-348</td></tr>
-            <tr><td>11</td><td>滚轮键：上下拖动滚动（默认上滑 = 滚轮下滑）、双击按下中键、单击无动作</td><td>ContentView.swift:352-425</td></tr>
-            <tr><td>12</td><td>设置：指针速度 0.4~3.5，默认 1.4×（连接后从这里调）</td><td>ContentView.swift:183-197</td></tr>
-            <tr><td>13</td><td>设置：滚动速度 0.3~3.0，默认 1.0× / 自然滚动开关（默认关 = 上滑滚轮下滑，连接后从这里调）</td><td>ContentView.swift:199-214</td></tr>
-            <tr><td>14</td><td>设置：按键说明三行</td><td>ContentView.swift:216-220</td></tr>
-            <tr><td>15</td><td>设置：关于四行（不再回显整机名）+ 底部三步改名说明</td><td>ContentView.swift:234-244</td></tr>
-            <tr><td>16</td><td>顶部「断开」按钮（仅已连接显示）：移除 GATT 服务并停止广播，可重新广播切换到 Windows / Mac</td><td>ContentView.swift:47</td></tr>
-            <tr><td>17</td><td>设置：「实验功能 · 回桌面」分组（键鼠复合开关、三指上滑、输入报告字节数、风险与回退说明）</td><td>ContentView.swift:222-232</td></tr>
+            <tr><td>8</td><td>连接日志卡片（108pt，等宽字体）</td><td>ContentView.swift:155-174</td></tr>
+            <tr><td>9</td><td>底部按键条高度 116pt（原 58pt 的 2 倍）、宽度比 左键:滚轮:右键 = 3:2:3、间距 10pt</td><td>ContentView.swift:328-371</td></tr>
+            <tr><td>10</td><td>左键／右键：按住变蓝，松手复原</td><td>ContentView.swift:375-404</td></tr>
+            <tr><td>11</td><td>滚轮键：上下拖动滚动（默认上滑 = 滚轮下滑）、双击按下中键、单击无动作</td><td>ContentView.swift:408-481</td></tr>
+            <tr><td>12</td><td>设置：指针速度 0.4~3.5，默认 1.4×（连接后从这里调）</td><td>ContentView.swift:195-209</td></tr>
+            <tr><td>13</td><td>设置：滚动速度 0.3~3.0，默认 1.0× / 自然滚动开关（默认关 = 上滑滚轮下滑，连接后从这里调）</td><td>ContentView.swift:211-226</td></tr>
+            <tr><td>14</td><td>设置：按键说明五行（新增全键盘、组合键两行）</td><td>ContentView.swift:228-234</td></tr>
+            <tr><td>15</td><td>设置：关于四行（不再回显整机名）+ 底部三步改名说明</td><td>ContentView.swift:248-258</td></tr>
+            <tr><td>16</td><td>顶部「断开」按钮（仅已连接显示）：移除 GATT 服务并停止广播，可重新广播切换到 Windows / Mac</td><td>ContentView.swift:59</td></tr>
+            <tr><td>17</td><td>设置：「实验功能 · 全键盘与回桌面」分组（键鼠复合开关、三指上滑、全键盘、输入报告字节数、风险与回退说明）</td><td>ContentView.swift:236-246</td></tr>
+            <tr><td>18</td><td>已连接触控区顶部切换栏：「触控板模式」+ 蓝色主按钮「全键盘」；键盘未就绪时多一行橙色提示</td><td>ContentView.swift:286-325</td></tr>
+            <tr><td>19</td><td>全键盘顶部工具条：「‹ 触控板」返回按钮 + 主键位 / 符号 / 功能 三页分段控件</td><td>KeyboardView.swift:231-257</td></tr>
+            <tr><td>20</td><td>粘滞修饰键状态条：Ctrl / Opt / Cmd / Shift 为一次性粘滞，下一次按键后自动清除；右侧「清除」按钮</td><td>KeyboardView.swift:260-291</td></tr>
+            <tr><td>21</td><td>键帽区：每页 5 行（4 行页面键 + 常驻控制行），键宽按权重分配，功能键深色、粘滞激活变蓝</td><td>KeyboardView.swift:126-191</td></tr>
+            <tr><td>22</td><td>HID 键码解析与发送：US ANSI 布局，符号自带 Shift；一次按键 = 按下 0.06 秒 + 连发空帧松键</td><td>KeyboardView.swift:11-75<br>HIDPeripheral.swift:552-584</td></tr>
+            <tr><td>23</td><td>键盘不可用橙色警告（键鼠复合关闭 / Boot Protocol / 未订阅 2A4D 时显示）+ 底部中文输入限制说明</td><td>KeyboardView.swift:293-316</td></tr>
           </tbody>
         </table>
       </div>
@@ -321,6 +398,12 @@ body.shot .phone { margin:0; }
         <br><b>三指上滑</b>：复合模式下发送键盘报告 Command+H 让 iPadOS 回主屏幕，真机需三指同时
         上滑 80pt 以上。这是实验功能，iPad 可能把设备识别为键盘而拒绝接管整个设备；此时关掉设置里的
         「键鼠复合模式」、忽略设备重新配对即可回退到纯鼠标，不需要重装 App。
+        <br><b>全键盘</b>：已连接时点触控区顶部蓝色「全键盘」按钮切换到三页虚拟键盘；键盘页顶部「‹ 触控板」
+        返回。主键位是数字 + QWERTY，符号页是上档符号与常用控制键，功能页是 F1~F12、方向键、Home / End / PageUp / PageDown。
+        底部常驻 Ctrl / Opt / Cmd / Shift 一次性粘滞修饰键，组合键先点修饰键再点字符键。底部左键 / 滚轮 / 右键在键盘模式下依旧可用。
+        <br><b>键盘限制</b>：按键走 USB HID 键码（0x00~0x65），中文、emoji 和输入法切换由主机决定，不能直接写入字符；
+        多媒体键（音量、亮度）属于 Consumer Page，本描述符未声明，无法发送。全键盘与三指上滑共用 12 字节键鼠复合报告，
+        必须保持「键鼠复合模式」开启并在 iPad 忽略设备后重新配对。
       </div>
     </div>
   </div>
@@ -335,18 +418,22 @@ body.shot .phone { margin:0; }
     subscribers: 0, statusText: "尚未启动",
     sensitivity: 1.4, scrollSensitivity: 1.0, naturalScrolling: false,
     compositeDevice: true,
+    keyboardPage: "letters", sticky: 0,
     displayName: "跟随 iPhone 整机名",
     showDiag: false, annotate: false, dark: false
   };
   var s = Object.assign({}, DEFAULTS);
-  // 支持 ?state=adv|connected|settings|setup 与 ?dark=1，便于直接打开某个状态的静态预览
+  // 支持 ?state=adv|connected|keyboard|settings|setup、?page=symbols|functions 与 ?dark=1，
+  // 便于直接打开某个状态的静态预览 / 截图。
   (function initFromURL() {
     var q = new URLSearchParams(location.search);
     if (q.get("shot") === "1") document.body.classList.add("shot");
     var v = q.get("state");
+    var p = q.get("page");
+    if (p === "symbols" || p === "functions") s.keyboardPage = p;
     if (v === "adv") { s.advertising = true; s.statusText = "等待 iPad 配对"; }
-    else if (v === "connected") {
-      s.screen = "connected"; s.connected = true; s.advertising = true;
+    else if (v === "connected" || v === "keyboard") {
+      s.screen = v; s.connected = true; s.advertising = true;
       s.subscribers = 1; s.statusText = "已连接 · 可以移动指针";
     } else if (v === "settings") { s.screen = "settings"; s.prevScreen = "setup"; }
     if (q.get("dark") === "1") {
@@ -393,18 +480,18 @@ body.shot .phone { margin:0; }
     var isSettings = s.screen === "settings";
     var conn = s.connected;
     var left = isSettings
-      ? "<button class=\"nav-btn\" data-act=\"back\" data-code=\"ContentView.swift:59-61\">‹ 返回</button>"
-      : "<button class=\"nav-btn\" data-act=\"settings\" data-code=\"ContentView.swift:29-38\" aria-label=\"设置\">" + gearSVG() + "</button>";
+      ? "<button class=\"nav-btn\" data-act=\"back\" data-code=\"ContentView.swift:71-73\">‹ 返回</button>"
+      : "<button class=\"nav-btn\" data-act=\"settings\" data-code=\"ContentView.swift:41-50\" aria-label=\"设置\">" + gearSVG() + "</button>";
     var right = "";
     if (!isSettings) {
-      right = (conn ? "<span class=\"dotgreen\" data-code=\"ContentView.swift:40-47\"></span><span class=\"nav-sub\" data-code=\"ContentView.swift:40-47\">已连接</span>" +
-        "<button class=\"nav-btn border\" data-act=\"disconnect\" data-code=\"ContentView.swift:47\">断开</button>" : "") +
-        "<button class=\"nav-btn border\" data-act=\"advertise\" data-code=\"ContentView.swift:49-57\">" +
+      right = (conn ? "<span class=\"dotgreen\" data-code=\"ContentView.swift:52-60\"></span><span class=\"nav-sub\" data-code=\"ContentView.swift:52-60\">已连接</span>" +
+        "<button class=\"nav-btn border\" data-act=\"disconnect\" data-code=\"ContentView.swift:59\">断开</button>" : "") +
+        "<button class=\"nav-btn border\" data-act=\"advertise\" data-code=\"ContentView.swift:61-69\">" +
         (s.advertising ? "停止广播" : "开始广播") + "</button>";
     }
     var title = isSettings ? "设置" : (conn ? "PT-Pad" : "口袋触控板");
     return "<div class=\"nav-left\">" + left + "</div>" +
-      "<div class=\"nav-title\" data-code=\"ContentView.swift:26\">" + title + "</div>" +
+      "<div class=\"nav-title\" data-code=\"ContentView.swift:38\">" + title + "</div>" +
       "<div class=\"nav-right\">" + right + "</div>";
   }
 
@@ -421,7 +508,7 @@ body.shot .phone { margin:0; }
 
   function setupHTML() {
     var diag = s.showDiag
-      ? "<div class=\"diag\" data-code=\"ContentView.swift:72-86\"><b>上次运行记录</b><code>7 运行中（广播正常）</code><div class=\"sub3\">若每次都停在同一步，把这段文字发回即可定位。</div></div>"
+      ? "<div class=\"diag\" data-code=\"ContentView.swift:84-98\"><b>上次运行记录</b><code>7 运行中（广播正常）</code><div class=\"sub3\">若每次都停在同一步，把这段文字发回即可定位。</div></div>"
       : "";
     var logs = [
       "16:02:11  已创建 CBPeripheralManager",
@@ -434,74 +521,211 @@ body.shot .phone { margin:0; }
     ];
     if (!s.advertising) logs = ["--  尚未开始广播，点右上角「开始广播」启动蓝牙  --"];
     return "<div class=\"scroll\"><div class=\"setup\">" + diag +
-      "<div class=\"card\" data-code=\"ContentView.swift:89-110\">" +
+      "<div class=\"card\" data-code=\"ContentView.swift:100-123\">" +
         "<div class=\"status-row\"><span class=\"status-dot" + (s.advertising ? " on" : "") + "\"></span>" +
         "<span class=\"status-title\">" + esc(s.statusText) + "</span><span class=\"spacer\"></span>" +
         "<span class=\"sub\">订阅 " + s.subscribers + "</span></div>" +
         "<div class=\"sub\">iPad 上打开 设置 &gt; 蓝牙，在「其他设备」里选择 PT-Pad 完成配对。</div>" +
         "<div class=\"sub3\">用右上角的「开始广播」启动蓝牙；连接成功后会自动出现全屏触控区。</div>" +
       "</div>" +
-      "<div class=\"card\" data-code=\"ContentView.swift:112-141\">" +
+      "<div class=\"card\" data-code=\"ContentView.swift:124-153\">" +
         "<div class=\"sub\" style=\"font-weight:600;margin:0 0 6px\">指针与滚动</div>" +
         "<div class=\"slider-label\"><span>指针速度</span><span class=\"spacer\"></span><span class=\"slider-val\" id=\"valSens\">" + s.sensitivity.toFixed(1) + "×</span></div>" +
         "<input type=\"range\" id=\"sens\" min=\"0.4\" max=\"3.5\" step=\"0.1\" value=\"" + s.sensitivity + "\">" +
         "<div class=\"slider-label\" style=\"margin-top:8px\"><span>滚动速度</span><span class=\"spacer\"></span><span class=\"slider-val\" id=\"valScroll\">" + s.scrollSensitivity.toFixed(1) + "×</span></div>" +
         "<input type=\"range\" id=\"scroll\" min=\"0.3\" max=\"3.0\" step=\"0.1\" value=\"" + s.scrollSensitivity + "\">" +
       "</div>" +
-      "<div class=\"card\" data-code=\"ContentView.swift:144-162\">" +
+      "<div class=\"card\" data-code=\"ContentView.swift:155-174\">" +
         "<div class=\"sub\" style=\"font-weight:600;margin:0 0 6px\">连接日志</div>" +
         "<div class=\"logbox\">" + logs.map(function (l) { return "<div>" + esc(l) + "</div>"; }).join("") + "</div>" +
       "</div>" +
-      "<div class=\"footnote\" data-code=\"ContentView.swift:164-167\">请保持本 App 在前台、屏幕常亮。锁屏或切到后台后 iOS 会停止 BLE 广播。</div>" +
+      "<div class=\"footnote\" data-code=\"ContentView.swift:176-179\">请保持本 App 在前台、屏幕常亮。锁屏或切到后台后 iOS 会停止 BLE 广播。</div>" +
       "</div></div>";
   }
 
   function connectedHTML() {
-    return "<div style=\"height:100%;width:100%\">" + padInner("pad-full") + "</div>";
+    return "<div class=\"input-view\">" + topbarHTML() +
+      "<div class=\"pad-flex\">" + padInner("pad-full") + "</div></div>";
+  }
+
+  function kbReady() { return s.connected && s.compositeDevice; }
+
+  function topbarHTML() {
+    var warn = kbReady() ? "" : "<span class=\"tb-warn\">键盘未就绪</span>";
+    return "<div class=\"topbar\" data-code=\"ContentView.swift:286-325\">" +
+      "<span class=\"tb-title\">触控板模式</span>" + warn +
+      "<button type=\"button\" class=\"tb-primary\" data-act=\"open-keyboard\" data-code=\"ContentView.swift:286-325\">全键盘</button>" +
+      "</div>";
+  }
+
+  /* ---------- 全键盘：与 KeyboardView.swift 保持一致的键码表 ---------- */
+  var KB_NAMED = {
+    "Esc":0x29, "⌫":0x2A, "Tab":0x2B, "Space":0x2C, "⏎":0x28,
+    "Caps":0x39, "Ins":0x49, "Home":0x4A, "PgUp":0x4B, "Del":0x4C,
+    "End":0x4D, "PgDn":0x4E, "←":0x50, "→":0x4F, "↑":0x52, "↓":0x51,
+    "PrtSc":0x46, "ScrLk":0x47, "Pause":0x48,
+    "F1":0x3A, "F2":0x3B, "F3":0x3C, "F4":0x3D, "F5":0x3E, "F6":0x3F,
+    "F7":0x40, "F8":0x41, "F9":0x42, "F10":0x43, "F11":0x44, "F12":0x45
+  };
+  var KB_SYM = {
+    "!":[0x1E,2], "\"":[0x34,2], "#":[0x20,2], "$":[0x21,2], "%":[0x22,2],
+    "&":[0x24,2], "'":[0x34,0], "(":[0x26,2], ")":[0x27,2], "*":[0x25,2],
+    "+":[0x2E,2], ",":[0x36,0], "-":[0x2D,0], ".":[0x37,0], "/":[0x38,0],
+    ":":[0x33,2], ";":[0x33,0], "<":[0x36,2], "=":[0x2E,0], ">":[0x37,2],
+    "?":[0x38,2], "@":[0x1F,2], "[":[0x2F,0], "\\":[0x31,0], "]":[0x30,0],
+    "^":[0x23,2], "_":[0x2D,2], "`":[0x35,0], "{":[0x2F,2], "|":[0x31,2],
+    "}":[0x30,2], "~":[0x35,2]
+  };
+  function kbResolve(label) {
+    if (KB_NAMED[label] !== undefined) return [KB_NAMED[label], 0];
+    if (KB_SYM[label]) return KB_SYM[label];
+    var c = label.charCodeAt(0);
+    // 键帽显示大写，实际发送小写键码；需要大写时由粘滞 Shift 提供 modifier。
+    if (c >= 65 && c <= 90) return [c - 65 + 0x04, 0];
+    if (c >= 97 && c <= 122) return [c - 97 + 0x04, 0];
+    if (c >= 49 && c <= 57) return [c - 49 + 0x1E, 0];
+    if (c === 48) return [0x27, 0];
+    return [0, 0];
+  }
+
+  function kbLine(chars, type) {
+    return chars.map(function (c) { return [c, 1, type || "k"]; });
+  }
+  function kbCtrlRow() {
+    return [
+      ["Ctrl", 1, "st", 0x01], ["Opt", 1, "st", 0x04],
+      ["Cmd", 1, "st", 0x08], ["⇧", 1, "st", 0x02],
+      ["Space", 2.6, "space"], ["⌫", 1.2, "fn"], ["⏎", 1.2, "fn"]
+    ];
+  }
+  function kbRows() {
+    if (s.keyboardPage === "symbols") return [
+      kbLine("!@#$%^&*()".split("")),
+      kbLine("`-=[]\\;',./".split("")),
+      kbLine("~_+{}|:\"<>?".split("")),
+      kbLine(["Esc", "Tab", "Caps", "Del", "Home", "End", "PgUp", "PgDn"], "fn"),
+      kbCtrlRow()
+    ];
+    if (s.keyboardPage === "functions") return [
+      kbLine(["Esc", "F1", "F2", "F3", "F4", "F5", "F6"], "fn"),
+      kbLine(["F7", "F8", "F9", "F10", "F11", "F12", "Ins"], "fn"),
+      kbLine(["PrtSc", "ScrLk", "Pause", "Home", "End", "PgUp", "PgDn"], "fn"),
+      kbLine(["←", "↓", "↑", "→", "Tab", "Caps", "Del"], "fn"),
+      kbCtrlRow()
+    ];
+    return [
+      kbLine("1234567890".split("")),
+      kbLine("QWERTYUIOP".split("")),
+      [["", 0.5, "gap"]].concat(kbLine("ASDFGHJKL".split("")), [["", 0.5, "gap"]]),
+      [["", 1.5, "gap"]].concat(kbLine("ZXCVBNM".split("")), [["", 1.5, "gap"]]),
+      kbCtrlRow()
+    ];
+  }
+
+  function kbRowHTML(row, ref) {
+    return "<div class=\"kb-row\" data-code=\"" + ref + "\">" + row.map(function (k) {
+      var label = k[0], w = k[1], t = k[2];
+      var style = "flex:" + w + " 1 0";
+      if (t === "gap") return "<div class=\"kb-key spacer\" style=\"" + style + "\"></div>";
+      var r = kbResolve(label);
+      var cls = "kb-key" + ((t === "fn" || t === "st") ? " fn" : "") + (t === "space" ? " wide" : "");
+      if (t === "st" && (s.sticky & k[3]) !== 0) cls += " sticky-on";
+      var attrs = "data-act=\"" + (t === "st" ? "sticky" : "kbkey") + "\"" +
+        " data-label=\"" + esc(label) + "\"" +
+        " data-hex=\"" + r[0].toString(16).toUpperCase() + "\"" +
+        " data-mod=\"" + r[1] + "\"" +
+        (t === "st" ? " data-mask=\"" + k[3] + "\"" : "") +
+        " data-code=\"" + ref + "\"";
+      return "<button type=\"button\" class=\"" + cls + "\" style=\"" + style + "\" " +
+        attrs + ">" + esc(label) + "</button>";
+    }).join("") + "</div>";
+  }
+
+  function stickyNames() {
+    var p = [];
+    if (s.sticky & 0x01) p.push("Ctrl");
+    if (s.sticky & 0x02) p.push("Shift");
+    if (s.sticky & 0x04) p.push("Option");
+    if (s.sticky & 0x08) p.push("Command");
+    return p.length ? p.join(" + ") : "无";
+  }
+
+  function keyboardHTML() {
+    var pages = [["letters", "主键位"], ["symbols", "符号"], ["functions", "功能"]];
+    var seg = pages.map(function (p) {
+      return "<button type=\"button\" class=\"" + (s.keyboardPage === p[0] ? "on" : "") +
+        "\" data-act=\"kb-page\" data-page=\"" + p[0] +
+        "\" data-code=\"KeyboardView.swift:231-257\">" + p[1] + "</button>";
+    }).join("");
+    var stickyText = s.sticky === 0
+      ? "修饰键：点一下临时按住，随下一次按键自动释放"
+      : "粘滞：" + stickyNames() + "（下一次按键后自动清除）";
+    var warn = kbReady() ? "" :
+      "<div class=\"kb-warn\" data-code=\"KeyboardView.swift:293-307\">键盘暂不可用：需在设置里开启「键鼠复合模式」，并在 iPad 蓝牙里忽略此设备后重新配对；主机还须处于 Report Protocol 并订阅 2A4D。</div>";
+    var ref = "KeyboardView.swift:161-191";
+    var rows = kbRows().map(function (r) { return kbRowHTML(r, ref); }).join("");
+    return "<div class=\"kb-wrap\">" +
+      "<div class=\"kb-toolbar\" data-code=\"KeyboardView.swift:231-257\">" +
+        "<button type=\"button\" class=\"kb-back\" data-act=\"close-keyboard\" data-code=\"KeyboardView.swift:231-257\">‹ 触控板</button>" +
+        "<div class=\"kb-seg\">" + seg + "</div>" +
+      "</div>" +
+      "<div class=\"kb-sticky\" data-code=\"KeyboardView.swift:260-291\">" +
+        "<span>键盘</span><span class=\"txt\">" + esc(stickyText) + "</span>" +
+        "<button type=\"button\" class=\"kb-clear\" data-act=\"kb-clear\"" +
+          (s.sticky === 0 ? " disabled" : "") + ">清除</button>" +
+      "</div>" + warn +
+      "<div class=\"kb-gap\"></div>" +
+      "<div class=\"kb-rows\">" + rows + "</div>" +
+      "<div class=\"kb-gap\"></div>" +
+      "<div class=\"kb-footer\" data-code=\"KeyboardView.swift:309-316\">按键以蓝牙 HID 键码发送；中文、emoji 由主机输入法决定，不能直接写入字符。底部左键 / 滚轮 / 右键仍可用。</div>" +
+      "</div>";
   }
 
   function settingsHTML() {
     return "<div class=\"scroll\"><div class=\"form\">" +
-      "<div class=\"sec-head\" data-code=\"ContentView.swift:183\">指针</div>" +
+      "<div class=\"sec-head\" data-code=\"ContentView.swift:195\">指针</div>" +
       "<div class=\"group\">" +
-        "<div class=\"form-row\" data-code=\"ContentView.swift:184-192\">" +
+        "<div class=\"form-row\" data-code=\"ContentView.swift:196-204\">" +
           "<div class=\"slider-label\"><span>指针速度</span><span class=\"spacer\"></span><span class=\"slider-val\" id=\"valSens\">" + s.sensitivity.toFixed(1) + "×</span></div>" +
           "<input type=\"range\" id=\"sens\" min=\"0.4\" max=\"3.5\" step=\"0.1\" value=\"" + s.sensitivity + "\">" +
         "</div>" +
-        "<div class=\"form-row cap\" data-code=\"ContentView.swift:194-196\">单指拖动换算成指针位移的倍率。</div>" +
+        "<div class=\"form-row cap\" data-code=\"ContentView.swift:206-208\">单指拖动换算成指针位移的倍率。</div>" +
       "</div>" +
-      "<div class=\"sec-head\" data-code=\"ContentView.swift:199\">滚动</div>" +
+      "<div class=\"sec-head\" data-code=\"ContentView.swift:211\">滚动</div>" +
       "<div class=\"group\">" +
-        "<div class=\"form-row\" data-code=\"ContentView.swift:200-208\">" +
+        "<div class=\"form-row\" data-code=\"ContentView.swift:212-220\">" +
           "<div class=\"slider-label\"><span>滚动速度</span><span class=\"spacer\"></span><span class=\"slider-val\" id=\"valScroll\">" + s.scrollSensitivity.toFixed(1) + "×</span></div>" +
           "<input type=\"range\" id=\"scroll\" min=\"0.3\" max=\"3.0\" step=\"0.1\" value=\"" + s.scrollSensitivity + "\">" +
         "</div>" +
-        "<div class=\"form-row line\" data-code=\"ContentView.swift:210\"><span>自然滚动</span><span class=\"spacer\"></span>" +
+        "<div class=\"form-row line\" data-code=\"ContentView.swift:222\"><span>自然滚动</span><span class=\"spacer\"></span>" +
           "<button class=\"toggle" + (s.naturalScrolling ? " on" : "") + "\" data-act=\"toggle\" aria-label=\"自然滚动\"></button></div>" +
-        "<div class=\"form-row cap\" data-code=\"ContentView.swift:211-213\">默认：双指或滚轮键向上滑 = 滚轮下滑。打开自然滚动后方向整体反转（跟手）。同时作用于双指滚动和底部滚轮键，设置会自动保存。</div>" +
+        "<div class=\"form-row cap\" data-code=\"ContentView.swift:223-225\">默认：双指或滚轮键向上滑 = 滚轮下滑。打开自然滚动后方向整体反转（跟手）。同时作用于双指滚动和底部滚轮键，设置会自动保存。</div>" +
       "</div>" +
-      "<div class=\"sec-head\" data-code=\"ContentView.swift:216\">按键</div>" +
-      "<div class=\"group\" data-code=\"ContentView.swift:216-220\">" +
+      "<div class=\"sec-head\" data-code=\"ContentView.swift:228\">按键</div>" +
+      "<div class=\"group\" data-code=\"ContentView.swift:228-234\">" +
         row("左键 / 右键", "按住 = 按下，松手 = 抬起") +
         row("滚轮", "上下拖动 = 滚动，双击 = 按下滚轮键") +
         row("触控区", "轻点左键 · 双击左键 · 长按右键") +
+        row("全键盘", "触控区顶部「全键盘」一键切换") +
+        row("组合键", "Ctrl / Opt / Cmd / ⇧ 为一次性粘滞键") +
       "</div>" +
-      "<div class=\"sec-head\" data-code=\"ContentView.swift:222\">实验功能 · 回桌面</div>" +
-      "<div class=\"group\" data-code=\"ContentView.swift:222-232\">" +
-        "<div class=\"form-row line\" data-code=\"ContentView.swift:223\"><span>键鼠复合模式</span><span class=\"spacer\"></span>" +
+      "<div class=\"sec-head\" data-code=\"ContentView.swift:236\">实验功能 · 全键盘与回桌面</div>" +
+      "<div class=\"group\" data-code=\"ContentView.swift:236-246\">" +
+        "<div class=\"form-row line\" data-code=\"ContentView.swift:237\"><span>键鼠复合模式</span><span class=\"spacer\"></span>" +
           "<button class=\"toggle" + (s.compositeDevice ? " on" : "") + "\" data-act=\"composite\" aria-label=\"键鼠复合模式\"></button></div>" +
         row("三指上滑", "回桌面（Command + H）") +
+        row("全键盘", "主键位 / 符号 / 功能三页") +
         row("输入报告", s.compositeDevice ? "12 字节（鼠标 4 + 键盘 8）" : "4 字节（纯鼠标）") +
       "</div>" +
-      "<div class=\"form-footer\" data-code=\"ContentView.swift:229-231\">开启后本设备同时声明为鼠标和键盘，iPad 可能弹出键盘配对验证，也可能拒绝接管整个设备导致鼠标失效。切换开关会自动断开并移除 GATT 服务：请在 iPad 蓝牙里「忽略此设备」，回到主页面点「开始广播」，再重新配对。若指针或点击失效，关掉本开关、同样忽略设备重新配对即可回到纯鼠标，不需要重装 App。Command + H 只对 iPadOS 有效；Windows 显示桌面是 Win + D，macOS 是 F11。</div>" +
-      "<div class=\"sec-head\" data-code=\"ContentView.swift:234\">关于</div>" +
-      "<div class=\"group\" data-code=\"ContentView.swift:234-239\">" +
+      "<div class=\"form-footer\" data-code=\"ContentView.swift:244-246\">开启后本设备同时声明为鼠标和键盘，全键盘与三指上滑都依赖这个开关。iPad 可能弹出键盘配对验证，也可能拒绝接管整个设备导致鼠标失效。切换开关会自动断开并移除 GATT 服务：请在 iPad 蓝牙里「忽略此设备」，回到主页面点「开始广播」，再重新配对。若指针或点击失效，关掉本开关、同样忽略设备重新配对即可回到纯鼠标，不需要重装 App。Command + H 只对 iPadOS 有效；Windows 显示桌面是 Win + D，macOS 是 F11。</div>" +
+      "<div class=\"sec-head\" data-code=\"ContentView.swift:248\">关于</div>" +
+      "<div class=\"group\" data-code=\"ContentView.swift:248-255\">" +
         row("广播名称", "PT-Pad") +
         row("iPad 显示名称", s.displayName) +
         row("连接方式", "蓝牙 HID over GATT") +
         row("前台要求", "锁屏后 iOS 会停止广播") +
       "</div>" +
-      "<div class=\"form-footer\" data-code=\"ContentView.swift:240-244\">iPad 蓝牙列表优先显示 iPhone 整机名（GAP Device Name），不是广播名称，App 无权改写。要显示 PT-Pad：① 在 iPad 设置 → 蓝牙 → 已连接设备旁的更多信息按钮 → 名称，改成 PT-Pad（改完不要再忽略此设备）；或 ② 把 iPhone 设置 → 通用 → 关于本机 → 名称 改成 PT-Pad，再到 iPad 蓝牙里「忽略此设备」后重新配对。两条路径都不需要重装 App。</div>" +
+      "<div class=\"form-footer\" data-code=\"ContentView.swift:256-258\">iPad 蓝牙列表优先显示 iPhone 整机名（GAP Device Name），不是广播名称，App 无权改写。要显示 PT-Pad：① 在 iPad 设置 → 蓝牙 → 已连接设备旁的更多信息按钮 → 名称，改成 PT-Pad（改完不要再忽略此设备）；或 ② 把 iPhone 设置 → 通用 → 关于本机 → 名称 改成 PT-Pad，再到 iPad 蓝牙里「忽略此设备」后重新配对。两条路径都不需要重装 App。</div>" +
       "</div></div>";
   }
   function row(t, d) {
@@ -509,15 +733,17 @@ body.shot .phone { margin:0; }
   }
 
   function buttonbarHTML() {
-    return "<button class=\"key\" data-act=\"hold\" data-label=\"左键\" data-code=\"ContentView.swift:319-348\">左键</button>" +
-      "<button class=\"key\" data-act=\"wheel\" data-code=\"ContentView.swift:352-425\">滚轮<small>拖动滚动<br>双击按下</small></button>" +
-      "<button class=\"key\" data-act=\"hold\" data-label=\"右键\" data-code=\"ContentView.swift:319-348\">右键</button>";
+    return "<button class=\"key\" data-act=\"hold\" data-label=\"左键\" data-code=\"ContentView.swift:375-404\">左键</button>" +
+      "<button class=\"key\" data-act=\"wheel\" data-code=\"ContentView.swift:408-481\">滚轮<small>拖动滚动<br>双击按下</small></button>" +
+      "<button class=\"key\" data-act=\"hold\" data-label=\"右键\" data-code=\"ContentView.swift:375-404\">右键</button>";
   }
 
   /* ---------- 渲染 ---------- */
   function render() {
     navbar.innerHTML = navHTML();
-    content.innerHTML = s.screen === "settings" ? settingsHTML() : (s.connected ? connectedHTML() : setupHTML());
+    content.innerHTML = s.screen === "settings" ? settingsHTML()
+      : (s.screen === "keyboard" ? keyboardHTML()
+      : (s.connected ? connectedHTML() : setupHTML()));
     buttonbar.innerHTML = buttonbarHTML();
     buttonbar.style.display = s.screen === "settings" ? "none" : "flex";
     var chips = document.querySelectorAll("#chips .chip");
@@ -527,8 +753,19 @@ body.shot .phone { margin:0; }
         (v === "setup" && s.screen === "setup" && !s.advertising && !s.connected);
       chips[i].className = "chip" + (active ? " active" : "");
     }
-    document.getElementById("stateKV").innerHTML =
-      kv("当前页面", s.screen === "settings" ? "设置子页面" : (s.connected ? "已连接 · 全屏触控" : "引导页")) +
+    document.getElementById("stateKV").innerHTML = stateHTML();
+  }
+  function stateHTML() {
+    var pageName = s.keyboardPage === "symbols" ? "符号"
+      : (s.keyboardPage === "functions" ? "功能" : "主键位");
+    var screenName = s.screen === "settings" ? "设置子页面"
+      : (s.screen === "keyboard" ? "已连接 · 全键盘"
+      : (s.connected ? "已连接 · 全屏触控" : "引导页"));
+    return kv("当前页面", screenName) +
+      kv("输入模式", s.screen === "keyboard" ? "全键盘" : (s.connected ? "触控板" : "未连接")) +
+      kv("键盘页", pageName) +
+      kv("粘滞修饰键", stickyNames()) +
+      kv("键盘可用", kbReady() ? "可用（12 字节复合报告）" : "不可用") +
       kv("广播", s.advertising ? "开启" : "关闭") +
       kv("主机订阅", String(s.subscribers)) +
       kv("状态文字", s.statusText) +
@@ -549,10 +786,13 @@ body.shot .phone { margin:0; }
       s.screen = "setup"; s.connected = false; s.advertising = false; s.subscribers = 0; s.statusText = "尚未启动";
     } else if (name === "adv") {
       s.screen = "setup"; s.connected = false; s.advertising = true; s.subscribers = 0; s.statusText = "等待 iPad 配对";
-    } else if (name === "connected") {
-      s.screen = "connected"; s.connected = true; s.advertising = true; s.subscribers = 1; s.statusText = "已连接 · 可以移动指针";
+    } else if (name === "connected" || name === "keyboard") {
+      s.screen = name; s.connected = true; s.advertising = true;
+      s.subscribers = 1; s.statusText = "已连接 · 可以移动指针";
     } else if (name === "settings") {
-      s.prevScreen = s.connected ? "connected" : (s.advertising ? "adv" : "setup");
+      s.prevScreen = s.connected
+        ? (s.screen === "keyboard" ? "keyboard" : "connected")
+        : (s.advertising ? "adv" : "setup");
       s.screen = "settings";
     }
     render();
@@ -565,7 +805,8 @@ body.shot .phone { margin:0; }
       log("开始广播（16 位 SIG UUID 1812 / 180F / 180A）");
     } else {
       s.connected = false; s.subscribers = 0; s.statusText = "广播已停止";
-      if (s.screen === "connected") s.screen = "setup";
+      if (s.screen === "connected" || s.screen === "keyboard") s.screen = "setup";
+      s.sticky = 0;
       log("停止广播");
     }
     render();
@@ -573,7 +814,8 @@ body.shot .phone { margin:0; }
   function togglePair() {
     if (s.connected) {
       s.connected = false; s.subscribers = 0; s.statusText = s.advertising ? "等待 iPad 配对" : "广播已停止";
-      if (s.screen === "connected") s.screen = "setup";
+      if (s.screen === "connected" || s.screen === "keyboard") s.screen = "setup";
+      s.sticky = 0;
       log("模拟 iPad 断开连接");
     } else {
       s.connected = true; s.advertising = true; s.subscribers = 1;
@@ -632,7 +874,8 @@ body.shot .phone { margin:0; }
     else if (act === "disconnect") {
       s.connected = false; s.subscribers = 0; s.advertising = false;
       s.statusText = "已断开连接";
-      if (s.screen === "connected") s.screen = "setup";
+      if (s.screen === "connected" || s.screen === "keyboard") s.screen = "setup";
+      s.sticky = 0;
       log("主动断开：停止广播并移除 GATT 服务");
       log("点「开始广播」重建服务后，Windows / Mac 等主机即可发现");
       render();
@@ -648,6 +891,44 @@ body.shot .phone { margin:0; }
       el.classList.toggle("on", s.compositeDevice);
       log("键鼠复合模式 → " + (s.compositeDevice ? "开（报告 12 字节）" : "关（报告 4 字节纯鼠标）"));
       log("真机切换会移除 GATT 服务：需在 iPad 忽略此设备后重新广播配对");
+      render();
+    }
+    else if (act === "open-keyboard") {
+      s.screen = "keyboard"; s.connected = true; s.advertising = true; s.subscribers = 1;
+      s.statusText = "已连接 · 可以移动指针";
+      log("点触控区顶部「全键盘」→ 切换到全键盘");
+      render();
+    }
+    else if (act === "close-keyboard") {
+      s.screen = "connected";
+      log("点「‹ 触控板」→ 返回全屏触控区");
+      render();
+    }
+    else if (act === "kb-page") {
+      s.keyboardPage = el.getAttribute("data-page");
+      log("键盘切页 → " + (s.keyboardPage === "letters" ? "主键位" : (s.keyboardPage === "symbols" ? "符号" : "功能")));
+      render();
+    }
+    else if (act === "kb-clear") {
+      s.sticky = 0;
+      log("清除全部粘滞修饰键");
+      render();
+    }
+    else if (act === "sticky") {
+      var mask = parseInt(el.getAttribute("data-mask"), 10);
+      s.sticky ^= mask;
+      log("粘滞 " + el.getAttribute("data-label") + " → " +
+        ((s.sticky & mask) ? "临时按住" : "取消") + "（当前 " + stickyNames() + "）");
+      render();
+    }
+    else if (act === "kbkey") {
+      var label = el.getAttribute("data-label");
+      var hex = el.getAttribute("data-hex");
+      var mod = parseInt(el.getAttribute("data-mod"), 10) | s.sticky;
+      log("键盘 → " + label + "（keycode 0x" + hex + "，modifier 0x" +
+        mod.toString(16).toUpperCase() + "）" + (s.sticky ? "，粘滞已清除" : ""));
+      if (!kbReady()) log("模拟提示：键盘未就绪，真机会在连接日志里写明具体原因");
+      s.sticky = 0;
       render();
     }
   });
@@ -668,18 +949,7 @@ body.shot .phone { margin:0; }
   });
   function renderStateOnly() {
     // 只重建键值区，滑块元素本身不重建，避免拖动被打断
-    var box = document.getElementById("stateKV");
-    box.innerHTML =
-      kv("当前页面", s.screen === "settings" ? "设置子页面" : (s.connected ? "已连接 · 全屏触控" : "引导页")) +
-      kv("广播", s.advertising ? "开启" : "关闭") +
-      kv("主机订阅", String(s.subscribers)) +
-      kv("状态文字", s.statusText) +
-      kv("指针速度", s.sensitivity.toFixed(1) + "×") +
-      kv("滚动速度", s.scrollSensitivity.toFixed(1) + "×") +
-      kv("自然滚动", s.naturalScrolling ? "开" : "关") +
-      kv("滚动方向", s.naturalScrolling ? "上滑 = 滚轮上滑（跟手）" : "上滑 = 滚轮下滑") +
-      kv("键鼠复合", s.compositeDevice ? "开（12 字节报告）" : "关（4 字节纯鼠标）") +
-      kv("iPad 显示名称", s.displayName);
+    document.getElementById("stateKV").innerHTML = stateHTML();
   }
 
   /* ---------- 事件：按下 / 拖动 / 抬起 ---------- */

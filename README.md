@@ -844,15 +844,18 @@ Apple 开发者论坛（thread 72343）的官方回复：当外设同时有这�
 
 ### 键盘报告如何发送
 
-`goHome()` 不直接发 BLE 包，只设置 `pendingKeycode` 与 0.08 秒的到期时间；
+`goHome()` 不直接发 BLE 包，只调用通用的 `sendKey(keycode:modifiers:)` 设置
+`pendingModifier` / `pendingKeycode` 与约 0.06 秒的到期时间；
 `tick()`（60Hz CADisplayLink）在到期前把键码和 modifier 合进每一帧的复合报告，
-到期那一帧发一份键盘字段全 0 的报告完成释放。按下与释放都走同一条报告流，
-不会被 `queuedPacket` 覆盖。三指手势用 `UIPanGestureRecognizer` 限制 3 指、
+到期那一帧发一份键盘字段全 0 的报告完成释放，并连发几帧空报告兜底。
+按下与释放都走同一条报告流，连按同一个键前会先补一帧「全松开」，
+避免主机把第二次按下当成一直按住。三指手势用 `UIPanGestureRecognizer` 限制 3 指、
 上滑 80pt 触发一次，与 1 指平移 / 2 指滚动靠触点数硬隔离。
+本轮把固定的 `Command + H` 泛化成了任意键码 + 任意修饰键组合，全键盘界面共用这条链路。
 
 ### 运行时开关与回退步骤
 
-设置 → 实验功能 · 回桌面 → 「键鼠复合模式」，默认开启。切换开关会调用 `disconnect()`
+设置 → 实验功能 · 全键盘与回桌面 → 「键鼠复合模式」，默认开启。切换开关会调用 `disconnect()`
 移除整个 GATT 服务并停止广播（主机缓存了 Report Map，无法热更新）。
 
 | 场景 | 操作 |
@@ -888,3 +891,84 @@ Apple 开发者论坛（thread 72343）的官方回复：当外设同时有这�
 | `README.md` | 第七节边界、第二十节结论更新，新增本节 |
 
 广播 UUID、服务数量、Boot Mouse、点击手势、滚动方向、按键宽度与高度一律未动。
+
+## 二十三、全键盘：触控区顶部一键切换（本轮新增）
+
+### 入口与交互
+
+已连接（主机订阅 `2A4D`）后，触控区顶部新增一条 46pt 切换栏：左侧「触控板模式」，
+右侧蓝色主按钮「全键盘」。点按钮把中间输入区从 `TrackpadSurface` 换成 `KeyboardPanel`；
+底部左键 / 滚轮 / 右键三键保持常驻，打字时仍可点鼠标。键盘页顶部「‹ 触控板」返回。
+断开连接时自动回到触控板，下次连接不会停在键盘页。
+键盘未就绪（复合模式关闭、Boot Protocol 或未订阅输入报告）时，切换栏显示橙色「键盘未就绪」，
+键盘页顶部给出具体原因提示。
+
+### 三页布局
+
+| 页面 | 内容 |
+| --- | --- |
+| 主键位 | 数字行、QWERTY 三行、常驻控制行（Ctrl / Opt / Cmd / Shift / Space / 退格 / 回车） |
+| 符号 | 上档符号 `!@#$%^&*()`、US 标点两行、Esc / Tab / Caps / Del / Home / End / PgUp / PgDn |
+| 功能 | Esc、F1~F12、Ins、PrtSc / ScrLk / Pause、Home / End / PgUp / PgDn、四向方向键、Tab / Caps / Del |
+
+每页 5 行（4 行页面键 + 1 行常驻控制行），键帽 44pt 高，键宽按权重分配；
+键区在剩余空间里垂直居中。功能键底色比字符键深，粘滞修饰键激活时变蓝。
+
+### 组合键：一次性粘滞修饰键
+
+`Ctrl` / `Opt` / `Cmd` / `Shift` 四个键不单独发报告，点一下亮起（位图按位或），
+下一次点普通键时把粘滞位图一起塞进报告的 modifier 字节，发完自动清零。
+状态条实时显示当前粘滞组合，右侧「清除」可手动取消。
+
+| 想发的组合 | 操作 |
+| --- | --- |
+| Command + C | 点 `Cmd` → 点 `C` |
+| Command + Shift + 4 | 点 `Cmd` → 点 `Shift` → 点 `4` |
+| 大写字母 Q | 点 `Shift` → 点 `Q` |
+
+字母键帽显示大写，但报告里发的是小写键码；大小写完全由粘滞 Shift 决定，
+避免「键盘显示大写就一直输出大写」。上档符号（`!`、`@` 等）自带 Shift 位。
+
+### HID 链路
+
+`KeyboardPanel` 只负责把按键解析成 `(keycode, modifier)`，交给
+`HIDPeripheral.sendKey(_:modifiers:label:)`。报告仍是复合模式的 12 字节：
+`[buttons, dx, dy, wheel, modifier, reserved, k1..k6]`，键盘部分只占第 5、7 字节。
+每次按键按下约 0.06 秒，由 60Hz `tick()` 合帧发出，到期连发空键盘帧完成释放；
+连按同一个键前先补一帧「全松开」，避免漏字。鼠标点击插入的报告会保留当前按下的键，
+不会把键盘键提前松开。三指上滑的 `Command + H` 走同一条 `sendKey` 链路，
+因此本轮没有新增任何 GATT 特征或 Report ID。
+
+### 已知限制
+
+| 限制 | 说明 |
+| --- | --- |
+| 键码范围 | Report Map 声明 Usage Maximum = 101 (`0x65`)，只发该范围内的 HID 键码；音量、亮度等多媒体键属 Consumer Page `0x0C`，未声明，无法发送 |
+| 中文与 emoji | 只发键码、不写字符；中文输入依赖主机输入法，输入法切换键由主机定义 |
+| 一次一键 | 界面一次只发一个普通键，未做 6 键同时按下（6KRO），组合键靠粘滞修饰键实现 |
+| 依赖复合模式 | 关掉「键鼠复合模式」或主机切到 Boot Protocol 时按键不会发送，日志写明原因 |
+| 配对缓存 | 开启复合模式后必须在 iPad 蓝牙里「忽略此设备」再重新配对，否则主机沿用旧 Report Map |
+| 键盘布局 | 按 US ANSI 布局解析；主机若使用其它键盘布局，符号位置可能不同 |
+| 系统输入法 | 这是 App 内自绘键盘，不调起 iOS 输入法，App 内也不显示候选词 |
+
+### 真机验证清单
+
+① 连接后顶部是否出现「全键盘」按钮；② 切到键盘页后底部三键是否仍可用；
+③ 主键位连打 `hello` 是否为小写；④ 粘滞 `Cmd` + `C` 在 iPad 是否触发拷贝；
+⑤ 符号页 `!` 与功能页方向键、F1~F12 是否正确；⑥ 日志是否打印对应 keycode 与 modifier；
+⑦ 关掉「键鼠复合模式」后是否出现橙色警告且日志说明原因；
+⑧ 返回触控板后单指 / 双指 / 三指手势是否照常。
+任一环节异常，按第二十二节的回退表关掉复合开关、忽略设备重新配对，或重装 `v0.0.8-63bc75b` 基线包。
+
+| 文件 | 改动 |
+| --- | --- |
+| `KeyboardView.swift`（新增） | HID 键码解析、三页布局、粘滞修饰键、键帽与顶部工具条 |
+| `HIDPeripheral.swift` | 固定 `Command + H` 泛化为 `sendKey`；新增 `keyboardReady`、可变 modifier、连按补空帧、key-up 连发兜底 |
+| `HIDDescriptor.swift` | 新增 8 个修饰键位常量、`maxKeyboardKeycode`，`makeReport` 支持多键码数组 |
+| `ContentView.swift` | 新增 `TrackpadTopBar` 切换栏与 `showKeyboard` 状态；设置页两行说明与分组标题更新 |
+| `preview/ui-preview.html` | 第五个状态「已连接 · 全键盘」、三页键盘与粘滞交互模拟、元素清单第 18~23 项、全部代码行号同步 |
+| `preview/shot-*.png` | 重新生成 5 张状态截图，新增 `shot-4-keyboard.png`、`shot-5-keyboard-functions.png` |
+| `README.md` | 更新第二十二节链路描述与分组名称，新增本节 |
+
+预览页支持 `?state=keyboard&page=functions` 直接打开功能页；点任意键帽会在右侧事件记录里
+打印对应的 keycode 与 modifier，方便对照真机日志。

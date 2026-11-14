@@ -5,6 +5,8 @@ struct ContentView: View {
 
     @EnvironmentObject private var hid: HIDPeripheral
     @State private var showSettings = false
+    /// true = 全键盘，false = 触控板。只在已连接时生效，断开自动回到触控板。
+    @State private var showKeyboard = false
 
     /// 主机订阅了 Input Report 才算真正连上；仅广播中不算连接。
     private var connected: Bool { hid.subscribers > 0 }
@@ -13,16 +15,26 @@ struct ContentView: View {
         NavigationStack {
             VStack(spacing: 0) {
                 if connected {
-                    // 已连接：触控区吃掉顶部栏与底部按键条之间的全部空间。
-                    TrackpadSurface(edgeToEdge: true)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .ignoresSafeArea(.container, edges: .horizontal)
+                    if showKeyboard {
+                        KeyboardPanel(showKeyboard: $showKeyboard)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } else {
+                        // 触控区顶部常驻一条切换栏：一键切到全键盘。
+                        TrackpadTopBar(showKeyboard: $showKeyboard)
+                        TrackpadSurface(edgeToEdge: true)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .ignoresSafeArea(.container, edges: .horizontal)
+                    }
                 } else {
                     setupBody
                 }
                 ButtonBar()
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .onChange(of: hid.subscribers) { newValue in
+                // 断开后不要停留在键盘界面，下次连上仍从触控板开始。
+                if newValue == 0 { showKeyboard = false }
+            }
             .navigationTitle(connected ? "PT-Pad" : "口袋触控板")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -217,17 +229,20 @@ struct SettingsView: View {
                 LabeledRow(title: "左键 / 右键", detail: "按住 = 按下，松手 = 抬起")
                 LabeledRow(title: "滚轮", detail: "上下拖动 = 滚动，双击 = 按下滚轮键")
                 LabeledRow(title: "触控区", detail: "轻点左键 · 双击左键 · 长按右键")
+                LabeledRow(title: "全键盘", detail: "触控区顶部「全键盘」一键切换")
+                LabeledRow(title: "组合键", detail: "Ctrl / Opt / Cmd / ⇧ 为一次性粘滞键")
             }
 
             Section {
                 Toggle("键鼠复合模式", isOn: $hid.compositeDevice)
                 LabeledRow(title: "三指上滑", detail: "回桌面（Command + H）")
+                LabeledRow(title: "全键盘", detail: "主键位 / 符号 / 功能三页")
                 LabeledRow(title: "输入报告",
                            detail: hid.compositeDevice ? "12 字节（鼠标 4 + 键盘 8）" : "4 字节（纯鼠标）")
             } header: {
-                Text("实验功能 · 回桌面")
+                Text("实验功能 · 全键盘与回桌面")
             } footer: {
-                Text("开启后本设备同时声明为鼠标和键盘，iPad 可能弹出键盘配对验证，也可能拒绝接管整个设备导致鼠标失效。切换开关会自动断开并移除 GATT 服务：请在 iPad 蓝牙里「忽略此设备」，回到主页面点「开始广播」，再重新配对。若指针或点击失效，关掉本开关、同样忽略设备重新配对即可回到纯鼠标，不需要重装 App。Command + H 只对 iPadOS 有效；Windows 显示桌面是 Win + D，macOS 是 F11。")
+                Text("开启后本设备同时声明为鼠标和键盘，全键盘与三指上滑都依赖这个开关。iPad 可能弹出键盘配对验证，也可能拒绝接管整个设备导致鼠标失效。切换开关会自动断开并移除 GATT 服务：请在 iPad 蓝牙里「忽略此设备」，回到主页面点「开始广播」，再重新配对。若指针或点击失效，关掉本开关、同样忽略设备重新配对即可回到纯鼠标，不需要重装 App。Command + H 只对 iPadOS 有效；Windows 显示桌面是 Win + D，macOS 是 F11。")
                     .font(.caption)
             }
 
@@ -261,6 +276,47 @@ private struct LabeledRow: View {
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.trailing)
         }
+    }
+}
+
+// MARK: - 触控区顶部的全键盘切换栏
+
+/// 只在已连接的触控板界面出现。按钮刻意做成蓝色实心主操作，
+/// 避免在全屏触控区里找不到入口；切成全键盘后由键盘页顶部提供返回按钮。
+private struct TrackpadTopBar: View {
+
+    @EnvironmentObject private var hid: HIDPeripheral
+    @Binding var showKeyboard: Bool
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "hand.tap")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text("触控板模式")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Spacer(minLength: 0)
+            if !hid.keyboardReady {
+                Text("键盘未就绪")
+                    .font(.caption2)
+                    .foregroundStyle(Color.orange)
+            }
+            Button {
+                showKeyboard = true
+            } label: {
+                Label("全键盘", systemImage: "keyboard")
+                    .font(.caption.weight(.semibold))
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+            .fixedSize()
+            .accessibilityLabel("切换到全键盘")
+        }
+        .padding(.horizontal, 12)
+        .frame(height: 46)
+        .background(Color(.secondarySystemBackground))
+        .overlay(alignment: .bottom) { Divider() }
     }
 }
 
