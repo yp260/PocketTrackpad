@@ -242,7 +242,7 @@ input[type=range] { width:100%; accent-color:var(--accent); margin:10px 0 2px; c
 .kb-gap { flex:1 1 auto; min-height:0; }
 .kb-row { display:flex; gap:4px; margin-bottom:6px; }
 .kb-key {
-  font:inherit; font-size:16px; font-weight:500; height:44px; border:0; border-radius:6px;
+  font:inherit; font-size:16px; font-weight:500; height:42px; border:0; border-radius:6px;
   background:var(--ios-btn); color:var(--ios-text);
   box-shadow:0 0 0 .5px rgba(60,60,67,.18); cursor:pointer;
   overflow:hidden; white-space:nowrap; padding:0 2px; min-width:0;
@@ -252,6 +252,10 @@ input[type=range] { width:100%; accent-color:var(--accent); margin:10px 0 2px; c
 .kb-key.spacer { background:transparent; box-shadow:none; pointer-events:none; }
 .kb-key.sticky-on { background:var(--accent); color:#fff; box-shadow:none; }
 .kb-key:active { filter:brightness(.88); }
+/* 两页统一 42px 键帽；主键位 7 行时收紧行距、缩小功能键字号以容纳 F1~F12 */
+.kb-rows.compact .kb-row { margin-bottom:5px; }
+.kb-rows.compact .kb-key.fn { font-size:10px; }
+.kb-rows.compact .kb-key.wide { font-size:12px; }
 .kb-footer {
   flex:0 0 auto; padding:0 14px 8px; text-align:center;
   font-size:10px; color:var(--ios-3); line-height:1.5;
@@ -374,11 +378,11 @@ body.shot .phone { margin:0; }
             <tr><td>16</td><td>顶部「断开」按钮（仅已连接显示）：移除 GATT 服务并停止广播，可重新广播切换到 Windows / Mac</td><td>ContentView.swift:59</td></tr>
             <tr><td>17</td><td>设置：「实验功能 · 全键盘与回桌面」分组（键鼠复合开关、三指上滑、全键盘、输入报告字节数、风险与回退说明）</td><td>ContentView.swift:236-246</td></tr>
             <tr><td>18</td><td>已连接触控区顶部切换栏：「触控板模式」+ 蓝色主按钮「全键盘」；键盘未就绪时多一行橙色提示</td><td>ContentView.swift:286-325</td></tr>
-            <tr><td>19</td><td>全键盘顶部工具条：「‹ 触控板」返回按钮 + 主键位 / 符号 / 功能 三页分段控件</td><td>KeyboardView.swift:231-257</td></tr>
-            <tr><td>20</td><td>粘滞修饰键状态条：Ctrl / Opt / Cmd / Shift 为一次性粘滞，下一次按键后自动清除；右侧「清除」按钮</td><td>KeyboardView.swift:260-291</td></tr>
-            <tr><td>21</td><td>键帽区：每页 5 行（4 行页面键 + 常驻控制行），键宽按权重分配，功能键深色、粘滞激活变蓝</td><td>KeyboardView.swift:126-191</td></tr>
+            <tr><td>19</td><td>全键盘顶部工具条：「‹ 触控板」返回按钮 + 主键位 / 符号 两页分段控件（功能页已并入主键位）</td><td>KeyboardView.swift:234-260</td></tr>
+            <tr><td>20</td><td>粘滞修饰键状态条：Ctrl / Opt / Cmd / Shift 为一次性粘滞，下一次按键后自动清除；右侧「清除」按钮</td><td>KeyboardView.swift:263-294</td></tr>
+            <tr><td>21</td><td>键帽区：主键位 7 行（F1~F12 + 数字 + QWERTY 三行 + 导航/方向键 + 控制行）、符号页 5 行，两页统一 42pt 键帽</td><td>KeyboardView.swift:127-189</td></tr>
             <tr><td>22</td><td>HID 键码解析与发送：US ANSI 布局，符号自带 Shift；一次按键 = 按下 0.06 秒 + 连发空帧松键</td><td>KeyboardView.swift:11-75<br>HIDPeripheral.swift:552-584</td></tr>
-            <tr><td>23</td><td>键盘不可用橙色警告（键鼠复合关闭 / Boot Protocol / 未订阅 2A4D 时显示）+ 底部中文输入限制说明</td><td>KeyboardView.swift:293-316</td></tr>
+            <tr><td>23</td><td>键盘不可用橙色警告（键鼠复合关闭 / Boot Protocol / 未订阅 2A4D 时显示）+ 底部中文输入限制说明</td><td>KeyboardView.swift:296-319</td></tr>
           </tbody>
         </table>
       </div>
@@ -398,8 +402,10 @@ body.shot .phone { margin:0; }
         <br><b>三指上滑</b>：复合模式下发送键盘报告 Command+H 让 iPadOS 回主屏幕，真机需三指同时
         上滑 80pt 以上。这是实验功能，iPad 可能把设备识别为键盘而拒绝接管整个设备；此时关掉设置里的
         「键鼠复合模式」、忽略设备重新配对即可回退到纯鼠标，不需要重装 App。
-        <br><b>全键盘</b>：已连接时点触控区顶部蓝色「全键盘」按钮切换到三页虚拟键盘；键盘页顶部「‹ 触控板」
-        返回。主键位是数字 + QWERTY，符号页是上档符号与常用控制键，功能页是 F1~F12、方向键、Home / End / PageUp / PageDown。
+        <br><b>全键盘</b>：已连接时点触控区顶部蓝色「全键盘」按钮切换到两页虚拟键盘；键盘页顶部「‹ 触控板」
+        返回。主键位页含 F1~F12、数字 + QWERTY、Esc / Tab / Caps / Del / Home / End 与四向方向键；
+        符号页是上档符号、US 标点两行，以及 Ins / PrtSc / ScrLk / Pause / PgUp / PgDn / Menu。
+        原来的独立「功能」页已并入主键位，功能键一个不丢。
         底部常驻 Ctrl / Opt / Cmd / Shift 一次性粘滞修饰键，组合键先点修饰键再点字符键。底部左键 / 滚轮 / 右键在键盘模式下依旧可用。
         <br><b>键盘限制</b>：按键走 USB HID 键码（0x00~0x65），中文、emoji 和输入法切换由主机决定，不能直接写入字符；
         多媒体键（音量、亮度）属于 Consumer Page，本描述符未声明，无法发送。全键盘与三指上滑共用 12 字节键鼠复合报告，
@@ -423,14 +429,15 @@ body.shot .phone { margin:0; }
     showDiag: false, annotate: false, dark: false
   };
   var s = Object.assign({}, DEFAULTS);
-  // 支持 ?state=adv|connected|keyboard|settings|setup、?page=symbols|functions 与 ?dark=1，
-  // 便于直接打开某个状态的静态预览 / 截图。
+  // 支持 ?state=adv|connected|keyboard|settings|setup、?page=symbols 与 ?dark=1，
+  // 便于直接打开某个状态的静态预览 / 截图。旧参数 page=functions 兼容映射到主键位页。
   (function initFromURL() {
     var q = new URLSearchParams(location.search);
     if (q.get("shot") === "1") document.body.classList.add("shot");
     var v = q.get("state");
     var p = q.get("page");
-    if (p === "symbols" || p === "functions") s.keyboardPage = p;
+    if (p === "symbols") s.keyboardPage = "symbols";
+    else if (p === "functions" || p === "letters") s.keyboardPage = "letters";
     if (v === "adv") { s.advertising = true; s.statusText = "等待 iPad 配对"; }
     else if (v === "connected" || v === "keyboard") {
       s.screen = v; s.connected = true; s.advertising = true;
@@ -562,7 +569,7 @@ body.shot .phone { margin:0; }
   var KB_NAMED = {
     "Esc":0x29, "⌫":0x2A, "Tab":0x2B, "Space":0x2C, "⏎":0x28,
     "Caps":0x39, "Ins":0x49, "Home":0x4A, "PgUp":0x4B, "Del":0x4C,
-    "End":0x4D, "PgDn":0x4E, "←":0x50, "→":0x4F, "↑":0x52, "↓":0x51,
+    "End":0x4D, "PgDn":0x4E, "Menu":0x65, "←":0x50, "→":0x4F, "↑":0x52, "↓":0x51,
     "PrtSc":0x46, "ScrLk":0x47, "Pause":0x48,
     "F1":0x3A, "F2":0x3B, "F3":0x3C, "F4":0x3D, "F5":0x3E, "F6":0x3F,
     "F7":0x40, "F8":0x41, "F9":0x42, "F10":0x43, "F11":0x44, "F12":0x45
@@ -598,26 +605,24 @@ body.shot .phone { margin:0; }
       ["Space", 2.6, "space"], ["⌫", 1.2, "fn"], ["⏎", 1.2, "fn"]
     ];
   }
+  /* 两页布局：功能页已并入主键位，F1~F12 / 方向键 / 常用导航键都在主键位页；
+     低频功能键（Ins / PrtSc / ScrLk / Pause / PgUp / PgDn / Menu）收进符号页最后一行。 */
   function kbRows() {
     if (s.keyboardPage === "symbols") return [
       kbLine("!@#$%^&*()".split("")),
       kbLine("`-=[]\\;',./".split("")),
       kbLine("~_+{}|:\"<>?".split("")),
-      kbLine(["Esc", "Tab", "Caps", "Del", "Home", "End", "PgUp", "PgDn"], "fn"),
-      kbCtrlRow()
-    ];
-    if (s.keyboardPage === "functions") return [
-      kbLine(["Esc", "F1", "F2", "F3", "F4", "F5", "F6"], "fn"),
-      kbLine(["F7", "F8", "F9", "F10", "F11", "F12", "Ins"], "fn"),
-      kbLine(["PrtSc", "ScrLk", "Pause", "Home", "End", "PgUp", "PgDn"], "fn"),
-      kbLine(["←", "↓", "↑", "→", "Tab", "Caps", "Del"], "fn"),
+      kbLine(["Ins", "PrtSc", "ScrLk", "Pause", "PgUp", "PgDn", "Menu"], "fn"),
       kbCtrlRow()
     ];
     return [
+      kbLine(["F1", "F2", "F3", "F4", "F5", "F6",
+              "F7", "F8", "F9", "F10", "F11", "F12"], "fn"),
       kbLine("1234567890".split("")),
       kbLine("QWERTYUIOP".split("")),
       [["", 0.5, "gap"]].concat(kbLine("ASDFGHJKL".split("")), [["", 0.5, "gap"]]),
       [["", 1.5, "gap"]].concat(kbLine("ZXCVBNM".split("")), [["", 1.5, "gap"]]),
+      kbLine(["Esc", "Tab", "Caps", "Del", "Home", "End", "←", "↓", "↑", "→"], "fn"),
       kbCtrlRow()
     ];
   }
@@ -651,33 +656,35 @@ body.shot .phone { margin:0; }
   }
 
   function keyboardHTML() {
-    var pages = [["letters", "主键位"], ["symbols", "符号"], ["functions", "功能"]];
+    var pages = [["letters", "主键位"], ["symbols", "符号"]];
     var seg = pages.map(function (p) {
       return "<button type=\"button\" class=\"" + (s.keyboardPage === p[0] ? "on" : "") +
         "\" data-act=\"kb-page\" data-page=\"" + p[0] +
-        "\" data-code=\"KeyboardView.swift:231-257\">" + p[1] + "</button>";
+        "\" data-code=\"KeyboardView.swift:234-260\">" + p[1] + "</button>";
     }).join("");
     var stickyText = s.sticky === 0
       ? "修饰键：点一下临时按住，随下一次按键自动释放"
       : "粘滞：" + stickyNames() + "（下一次按键后自动清除）";
     var warn = kbReady() ? "" :
-      "<div class=\"kb-warn\" data-code=\"KeyboardView.swift:293-307\">键盘暂不可用：需在设置里开启「键鼠复合模式」，并在 iPad 蓝牙里忽略此设备后重新配对；主机还须处于 Report Protocol 并订阅 2A4D。</div>";
-    var ref = "KeyboardView.swift:161-191";
-    var rows = kbRows().map(function (r) { return kbRowHTML(r, ref); }).join("");
+      "<div class=\"kb-warn\" data-code=\"KeyboardView.swift:296-310\">键盘暂不可用：需在设置里开启「键鼠复合模式」，并在 iPad 蓝牙里忽略此设备后重新配对；主机还须处于 Report Protocol 并订阅 2A4D。</div>";
+    var ref = "KeyboardView.swift:164-189";
+    var rowDefs = kbRows();
+    var compact = rowDefs.length > 5;
+    var rows = rowDefs.map(function (r) { return kbRowHTML(r, ref); }).join("");
     return "<div class=\"kb-wrap\">" +
-      "<div class=\"kb-toolbar\" data-code=\"KeyboardView.swift:231-257\">" +
-        "<button type=\"button\" class=\"kb-back\" data-act=\"close-keyboard\" data-code=\"KeyboardView.swift:231-257\">‹ 触控板</button>" +
+      "<div class=\"kb-toolbar\" data-code=\"KeyboardView.swift:234-260\">" +
+        "<button type=\"button\" class=\"kb-back\" data-act=\"close-keyboard\" data-code=\"KeyboardView.swift:234-260\">‹ 触控板</button>" +
         "<div class=\"kb-seg\">" + seg + "</div>" +
       "</div>" +
-      "<div class=\"kb-sticky\" data-code=\"KeyboardView.swift:260-291\">" +
+      "<div class=\"kb-sticky\" data-code=\"KeyboardView.swift:263-294\">" +
         "<span>键盘</span><span class=\"txt\">" + esc(stickyText) + "</span>" +
         "<button type=\"button\" class=\"kb-clear\" data-act=\"kb-clear\"" +
           (s.sticky === 0 ? " disabled" : "") + ">清除</button>" +
       "</div>" + warn +
       "<div class=\"kb-gap\"></div>" +
-      "<div class=\"kb-rows\">" + rows + "</div>" +
+      "<div class=\"kb-rows" + (compact ? " compact" : "") + "\">" + rows + "</div>" +
       "<div class=\"kb-gap\"></div>" +
-      "<div class=\"kb-footer\" data-code=\"KeyboardView.swift:309-316\">按键以蓝牙 HID 键码发送；中文、emoji 由主机输入法决定，不能直接写入字符。底部左键 / 滚轮 / 右键仍可用。</div>" +
+      "<div class=\"kb-footer\" data-code=\"KeyboardView.swift:312-319\">F1~F12 与方向键已并入主键位页，其余功能键在符号页。中文、emoji 由主机输入法决定；底部左键 / 滚轮 / 右键仍可用。</div>" +
       "</div>";
   }
 
@@ -714,7 +721,7 @@ body.shot .phone { margin:0; }
         "<div class=\"form-row line\" data-code=\"ContentView.swift:237\"><span>键鼠复合模式</span><span class=\"spacer\"></span>" +
           "<button class=\"toggle" + (s.compositeDevice ? " on" : "") + "\" data-act=\"composite\" aria-label=\"键鼠复合模式\"></button></div>" +
         row("三指上滑", "回桌面（Command + H）") +
-        row("全键盘", "主键位 / 符号 / 功能三页") +
+        row("全键盘", "主键位（含 F 键 / 方向键）与符号，共两页") +
         row("输入报告", s.compositeDevice ? "12 字节（鼠标 4 + 键盘 8）" : "4 字节（纯鼠标）") +
       "</div>" +
       "<div class=\"form-footer\" data-code=\"ContentView.swift:244-246\">开启后本设备同时声明为鼠标和键盘，全键盘与三指上滑都依赖这个开关。iPad 可能弹出键盘配对验证，也可能拒绝接管整个设备导致鼠标失效。切换开关会自动断开并移除 GATT 服务：请在 iPad 蓝牙里「忽略此设备」，回到主页面点「开始广播」，再重新配对。若指针或点击失效，关掉本开关、同样忽略设备重新配对即可回到纯鼠标，不需要重装 App。Command + H 只对 iPadOS 有效；Windows 显示桌面是 Win + D，macOS 是 F11。</div>" +
@@ -756,8 +763,7 @@ body.shot .phone { margin:0; }
     document.getElementById("stateKV").innerHTML = stateHTML();
   }
   function stateHTML() {
-    var pageName = s.keyboardPage === "symbols" ? "符号"
-      : (s.keyboardPage === "functions" ? "功能" : "主键位");
+    var pageName = s.keyboardPage === "symbols" ? "符号" : "主键位（含 F 键 / 方向键）";
     var screenName = s.screen === "settings" ? "设置子页面"
       : (s.screen === "keyboard" ? "已连接 · 全键盘"
       : (s.connected ? "已连接 · 全屏触控" : "引导页"));
@@ -906,7 +912,7 @@ body.shot .phone { margin:0; }
     }
     else if (act === "kb-page") {
       s.keyboardPage = el.getAttribute("data-page");
-      log("键盘切页 → " + (s.keyboardPage === "letters" ? "主键位" : (s.keyboardPage === "symbols" ? "符号" : "功能")));
+      log("键盘切页 → " + (s.keyboardPage === "letters" ? "主键位（含 F 键 / 方向键）" : "符号"));
       render();
     }
     else if (act === "kb-clear") {

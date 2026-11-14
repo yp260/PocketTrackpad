@@ -76,10 +76,11 @@ enum HIDKeycode {
 
 // MARK: - 键盘页与布局
 
+/// 两页布局：F1~F12、方向键与常用导航键已并入主键位，不再单独占用「功能」页。
+/// 低频功能键收纳到符号页最后一行，所有键码一个不丢。
 enum KeyboardPage: String, CaseIterable, Identifiable {
     case letters = "主键位"
     case symbols = "符号"
-    case functions = "功能"
     var id: String { rawValue }
 }
 
@@ -158,14 +159,20 @@ enum KeyboardLayout {
         return row
     }
 
+    /// 主键位 7 行：顶部一整行 F1~F12，字母区下方一行导航键与四向方向键。
+    /// 行数变多后由 KeyboardPanel 把键帽高度从 44pt 降到 38pt，保证小屏放得下。
     static func rows(for page: KeyboardPage) -> [[KeyDef]] {
         switch page {
         case .letters:
             return [
+                functionLine(["F1", "F2", "F3", "F4", "F5", "F6",
+                              "F7", "F8", "F9", "F10", "F11", "F12"]),
                 line("1234567890"),
                 letters("QWERTYUIOP"),
                 [.spacer(0.5)] + letters("ASDFGHJKL") + [.spacer(0.5)],
                 [.spacer(1.5)] + letters("ZXCVBNM") + [.spacer(1.5)],
+                functionLine(["Esc", "Tab", "Caps", "Del", "Home", "End",
+                              "←", "↓", "↑", "→"]),
                 controlRow
             ]
         case .symbols:
@@ -173,15 +180,8 @@ enum KeyboardLayout {
                 line("!@#$%^&*()"),
                 line("`-=[]\\;',./"),
                 line("~_+{}|:\"<>?"),
-                functionLine(["Esc", "Tab", "Caps", "Del", "Home", "End", "PgUp", "PgDn"]),
-                controlRow
-            ]
-        case .functions:
-            return [
-                functionLine(["Esc", "F1", "F2", "F3", "F4", "F5", "F6"]),
-                functionLine(["F7", "F8", "F9", "F10", "F11", "F12", "Ins"]),
-                functionLine(["PrtSc", "ScrLk", "Pause", "Home", "End", "PgUp", "PgDn"]),
-                functionLine(["←", "↓", "↑", "→", "Tab", "Caps", "Del"]),
+                functionLine(["Ins", "PrtSc", "ScrLk", "Pause",
+                              "PgUp", "PgDn", "Menu"]),
                 controlRow
             ]
         }
@@ -203,6 +203,9 @@ struct KeyboardPanel: View {
 
     var body: some View {
         let rows = KeyboardLayout.rows(for: page)
+        // 主键位合并后 7 行、符号页 5 行，两页统一 42pt：既放得下 7 行，
+        // 又接近系统建议的 44pt 触控高度，切页时键帽不会忽大忽小。
+        let rowHeight: CGFloat = 42
         return VStack(spacing: 0) {
             toolbar
             stickyBar
@@ -214,7 +217,7 @@ struct KeyboardPanel: View {
                 // 用整数索引而不是 enumerated() 元组：后者配 id: \.offset
                 // 在部分 Swift 版本会报「key path 不能指向元组元素」。
                 ForEach(0..<rows.count, id: \.self) { i in
-                    KeyRow(keys: rows[i], sticky: sticky, tap: handle)
+                    KeyRow(keys: rows[i], sticky: sticky, height: rowHeight, tap: handle)
                 }
             }
             .padding(.horizontal, 6)
@@ -307,7 +310,7 @@ struct KeyboardPanel: View {
     }
 
     private var footer: some View {
-        Text("按键以蓝牙 HID 键码发送；中文、emoji 由主机输入法决定，不能直接写入字符。底部左键 / 滚轮 / 右键仍可用。")
+        Text("F1~F12 与方向键已并入主键位页，其余功能键在符号页。中文、emoji 由主机输入法决定；底部左键 / 滚轮 / 右键仍可用。")
             .font(.caption2)
             .foregroundStyle(.tertiary)
             .multilineTextAlignment(.center)
@@ -339,6 +342,7 @@ struct KeyboardPanel: View {
 private struct KeyRow: View {
     let keys: [KeyDef]
     let sticky: UInt8
+    let height: CGFloat
     let tap: (KeyDef) -> Void
 
     private static let spacing: CGFloat = 4
@@ -353,7 +357,7 @@ private struct KeyRow: View {
         HStack(spacing: KeyRow.spacing) {
             ForEach(0..<keys.count, id: \.self) { i in
                 KeyCap(key: keys[i], sticky: sticky,
-                       width: u * keys[i].weight, tap: tap)
+                       width: u * keys[i].weight, height: height, tap: tap)
             }
         }
     }
@@ -362,7 +366,7 @@ private struct KeyRow: View {
         GeometryReader { geo in
             row(unit: unit(for: geo.size.width))
         }
-        .frame(height: 44)
+        .frame(height: height)
     }
 }
 
@@ -370,6 +374,7 @@ private struct KeyCap: View {
     let key: KeyDef
     let sticky: UInt8
     let width: CGFloat
+    let height: CGFloat
     let tap: (KeyDef) -> Void
 
     private var isStickyActive: Bool {
@@ -400,7 +405,7 @@ private struct KeyCap: View {
                         .font(.system(size: fontSize, weight: .medium))
                         .minimumScaleFactor(0.6)
                         .lineLimit(1)
-                        .frame(width: width, height: 44)
+                        .frame(width: width, height: height)
                         .background(fill, in: RoundedRectangle(cornerRadius: 6))
                         .foregroundStyle(isStickyActive ? Color.white : Color.primary)
                         .overlay(
@@ -413,6 +418,6 @@ private struct KeyCap: View {
                 .accessibilityLabel(key.label)
             }
         }
-        .frame(width: width, height: 44)
+        .frame(width: width, height: height)
     }
 }

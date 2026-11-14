@@ -892,7 +892,7 @@ Apple 开发者论坛（thread 72343）的官方回复：当外设同时有这�
 
 广播 UUID、服务数量、Boot Mouse、点击手势、滚动方向、按键宽度与高度一律未动。
 
-## 二十三、全键盘：触控区顶部一键切换（本轮新增）
+## 二十三、全键盘：触控区顶部一键切换
 
 ### 入口与交互
 
@@ -903,16 +903,15 @@ Apple 开发者论坛（thread 72343）的官方回复：当外设同时有这�
 键盘未就绪（复合模式关闭、Boot Protocol 或未订阅输入报告）时，切换栏显示橙色「键盘未就绪」，
 键盘页顶部给出具体原因提示。
 
-### 三页布局
+### 两页布局（功能页已并入主键位，见第二十四节）
 
-| 页面 | 内容 |
-| --- | --- |
-| 主键位 | 数字行、QWERTY 三行、常驻控制行（Ctrl / Opt / Cmd / Shift / Space / 退格 / 回车） |
-| 符号 | 上档符号 `!@#$%^&*()`、US 标点两行、Esc / Tab / Caps / Del / Home / End / PgUp / PgDn |
-| 功能 | Esc、F1~F12、Ins、PrtSc / ScrLk / Pause、Home / End / PgUp / PgDn、四向方向键、Tab / Caps / Del |
+| 页面 | 行数 | 内容 |
+| --- | --- | --- |
+| 主键位 | 7 行 | F1~F12 一整行、数字行、QWERTY 三行、Esc / Tab / Caps / Del / Home / End + 四向方向键、常驻控制行（Ctrl / Opt / Cmd / Shift / Space / 退格 / 回车） |
+| 符号 | 5 行 | 上档符号 `!@#$%^&*()`、US 标点两行、Ins / PrtSc / ScrLk / Pause / PgUp / PgDn / Menu、常驻控制行 |
 
-每页 5 行（4 行页面键 + 1 行常驻控制行），键帽 44pt 高，键宽按权重分配；
-键区在剩余空间里垂直居中。功能键底色比字符键深，粘滞修饰键激活时变蓝。
+两页统一 42pt 键帽（主键位 7 行时行距略收紧），键宽按权重分配，键区在剩余空间里垂直居中。
+功能键底色比字符键深，粘滞修饰键激活时变蓝。原「功能」页的所有键码都保留了，只是重新分配。
 
 ### 组合键：一次性粘滞修饰键
 
@@ -955,20 +954,66 @@ Apple 开发者论坛（thread 72343）的官方回复：当外设同时有这�
 
 ① 连接后顶部是否出现「全键盘」按钮；② 切到键盘页后底部三键是否仍可用；
 ③ 主键位连打 `hello` 是否为小写；④ 粘滞 `Cmd` + `C` 在 iPad 是否触发拷贝；
-⑤ 符号页 `!` 与功能页方向键、F1~F12 是否正确；⑥ 日志是否打印对应 keycode 与 modifier；
+⑤ 主键位页 F1~F12、方向键与符号页 `!` / PgUp 是否正确；⑥ 日志是否打印对应 keycode 与 modifier；
 ⑦ 关掉「键鼠复合模式」后是否出现橙色警告且日志说明原因；
 ⑧ 返回触控板后单指 / 双指 / 三指手势是否照常。
 任一环节异常，按第二十二节的回退表关掉复合开关、忽略设备重新配对，或重装 `v0.0.8-63bc75b` 基线包。
 
 | 文件 | 改动 |
 | --- | --- |
-| `KeyboardView.swift`（新增） | HID 键码解析、三页布局、粘滞修饰键、键帽与顶部工具条 |
+| `KeyboardView.swift`（新增） | HID 键码解析、两页布局、粘滞修饰键、键帽与顶部工具条 |
 | `HIDPeripheral.swift` | 固定 `Command + H` 泛化为 `sendKey`；新增 `keyboardReady`、可变 modifier、连按补空帧、key-up 连发兜底 |
 | `HIDDescriptor.swift` | 新增 8 个修饰键位常量、`maxKeyboardKeycode`，`makeReport` 支持多键码数组 |
 | `ContentView.swift` | 新增 `TrackpadTopBar` 切换栏与 `showKeyboard` 状态；设置页两行说明与分组标题更新 |
-| `preview/ui-preview.html` | 第五个状态「已连接 · 全键盘」、三页键盘与粘滞交互模拟、元素清单第 18~23 项、全部代码行号同步 |
-| `preview/shot-*.png` | 重新生成 5 张状态截图，新增 `shot-4-keyboard.png`、`shot-5-keyboard-functions.png` |
+| `preview/ui-preview.html` | 第五个状态「已连接 · 全键盘」、两页键盘与粘滞交互模拟、元素清单第 18~23 项、全部代码行号同步 |
+| `preview/shot-*.png` | 重新生成 5 张状态截图：`shot-4-keyboard.png`（主键位）、`shot-5-keyboard-symbols.png`（符号） |
 | `README.md` | 更新第二十二节链路描述与分组名称，新增本节 |
 
-预览页支持 `?state=keyboard&page=functions` 直接打开功能页；点任意键帽会在右侧事件记录里
-打印对应的 keycode 与 modifier，方便对照真机日志。
+预览页支持 `?state=keyboard`（主键位）与 `?state=keyboard&page=symbols`（符号）直接打开对应页；
+点任意键帽会在右侧事件记录里打印对应的 keycode 与 modifier，方便对照真机日志。
+旧参数 `page=functions` 仍可解析，会落到合并后的主键位页。
+
+## 二十四、主键位与功能页合并（本轮新增）
+
+原三页键盘里，F1~F12 和方向键必须切到独立的「功能」页才能按到，打字和控制来回切页不方便。
+本轮把功能页并入主键位，分段控件从三页减到两页。
+
+### 键位重新分配
+
+| 去向 | 键 |
+| --- | --- |
+| 主键位第 1 行 | `F1` ~ `F12`（12 个等宽键，标签字号缩到 10px 以容纳三字符 `F10` / `F11` / `F12`） |
+| 主键位第 6 行 | `Esc` `Tab` `Caps` `Del` `Home` `End` `←` `↓` `↑` `→` |
+| 符号第 4 行 | `Ins` `PrtSc` `ScrLk` `Pause` `PgUp` `PgDn` `Menu` |
+
+`Menu` = `0x65` 是这一轮新放上界面的键（键码表本来就有，正好落在 Report Map 的
+Usage Maximum = 101 边界内）。原功能页的 Esc / Tab / Caps / Del / Home / End / PgUp / PgDn
+与四向方向键全部保留，**没有因为合并丢任何键码**。
+
+### 行高与排版
+
+主键位从 5 行变 7 行，`KeyboardPanel` 把行高做成可传参：两页统一 42pt，
+而不是让主键位缩到 38pt、符号页保持 44pt——那样切页时键帽会忽大忽小。
+`KeyRow` / `KeyCap` 新增 `height` 参数，行数只影响上下弹性间隔与行距，不再隐式决定键帽高度。
+预览页用 `.kb-rows.compact` 收紧 7 行页面的行距与功能键字号，和 Swift 端保持一致。
+
+### 未改动
+
+HID 报告格式（12 字节复合报告）、`sendKey` 链路、粘滞修饰键、键码表、GATT 服务、
+广播 UUID、三指上滑、触控区手势、底部三键一律未动；只改了界面布局与文案。
+
+| 文件 | 改动 |
+| --- | --- |
+| `KeyboardView.swift` | `KeyboardPage` 删 `functions`；`KeyboardLayout.rows` 重排两页；`KeyRow` / `KeyCap` 支持 `height`；footer 与顶部注释更新 |
+| `ContentView.swift` | 设置页「全键盘」说明改为「主键位（含 F 键 / 方向键）与符号，共两页」 |
+| `preview/ui-preview.html` | 两页分段控件、`kbRows()` 重写、42pt 与 compact 样式、状态键值 / 事件日志 / 元素清单 / 全部代码行号同步 |
+| `preview/shot-*.png` | 删除 `shot-5-keyboard-functions.png`，新增 `shot-5-keyboard-symbols.png`，其余 4 张重新生成 |
+| `README.md` | 第二十三节改为两页布局，新增本节 |
+
+### 真机验证补充
+
+① 分段控件只有「主键位」「符号」两项；② 主键位 7 行在真机上无裁切、键帽不重叠；
+③ `F12`、四向方向键、`Menu` 按下后日志打印的 keycode 分别为 `0x45` / `0x50` `0x51` `0x52` `0x4F` / `0x65`；
+④ 主键位与符号页来回切换时键帽高度无跳变；⑤ 底部三键、返回触控板与三指上滑仍正常。
+若小屏上 7 行显得过挤，回退方式是把 `KeyboardPanel` 的 `rowHeight` 调到 38pt 再出包，
+不需要改键位表或 HID 链路。
