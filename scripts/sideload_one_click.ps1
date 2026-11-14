@@ -85,20 +85,123 @@ Write-Host ""
 
 $DownloadedIpa = ""
 
+# ---------------------------------------------------------------- helpers ---
+function Get-HttpCode([string]$Url, [string]$ProxyUrl, [int]$Seconds) {
+    # curl.exe is used only to decide which network route works. The result is
+    # exported as HTTPS_PROXY for gh and git, which are native programs and do
+    # NOT inherit the IE/WinINET proxy that the browser uses.
+    if ([string]::IsNullOrWhiteSpace($script:CurlExe)) { return "000" }
+    $CurlArgs = @("-s", "-o", "NUL", "-w", "%{http_code}",
+                  "--max-time", "$Seconds", "-H", "User-Agent: PocketTrackpad/1.0")
+    if ([string]::IsNullOrWhiteSpace($ProxyUrl)) {
+        $CurlArgs += @("--noproxy", "*")
+    } else {
+        $CurlArgs += @("-x", $ProxyUrl)
+    }
+    $CurlArgs += $Url
+    try {
+        $Code = (& $script:CurlExe @CurlArgs 2>$null) -join ""
+        return $Code.Trim()
+    } catch { return "000" }
+}
+
+function Initialize-GitHubNetwork {
+    $script:CurlExe = ""
+    $CurlCmd = Get-Command curl.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($null -ne $CurlCmd) { $script:CurlExe = $CurlCmd.Source }
+
+    $RawProxy = ""
+    $Ie = Get-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings" -ErrorAction SilentlyContinue
+    if ($null -ne $Ie -and [int]$Ie.ProxyEnable -eq 1) {
+        $RawProxy = [string]$Ie.ProxyServer
+    }
+    if ($RawProxy -match "https=([^;]+)") { $RawProxy = $Matches[1] }
+    elseif ($RawProxy -match "http=([^;]+)") { $RawProxy = $Matches[1] }
+    else { $RawProxy = ($RawProxy -split ";")[0] }
+    $RawProxy = $RawProxy.Trim()
+    if ($RawProxy -and $RawProxy -notmatch "^https?://") { $RawProxy = "http://" + $RawProxy }
+
+    $Direct = Get-HttpCode "https://github.com" "" 5
+    $UseProxy = ""
+    if ($Direct -notmatch "^[23]" -and $RawProxy) {
+        $ViaProxy = Get-HttpCode "https://github.com" $RawProxy 10
+        if ($ViaProxy -match "^[23]") { $UseProxy = $RawProxy }
+    }
+
+    if ($UseProxy) {
+        $env:HTTPS_PROXY = $UseProxy
+        $env:HTTP_PROXY  = $UseProxy
+        $env:https_proxy = $UseProxy
+        $env:http_proxy  = $UseProxy
+        # Some network setups block api.github.com through the proxy while a
+        # direct route still works. Keep that one host out of the proxy then.
+        $ApiDirect = Get-HttpCode "https://api.github.com" "" 5
+        if ($ApiDirect -match "^[23]") {
+            $env:NO_PROXY = "api.github.com"
+            $env:no_proxy = "api.github.com"
+        } else {
+            $env:NO_PROXY = ""
+            $env:no_proxy = ""
+        }
+        Write-Host ("  OK    network via system proxy {0}" -f $UseProxy)
+    } else {
+        Write-Host "  OK    direct network (no proxy needed)"
+    }
+    if ($Direct -notmatch "^[23]" -and -not $UseProxy) {
+        Write-Host "  WARN  github.com is unreachable both directly and via $RawProxy."
+        Write-Host "        Start your proxy software, then re-run this script."
+    }
+}
+
+function Resolve-GitExe {
+    $GitCmd = Get-Command git.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($null -ne $GitCmd) { return $GitCmd.Source }
+
+    $Candidates = @(
+        "C:\Program Files\Git\cmd\git.exe",
+        "C:\Program Files (x86)\Git\cmd\git.exe",
+        (Join-Path $env:LOCALAPPDATA "Programs\Git\cmd\git.exe")
+    )
+    # WorkBuddy ships a portable Git that is NOT on the Windows PATH.
+    $PortableRoot = Join-Path $env:USERPROFILE ".workbuddy\binaries\PortableGit\versions"
+    if (Test-Path $PortableRoot) {
+        foreach ($Dir in (Get-ChildItem -Path $PortableRoot -Directory | Sort-Object Name -Descending)) {
+            $Candidates += (Join-Path $Dir.FullName "cmd\git.exe")
+        }
+    }
+    foreach ($Candidate in $Candidates) {
+        if (Test-Path $Candidate) { return $Candidate }
+    }
+    return ""
+}
+
 if (-not $SkipGitHub) {
     # ------------------------------------------------------------ Phase 1 ---
     Write-Phase "1/6  Toolchain"
 
-    if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
-        throw "git is required but not found. Install Git for Windows first."
+    Initialize-GitHubNetwork
+
+    $script:GitExe = Resolve-GitExe
+    if ([string]::IsNullOrWhiteSpace($script:GitExe)) {
+        Write-Host "  git.exe not on PATH. Trying winget install Git.Git ..."
+        $WingetForGit = Get-Command winget -ErrorAction SilentlyContinue
+        if ($null -ne $WingetForGit) {
+            & winget install --id Git.Git -e --accept-source-agreements --accept-package-agreements --disable-interactivity | Out-Null
+            $script:GitExe = Resolve-GitExe
+        }
     }
-    Write-Host "  OK    git found"
+    if ([string]::IsNullOrWhiteSpace($script:GitExe)) {
+        throw "git.exe not found. Install Git for Windows: https://git-scm.com/download/win"
+    }
+    Write-Host ("  OK    git: {0}" -f $script:GitExe)
+    # git credential helpers shell out to `gh`, so both dirs must be on PATH.
+    $env:Path = (Split-Path -Parent $script:GitExe) + ";" + $env:Path
 
     $script:GhExe = ""
     $GhCmd = Get-Command gh -ErrorAction SilentlyContinue
     if ($null -ne $GhCmd) { $script:GhExe = $GhCmd.Source }
 
-    # winget / MSI 刚装完时，当前会话的 PATH 可能还没刷新，直接查默认安装路径
+    # A fresh winget/MSI install may not refresh this session's PATH, so probe the default install paths too
     if ([string]::IsNullOrWhiteSpace($script:GhExe)) {
         foreach ($Candidate in @("C:\Program Files\GitHub CLI\gh.exe", "C:\Program Files (x86)\GitHub CLI\gh.exe", (Join-Path $env:LOCALAPPDATA "Programs\GitHub CLI\gh.exe"))) {
             if (Test-Path $Candidate) { $script:GhExe = $Candidate; break }
@@ -129,6 +232,7 @@ if (-not $SkipGitHub) {
         throw "GitHub CLI (gh) is not available."
     }
     Write-Host ("  OK    GitHub CLI: {0}" -f $script:GhExe)
+    $env:Path = (Split-Path -Parent $script:GhExe) + ";" + $env:Path
 
     # ------------------------------------------------------------ Phase 2 ---
     Write-Phase "2/6  GitHub sign-in"
@@ -154,25 +258,25 @@ if (-not $SkipGitHub) {
     Set-Location $Root
 
     $IsRepo = $false
-    try { & git rev-parse --is-inside-work-tree 2>$null | Out-Null; $IsRepo = ($LASTEXITCODE -eq 0) } catch { }
+    try { & $script:GitExe rev-parse --is-inside-work-tree 2>$null | Out-Null; $IsRepo = ($LASTEXITCODE -eq 0) } catch { }
     if (-not $IsRepo) {
-        & git init -b main | Out-Null
+        & $script:GitExe init -b main | Out-Null
         Write-Host "  Initialised git repository"
     }
 
-    $ConfiguredName = (& git config user.name 2>$null)
-    $ConfiguredMail = (& git config user.email 2>$null)
+    $ConfiguredName = (& $script:GitExe config user.name 2>$null)
+    $ConfiguredMail = (& $script:GitExe config user.email 2>$null)
     $GitIdentity = @()
     if ([string]::IsNullOrWhiteSpace($ConfiguredName)) { $GitIdentity += @("-c", "user.name=PocketTrackpad Builder") }
     if ([string]::IsNullOrWhiteSpace($ConfiguredMail)) { $GitIdentity += @("-c", "user.email=builder@localhost") }
 
-    $Pending = @(& git status --porcelain 2>$null)
+    $Pending = @(& $script:GitExe status --porcelain 2>$null)
     if ($Pending.Count -gt 0) {
-        & git add -A | Out-Null
+        & $script:GitExe add -A | Out-Null
         if ($GitIdentity.Count -gt 0) {
-            & git @GitIdentity commit -m "PocketTrackpad: initial project" | Out-Null
+            & $script:GitExe @GitIdentity commit -m "PocketTrackpad: initial project" | Out-Null
         } else {
-            & git commit -m "PocketTrackpad: initial project" | Out-Null
+            & $script:GitExe commit -m "PocketTrackpad: initial project" | Out-Null
         }
         Write-Host "  Committed local changes"
     } else {
@@ -180,7 +284,7 @@ if (-not $SkipGitHub) {
     }
 
     $Remote = ""
-    try { $Remote = (& git remote get-url origin 2>$null) } catch { }
+    try { $Remote = (& $script:GitExe remote get-url origin 2>$null) } catch { }
     if ([string]::IsNullOrWhiteSpace($Remote)) {
         Write-Host ("  Creating PUBLIC repo '{0}' (public repos get free macOS runners)" -f $RepoName)
         & $script:GhExe repo create $RepoName --public --source=. --push --remote=origin
@@ -189,7 +293,7 @@ if (-not $SkipGitHub) {
             throw "gh repo create failed"
         }
     } else {
-        & git push origin HEAD
+        & $script:GitExe push origin HEAD
         if ($LASTEXITCODE -ne 0) { throw "git push failed" }
     }
     Write-Host "  OK    code pushed"

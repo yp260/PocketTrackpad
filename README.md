@@ -467,20 +467,33 @@ powershell -ExecutionPolicy Bypass -File scripts\sideload_one_click.ps1 -OpenDow
 
 | 项目 | 结果 |
 | --- | --- |
-| git / curl / unzip | 已有 |
-| GitHub CLI (`gh`) | 未安装，脚本会尝试用 winget 安装 |
+| git / curl / unzip | Git 仅存在于 WorkBuddy 便携目录，**不在系统 PATH**；脚本现已能自动定位 |
+| 系统代理 | IE 代理 `127.0.0.1:7898` 已启用，浏览器可用；命令行默认直连，脚本会自动注入 `HTTPS_PROXY` |
+| GitHub CLI (`gh`) | 已通过 winget 安装 2.104.0，位于 `C:\Program Files\GitHub CLI\gh.exe` |
 | GitHub 登录 / 仓库 | 未登录、未建仓；本地仓库已初始化并提交 |
 | 网页版 iTunes | 未安装 |
 | Microsoft Store 版 iTunes | **存在，必须先卸载**，否则 Sideloadly 找不到设备 |
 | iCloud / Sideloadly / Apple 设备服务 | 均未安装 |
 | USB 连接的 iPhone | 未检测到 |
 | 本机 iOS 签名证书 | 0 个 |
-| GitHub CLI (`gh`) | 已通过 winget 安装 2.104.0，位于 `C:\Program Files\GitHub CLI\gh.exe` |
 | `gh` 授权状态 | **未授权**。网页登录 GitHub 与命令行授权是两回事，需跑一次 `gh auth login --web` |
+| 直连 / 代理实测 | 直连 `github.com` 超时（000）；走 `127.0.0.1:7898` 返回 200；git 走代理 `ls-remote` 成功 |
 
 也就是说：软件环境需要你装三样（网页版 iTunes、iCloud、Sideloadly），外加一次 GitHub 命令行授权。这三样都涉及系统安装或账号凭证，脚本已给出下载链接并自动打开页面，但不能代替你点确认。
 
-> **网络限制（实测）**：本会话执行环境的代理 `127.0.0.1:11061` 只放行 `api.github.com`，`github.com` 整域返回连接失败，因此设备码授权（`https://github.com/login/device/code`）和 `git push` 都无法由助手侧代跑。请在**你自己打开的 PowerShell 窗口**里运行一键脚本 —— 你的浏览器既然能登录 GitHub，说明该窗口的网络不受此限制。若你那边同样报 `Bad Gateway`，改用网页生成 Personal Access Token 后执行 `gh auth login --with-token`，不要聊天里粘贴 token。
+> **网络根因（2026-11-14 实测并已修复）**：这台机器的 IE/系统代理为 `127.0.0.1:7898`，浏览器走它所以能打开 GitHub；但 `gh.exe` 和 `git.exe` 是原生程序，**不继承 IE 代理**，会直连 `github.com` 并超时报 `wsarecv`。一键脚本现已自动完成三件事：读取注册表里的系统代理 → 分别探测直连与代理哪条通 → 把可用代理写入 `HTTPS_PROXY` / `HTTP_PROXY`（当 `api.github.com` 直连可用时加入 `NO_PROXY`）。同时自动定位不在 PATH 上的 Git（含 WorkBuddy 便携版），并把 Git 与 GitHub CLI 目录加入 PATH，保证 `git push` 的凭据助手能调用 `gh`。
+>
+> 实测结果：`OK network via system proxy http://127.0.0.1:7898`、`Resolved git.exe: ...PortableGit\...\cmd\git.exe`、`NO_PROXY: api.github.com`。
+
+### 两个典型报错
+
+| 终端现象 | 原因 | 处理 |
+| --- | --- | --- |
+| `failed to authenticate via web browser: Post "https://github.com/login/device/code": ... wsarecv: A connection attempt failed...` | gh 直连被网络挡住，没走系统代理 | 直接重跑一键脚本，它会自动注入代理；**不需要**再手动跑 `gh auth login` |
+| `git is required but not found. Install Git for Windows first.` | Git 只在 WorkBuddy 便携目录，不在 Windows PATH | 脚本现已自动搜索便携版路径并加入 PATH；无需另装 Git |
+| 浏览器只显示 GitHub 首页、没有 Authorize | 打开的不是设备验证页 | 见下一节，手动输入 `https://github.com/login/device` |
+
+若代理软件没启动，两条路都不通，脚本会打印 `WARN github.com is unreachable...`；先开代理软件再重跑。
 
 ### 没看到 Authorize 按钮
 
@@ -494,9 +507,10 @@ GitHub 首页（Dashboard）上**不会**出现 Authorize 按钮。授权是两�
 | 4 | 该页面 | 粘贴 8 位码 → Continue → 点绿色 `Authorize GitHub CLI` |
 | 5 | 终端 | 出现 `✓ Logged in as <你的用户名>` 即成功 |
 
-单独完成授权的命令（授权成功后一键脚本会自动跳过这一步）：
+授权已由一键脚本自动发起，**不需要单独运行下面这条**。只有在脚本之外手动授权时才用，且必须先设置代理，否则又会超时：
 
 ```powershell
+$env:HTTPS_PROXY = "http://127.0.0.1:7898"
 & "C:\Program Files\GitHub CLI\gh.exe" auth login --web --git-protocol https --scopes "repo,workflow"
 ```
 
