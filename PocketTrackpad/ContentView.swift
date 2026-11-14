@@ -231,6 +231,7 @@ struct ContentView: View {
 struct SettingsView: View {
 
     @EnvironmentObject private var hid: HIDPeripheral
+    @EnvironmentObject private var clicks: KeyClickPlayer
 
     var body: some View {
         Form {
@@ -263,6 +264,28 @@ struct SettingsView: View {
                 }
                 Toggle("自然滚动", isOn: $hid.naturalScrolling)
                 Text("默认：双指或滚轮键向上滑 = 滚轮下滑。打开自然滚动后方向整体反转（跟手）。同时作用于双指滚动和底部滚轮键，设置会自动保存。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("按键音") {
+                Toggle("启用按键音", isOn: $clicks.isEnabled)
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text("音量")
+                        Spacer()
+                        Text(clicks.levelText)
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                    }
+                    Slider(value: $clicks.volume, in: 0...1, step: 0.05)
+                }
+                Button {
+                    clicks.preview()
+                } label: {
+                    Label("试听", systemImage: "speaker.wave.2.fill")
+                }
+                Text("虚拟键盘每次按键都会响一声机械键盘音；底部左键 / 右键 / 滚轮键同样有反馈音。音量 0 即静音。键盘页工具条的喇叭按钮可在 静音 / 25% / 50% / 100% 之间快速切换。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -441,6 +464,7 @@ private struct ButtonBar: View {
 private struct HoldButton: View {
 
     @EnvironmentObject private var hid: HIDPeripheral
+    @EnvironmentObject private var clicks: KeyClickPlayer
     let title: String
     let mask: UInt8
     @State private var isDown = false
@@ -459,6 +483,7 @@ private struct HoldButton: View {
                         guard !isDown else { return }
                         isDown = true
                         hid.setButton(mask, pressed: true)
+                        clicks.play()
                         UIImpactFeedbackGenerator(style: .light).impactOccurred()
                     }
                     .onEnded { _ in
@@ -474,6 +499,7 @@ private struct HoldButton: View {
 private struct WheelButton: View {
 
     @EnvironmentObject private var hid: HIDPeripheral
+    @EnvironmentObject private var clicks: KeyClickPlayer
 
     @State private var isDragging = false
     @State private var lastY: CGFloat = 0
@@ -539,6 +565,7 @@ private struct WheelButton: View {
         if now.timeIntervalSince(lastTap) < doubleTapInterval {
             lastTap = .distantPast
             hid.click(0x04)
+            clicks.play()
             UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         } else {
             lastTap = now

@@ -1496,3 +1496,49 @@ Windows / Android / iPad（标准蓝牙键盘 + 鼠标）
 | `esp32/README.md` | Appearance、报告布局、定位说明同步 |
 | `preview/ui-preview.html` | 选词提示与设置页输入报告描述同步 |
 | `README.md` | 更新第三十一节 Appearance/布局引用，新增本节 |
+
+## 三十三、按键音：每个键都有反馈，音量可调（本轮新增）
+
+### 需求
+
+虚拟键盘敲键无声，和实体键盘的手感差一截；同时鼠标按键也没有反馈音。
+
+### 实现
+
+| 位置 | 文件 | 说明 |
+| --- | --- | --- |
+| 播放器 | `PocketTrackpad/KeyClickPlayer.swift`（新增） | `AVAudioPlayer` 播放打包的 `keyclick.wav`；4 个播放器轮转（连按时不互相打断）；音量与开关持久化到 `UserDefaults` |
+| 音色 | `PocketTrackpad/Resources/keyclick.wav`（新增） | 机械键盘 click 音色，45ms，44100Hz 单声道 16bit，约 4KB；由 `scripts/gen_keyclick.py` 合成（噪声瞬态 + 阻尼共振体），可随时重新生成调整音色 |
+| 工程配置 | `project.yml` | `Resources` 目录从 `sources` 排除，单独列为 `resources`，保证 wav 进 Resources 构建阶段 |
+| 键盘页 | `KeyboardView.swift` | 每次按键 `clicks.play()`；工具条加喇叭按钮，点击在 静音 / 25% / 50% / 100% 之间循环，图标随档位变化 |
+| 设置页 | `ContentView.swift` | 新增「按键音」分组：总开关 + 音量滑块（0~1，步进 0.05，0 即静音）+「试听」按钮 |
+| 鼠标键 | `ContentView.swift` / `TrackpadSurface.swift` | 底部左键 / 右键 / 滚轮键、触控区轻点 / 双击 / 长按右键同样发出反馈音 |
+
+### 两个技术选择
+
+1. **不用系统音效**：系统按键音（`AudioServicesPlaySystemSound`）音量不可调。
+   自带 WAV + `AVAudioPlayer` 才能实现用户可调的音量。
+2. **音频会话用 `.playback` + `.mixWithOthers`**：与 iOS 自带键盘一致——手机处于静音模式时
+   按键音仍然响；同时 `mixWithOthers` 保证不打断 iPad 上正在播放的音频。
+   会话在第一次播放时才激活，避免 App 启动就抢占音频焦点。
+
+### 行为约定
+
+- 音量 0 = 静音；总开关关闭时任何按键都不发声。
+- 键盘页工具条的喇叭按钮：静音 → 25% → 50% → 100% → 静音，循环。
+  切到静音档时先按旧音量响一声，让用户确认按钮有效。
+- 按键音在 iPhone 端播放（iPad 是被控端，没法在主机侧发声）。
+
+### 本轮改动文件
+
+| 文件 | 改动 |
+| --- | --- |
+| `PocketTrackpad/KeyClickPlayer.swift` | 新增：按键音播放器（播放器池 + 音量持久化 + 档位循环 + 音频会话） |
+| `PocketTrackpad/Resources/keyclick.wav` | 新增：按键音素材（4,012 字节） |
+| `scripts/gen_keyclick.py` | 新增：按键音合成脚本（可复现、可调音色） |
+| `PocketTrackpad/PocketTrackpadApp.swift` | 注入 `KeyClickPlayer.shared` 环境对象 |
+| `PocketTrackpad/KeyboardView.swift` | 按键发声；工具条加音量按钮 |
+| `PocketTrackpad/ContentView.swift` | 设置页「按键音」分组；底部鼠标键发声 |
+| `PocketTrackpad/TrackpadSurface.swift` | 触控区轻点 / 双击 / 长按右键发声 |
+| `project.yml` | 新增 `resources` 声明，Resources 目录从 sources 排除 |
+| `preview/ui-preview.html` | 键盘页喇叭按钮、设置页按键音分组、音量交互同步 |

@@ -196,6 +196,7 @@ enum KeyboardLayout {
 struct KeyboardPanel: View {
 
     @EnvironmentObject private var hid: HIDPeripheral
+    @EnvironmentObject private var clicks: KeyClickPlayer
     @Binding var showKeyboard: Bool
 
     @State private var page: KeyboardPage = .letters
@@ -289,6 +290,19 @@ struct KeyboardPanel: View {
                 .fixedSize()
                 .accessibilityLabel("清除粘滞修饰键：" + stickyNames)
             }
+
+            // 音量快捷键：点击在 静音 / 25% / 50% / 100% 之间循环，
+            // 不占用额外一行高度，图标随档位变化。
+            Button {
+                clicks.cycleVolume()
+            } label: {
+                Image(systemName: clicks.iconName)
+                    .font(.caption)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .fixedSize()
+            .accessibilityLabel("按键音音量：" + clicks.levelText)
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
@@ -347,6 +361,9 @@ struct KeyboardPanel: View {
         case .key(let keycode, let modifier):
             hid.sendKey(keycode, modifiers: modifier | sticky, label: key.label)
             sticky = 0
+            // 按键音：与真实键盘一致，敲一下响一下；音量在设置页滑块调节，
+            // 键盘页工具条的喇叭按钮可在 静音 / 25% / 50% / 100% 之间循环。
+            clicks.play()
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
         }
     }

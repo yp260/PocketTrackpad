@@ -21,6 +21,11 @@ targets:
       - path: PocketTrackpad
         excludes:
           - "Info.plist"
+          - "Resources"
+    # 资源单独声明：按键音 keyclick.wav（scripts/gen_keyclick.py 生成）。
+    # 放在 Resources 目录并从 sources 里排除，避免同一文件被加进两次。
+    resources:
+      - path: PocketTrackpad/Resources
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.example.PocketTrackpad

@@ -192,12 +192,14 @@ struct TrackpadSurface: UIViewRepresentable {
         @objc func handleTap(_ g: UITapGestureRecognizer) {
             hideHint()
             hid.click(0x01)
+            KeyClickPlayer.shared.play()
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
         }
 
         @objc func handleDoubleTap(_ g: UITapGestureRecognizer) {
             hideHint()
             hid.click(0x01, count: 2)
+            KeyClickPlayer.shared.play()
             UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         }
 
@@ -205,6 +207,7 @@ struct TrackpadSurface: UIViewRepresentable {
             guard g.state == .began else { return }
             hideHint()
             hid.click(0x02)
+            KeyClickPlayer.shared.play()
             UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
         }
 
