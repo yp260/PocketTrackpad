@@ -10,8 +10,8 @@ struct ContentView: View {
     /// 断开后弹出「切换设备」指引（配对信息在主机侧，iPad 会自动回连）。
     @State private var showSwitchHelp = false
 
-    /// 主机订阅了 Input Report 才算真正连上；仅广播中不算连接。
-    private var connected: Bool { hid.subscribers > 0 }
+    /// 主机订阅了 Input Report（BLE），或硬件桥已连上（ESP32），都算真正连上。
+    private var connected: Bool { hid.isLinkActive }
 
     var body: some View {
         NavigationStack {
@@ -58,13 +58,33 @@ struct ContentView: View {
                         Text("已连接")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
-                        DisconnectButton(onDisconnected: { showSwitchHelp = true })
+                        Button("断开") {
+                            if hid.bridgeMode {
+                                hid.disconnectBridge()
+                            } else {
+                                hid.disconnect()
+                                showSwitchHelp = true
+                            }
+                        }
+                        .font(.caption2)
+                        .buttonStyle(.bordered)
+                        .controlSize(.mini)
+                        .accessibilityLabel("断开当前连接")
                     }
                     Button {
-                        if hid.isAdvertising { hid.stopAdvertising() } else { hid.start() }
+                        if hid.bridgeMode {
+                            if hid.bridgeActive { hid.disconnectBridge() } else { hid.startBridge() }
+                        } else {
+                            if hid.isAdvertising { hid.stopAdvertising() } else { hid.start() }
+                        }
                     } label: {
-                        Text(hid.isAdvertising ? "停止广播" : "开始广播")
-                            .font(.caption2)
+                        if hid.bridgeMode {
+                            Text(hid.bridgeActive ? "断开硬件桥" : "连接硬件桥")
+                                .font(.caption2)
+                        } else {
+                            Text(hid.isAdvertising ? "停止广播" : "开始广播")
+                                .font(.caption2)
+                        }
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.mini)
@@ -117,12 +137,21 @@ struct ContentView: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
-                    Text("iPad 上打开 设置 > 蓝牙，在「其他设备」里选择 PT-Pad 完成配对。")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Text("用右上角的「开始广播」启动蓝牙；连接成功后会自动出现全屏触控区。")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
+                    if hid.bridgeMode {
+                        Text("先让 iPhone 连上 ESP32 的 PT-Bridge 热点（无线局域网里选择，无需密码）。")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Text("再点右上角「连接硬件桥」；连上后 ESP32 会被 Windows / Android 当作标准蓝牙鼠标。")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    } else {
+                        Text("iPad 上打开 设置 > 蓝牙，在「其他设备」里选择 PT-Pad 完成配对。")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Text("用右上角的「开始广播」启动蓝牙；连接成功后会自动出现全屏触控区。")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
                 }
                 // 显式撑满：VStack 默认按最宽子视图定宽，内容短时会缩成窄卡片并居中。
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -256,6 +285,18 @@ struct SettingsView: View {
                 Text("实验功能 · 全键盘与回桌面")
             } footer: {
                 Text("开启后本设备同时声明为鼠标和键盘，全键盘与三指上滑都依赖这个开关。iPad 可能弹出键盘配对验证，也可能拒绝接管整个设备导致鼠标失效。切换开关会自动断开并移除 GATT 服务：请在 iPad 蓝牙里「忽略此设备」，回到主页面点「开始广播」，再重新配对。若指针或点击失效，关掉本开关、同样忽略设备重新配对即可回到纯鼠标，不需要重装 App。Command + H 只对 iPadOS 有效；Windows 显示桌面是 Win + D，macOS 是 F11。")
+                    .font(.caption)
+            }
+
+            Section {
+                Toggle("启用硬件桥（ESP32）", isOn: $hid.bridgeMode)
+                LabeledRow(title: "桥热点", detail: "PT-Bridge（无密码）")
+                LabeledRow(title: "iPhone 发送", detail: "WiFi UDP → 12 字节复合报告")
+                LabeledRow(title: "目标系统", detail: "Windows / Android（标准 BLE HID）")
+            } header: {
+                Text("硬件桥（ESP32）")
+            } footer: {
+                Text("iOS 的蓝牙外设无法设置 GAP Appearance，Windows 因此搜不到本机虚拟键鼠；ESP32 可以，所以把「被主机发现」交给它。开启后本机不再广播，改为把输入通过 WiFi 发给 ESP32，由 ESP32 以标准 BLE HID（Appearance 0x03C2）连上 Windows / Android。需要一台 ESP32-C3 开发板并烧录本仓库 esp32/ 目录的固件，详见 README。")
                     .font(.caption)
             }
 
@@ -505,25 +546,5 @@ private struct WheelButton: View {
     }
 }
 
-// MARK: - 主动断开
+// MARK: - 主动断开（已并入顶部工具栏，见 ContentView.body 的 toolbar）
 
-/// 仅在已连接时出现在顶部工具栏。断开后保持停止广播，让用户决定何时重新广播，
-/// 避免 iPad 立刻自动重连；点「开始广播」即可让 Windows / Mac 等其他主机发现。
-/// onDisconnected 由父视图传入，用来弹出「切换设备」指引（alert 必须挂在常驻视图上，
-/// 因为本按钮在断开后随 toolbar 一起被移除）。
-private struct DisconnectButton: View {
-
-    @EnvironmentObject private var hid: HIDPeripheral
-    var onDisconnected: () -> Void
-
-    var body: some View {
-        Button("断开") {
-            hid.disconnect()
-            onDisconnected()
-        }
-        .font(.caption2)
-        .buttonStyle(.bordered)
-        .controlSize(.mini)
-        .accessibilityLabel("断开当前连接")
-    }
-}

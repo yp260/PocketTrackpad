@@ -26,6 +26,8 @@
 	<string>用于把本机虚拟成蓝牙触控板，向 iPad 发送指针移动、点击与滚动数据。</string>
 	<key>NSBluetoothPeripheralUsageDescription</key>
 	<string>用于把本机虚拟成蓝牙触控板，向 iPad 发送指针移动、点击与滚动数据。</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>用于硬件桥模式：把触控输入通过 WiFi 发给 ESP32 开发板，由它连接 Windows / Android。</string>
 	<!-- 刻意不声明 UIBackgroundModes：本 App 必须前台常亮运行，
 	     免费 Apple ID 侧载时某些后台模式会被内核校验拒绝、导致点开即闪退。 -->
 	<key>UILaunchScreen</key>

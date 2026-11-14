@@ -70,7 +70,7 @@ struct TrackpadSurface: UIViewRepresentable {
         view.addGestureRecognizer(homeSwipe)
 
         let hint = UILabel()
-        hint.text = Self.hintText(composite: hid.compositeDevice)
+        hint.text = Self.hintText(composite: hid.compositeDevice || hid.bridgeMode)
         // 键盘页的小触控区不显示任何提示文字；全屏触控板保留手势说明。
         hint.isHidden = compact
         hint.numberOfLines = 0
@@ -92,7 +92,7 @@ struct TrackpadSurface: UIViewRepresentable {
 
     func updateUIView(_ uiView: UIView, context: Context) {
         context.coordinator.hid = hid
-        context.coordinator.hint?.text = Self.hintText(composite: hid.compositeDevice)
+        context.coordinator.hint?.text = Self.hintText(composite: hid.compositeDevice || hid.bridgeMode)
         context.coordinator.hint?.isHidden = compact
         Self.applyStyle(uiView, edgeToEdge: edgeToEdge, compact: compact)
     }

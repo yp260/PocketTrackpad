@@ -18,6 +18,25 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
     /// 键鼠复合模式开启、主机处于 Report Protocol、且已订阅 2A4D 输入报告。
     @Published private(set) var keyboardReady = false
 
+    /// 硬件桥（ESP32）是否已真正连上：以收到 ESP32 的欢迎回包为准。
+    @Published private(set) var bridgeActive = false
+
+    /// BLE 已订阅，或硬件桥已连上，都算「链路已建立」，界面据此切换全屏触控区。
+    var isLinkActive: Bool { subscribers > 0 || bridgeActive }
+
+    /// 硬件桥传输层：把 12 字节复合 HID 报告通过 UDP 发给 ESP32。
+    /// 仅在「硬件桥模式」下参与输入上报；关闭时完全不触碰网络。
+    lazy var bridge: BridgeTransport = {
+        let b = BridgeTransport()
+        b.onConnectionChange = { [weak self, weak b] in
+            guard let self = self, let b = b else { return }
+            self.bridgeActive = b.isConnected
+            self.objectWillChange.send()
+            self.refreshKeyboardReady()
+        }
+        return b
+    }()
+
     /// iPad 蓝牙列表显示的是 iPhone 整机 GAP Device Name（0x1800 / 0x2A00），
     /// 不是广播包里的 CBAdvertisementDataLocalNameKey。iOS 不向 App 开放
     /// Device Name 特征，CoreBluetooth 也隐藏 Generic Access 服务，App 无法
@@ -67,9 +86,38 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
             }
         }
 
+    // MARK: - 硬件桥（ESP32）模式
+    //
+    // 开启后，本 App 不再作为 BLE HID 外设广播，而是把采集到的输入通过 WiFi UDP
+    // 发给 ESP32，由 ESP32 以标准 BLE HID（带正确 GAP Appearance = 0x03C2）连上
+    // Windows / Android。原因：iOS 的 CoreBluetooth 外设无法设置 GAP Appearance，
+    // 导致 Windows 搜不到 / 配对失败；ESP32 可以，因此把「被主机发现」这件事交给它。
+    private static let bridgeKey = "PocketTrackpad.bridgeMode.v1"
+
+    @Published var bridgeMode: Bool =
+        (UserDefaults.standard.object(forKey: HIDPeripheral.bridgeKey) as? Bool) ?? false {
+            didSet {
+                UserDefaults.standard.set(bridgeMode, forKey: HIDPeripheral.bridgeKey)
+                if bridgeMode {
+                    // 启用桥模式时先关掉本地 BLE 广播，避免两个发射源冲突、互相抢连接。
+                    disconnect()
+                    note("已启用硬件桥模式：iPhone 只采集输入，ESP32 负责被主机发现")
+                    note("请先在 iPhone 无线局域网里连接 ESP32 的 PT-Bridge 热点，再点「连接硬件桥」")
+                } else {
+                    note("已关闭硬件桥模式：恢复本机直接广播（iPad 直连）")
+                }
+                refreshKeyboardReady()
+            }
+        }
+
     /// 键盘是否可用由三处状态共同决定，任何一处变化都刷新一次，供界面显示。
     private func refreshKeyboardReady() {
-        keyboardReady = compositeDevice && protocolMode != 0 && inputSubscribed
+        if bridgeMode {
+            // 桥模式下没有 protocolMode / inputSubscribed 概念，桥连上即代表键盘可用。
+            keyboardReady = bridgeActive
+        } else {
+            keyboardReady = compositeDevice && protocolMode != 0 && inputSubscribed
+        }
     }
 
     private func applyCompositeModeChange() {
@@ -151,6 +199,30 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         }
     }
 
+    /// 硬件桥模式下的「开始」：不创建 BLE 外设，只连接 UDP 并把采集到的输入发给 ESP32。
+    func startBridge() {
+        mark("1 调用 startBridge()")
+        if link == nil {
+            let l = CADisplayLink(target: self, selector: #selector(tick))
+            l.add(to: .main, forMode: .common)
+            link = l
+        }
+        statusText = "正在连接硬件桥"
+        note("硬件桥模式：iPhone 采集输入 → WiFi UDP → ESP32 → 标准 BLE HID → Windows/Android")
+        note("请先在 iPhone 无线局域网里连接 ESP32 的 PT-Bridge 热点（无需密码）")
+        bridge.connect()
+    }
+
+    /// 断开硬件桥 UDP 连接；不影响本机 BLE 路径（关掉桥模式后用「开始广播」即可直连 iPad）。
+    func disconnectBridge() {
+        bridge.disconnect()
+        subscribers = 0
+        statusText = "硬件桥已断开"
+        note("已断开硬件桥；回到 iPad 直连请关掉「硬件桥」开关，或点「连接硬件桥」重试")
+        mark("7 运行中（已断开硬件桥）")
+        refreshKeyboardReady()
+    }
+
     func stopAdvertising() {
         manager?.stopAdvertising()
         isAdvertising = false
@@ -165,6 +237,7 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
     /// 服务，再释放 manager 实例，由系统拆掉当前链路；下次调用 start() 会重新创建
     /// manager、重建 GATT 数据库并重新广播。
     func disconnect() {
+        bridge.disconnect()
         note("主动断开：停止广播并移除 GATT 服务")
         manager?.stopAdvertising()
         manager?.removeAllServices()
@@ -551,15 +624,15 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
     /// key-up，会把第二次按下当成一直按住，表现为漏字。
     func sendKey(_ keycode: UInt8, modifiers: UInt8 = 0,
                  label: String = "按键", reason: String = "按键未发送") {
-        guard compositeDevice else {
-            note("\(reason)：当前是纯鼠标模式，请到设置里开启「键鼠复合模式」")
+        guard compositeDevice || bridgeMode else {
+            note("\(reason)：当前是纯鼠标模式，请到设置里开启「键鼠复合模式」或硬件桥")
             return
         }
-        guard protocolMode != 0 else {
+        guard bridgeMode || protocolMode != 0 else {
             note("\(reason)：主机处于 Boot Protocol，键盘报告不可用")
             return
         }
-        guard inputSubscribed else {
+        guard bridgeMode || inputSubscribed else {
             note("\(reason)：主机尚未订阅 2A4D 输入报告")
             return
         }
@@ -615,7 +688,7 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
 
     private func flush(force: Bool, modifier: UInt8 = 0, keycodes: [UInt8] = [],
                        keyReleased: Bool = false) {
-        guard manager?.state == .poweredOn else { return }
+        guard bridgeMode || manager?.state == .poweredOn else { return }
         let x = Int8(clamping: pendingX)
         let y = Int8(clamping: pendingY)
         let w = Int8(clamping: pendingWheel)
@@ -638,6 +711,16 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         // 否则按键会被当成一直按住（或一直没按）。
         let keyboardPending = mod != 0 || !keys.isEmpty || keyReleased
         guard force || x != 0 || y != 0 || w != 0 || keyboardPending else { return }
+
+        // 硬件桥模式：直接把 12 字节复合报告发给 ESP32，由它转发给主机。
+        // 布局与 ESP32 端 HID 描述符逐字节对应，App 这侧的手势 / 键盘逻辑完全不变。
+        if bridgeMode {
+            let packet = HIDSpec.makeReport(buttons: buttonBits, x: x, y: y, wheel: w,
+                                            composite: true, modifier: mod, keycodes: keys)
+            bridge.send(packet)
+            return
+        }
+
         guard let characteristic = activeReport else { return }
 
         let packet: Data

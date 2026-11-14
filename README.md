@@ -1358,3 +1358,65 @@ ESP32 固件与 iPhone 端透传是另一个独立子项目，代码里已在多
 | `preview/ui-preview.html` | IME 提示、切换设备分组（Windows 时序）、断开弹窗复刻、元素清单 29/30 项 |
 | `preview/shot-3-settings.png` / `shot-4-keyboard.png` / `shot-5-keyboard-symbols.png` | 重新生成 |
 | `README.md` | 新增本节与第二十九节，并随本轮反馈修订 |
+
+## 三十一、硬件桥（ESP32）：让 Windows / Android 真正连上（本轮新增）
+
+### 背景：为什么需要它
+
+v0.0.17 真机确认两点：
+
+1. **iPad 拼音选词**：BLE 复合键鼠外设上，iPadOS 输入法对数字/空格/方向键选词经常不触发，只有「用下方小触控区移动指针去点候选条」最稳（已在 v0.0.17 改为默认路径）。
+2. **Windows 搜不到**：iOS 的 `CBPeripheralManager` 外设**无法设置 GAP Appearance（0x03C2, Mouse）**，而 Windows 等主机的蓝牙发现列表依赖这个字段判定设备类别，因此即使广播了标准 16 位 `0x1812`，Windows 也搜不到或卡在配对。**这是系统级硬限制，纯 iOS 软件无解。**
+
+出路：把「被主机发现」这一步交给 ESP32——它能在广播里设置正确的 GAP Appearance，从而被 Windows / Android 当作标准蓝牙鼠标/键盘。
+
+### 架构
+
+```
+iPhone（PocketTrackpad App）
+  采集手势 / 键盘  →  组装 12 字节复合 HID 报告
+        │  WiFi UDP（连 ESP32 的 PT-Bridge 热点，端口 5000）
+        ▼
+ESP32-C3（本仓库 esp32/ 固件）
+  收到 12 字节  →  以标准 BLE HID（Appearance=0x03C2）notify 给主机
+        │  BLE HID over GATT
+        ▼
+Windows / Android（标准蓝牙鼠标 + 键盘）
+```
+
+关键点：**iPhone 端那 12 字节复合报告的布局，与 ESP32 端 HID 描述符逐字节对应**（都源自 `HIDSpec.compositeReportMap`：鼠标 4 字节 + 键盘 8 字节）。App 里手势、键盘、三指上滑、粘滞修饰键等逻辑**完全不用改**，只是 `flush()` 在桥模式下改走 UDP 而不是本地 BLE。
+
+协议（见 `esp32/src/main.cpp` 与 `BridgeTransport.swift`）：
+
+- iPhone 周期发送 2 字节 hello `[0x50,0x54]`（"PT"），ESP32 回 `[0x54,0x50]`（"TP"）作为「已连接」确认。
+- 12 字节报告直接原样转发。
+
+### 用法
+
+1. 烧录固件：本地 `pio run -d esp32 -t upload`，或到 GitHub Actions 的 `Build ESP32 firmware` 下载 `firmware.bin` 用 esptool 烧录（波特率 921600）。
+2. ESP32 启动后发出名为 **`PT-Bridge`** 的开放 WiFi 热点（无密码）。
+3. iPhone 在「设置 → 无线局域网」连上 `PT-Bridge`。
+4. App 设置里打开「**启用硬件桥（ESP32）**」（会停掉本机 BLE 广播）。
+5. 右上角按钮变为「**连接硬件桥**」，点一下；状态变「已连接硬件桥」后即可像控制 iPad 一样控制 Windows / Android。
+
+### 本轮改动
+
+| 文件 | 改动 |
+| --- | --- |
+| `PocketTrackpad/BridgeTransport.swift` | 新增：Network.framework UDP 传输层，连接/hello/welcome 状态机，12 字节报告发送 |
+| `PocketTrackpad/HIDPeripheral.swift` | 新增 `bridgeMode` / `bridgeActive` / `isLinkActive`；`flush()` 桥模式下改走 UDP；`sendKey` 放行桥模式；新增 `startBridge()` / `disconnectBridge()`；`refreshKeyboardReady` 适配桥模式 |
+| `PocketTrackpad/ContentView.swift` | 右上角按钮在桥模式下变为「连接/断开硬件桥」；引导页与设置新增桥模式指引；设置新增「硬件桥（ESP32）」分组 |
+| `PocketTrackpad/TrackpadSurface.swift` | 三指上滑提示在桥模式下也显示（Command+H 同样有效） |
+| `PocketTrackpad/Info.plist` | 新增 `NSLocalNetworkUsageDescription`（iOS 14+ 局域网 UDP 必需，弹窗需点允许） |
+| `esp32/src/main.cpp` | 新增：ESP32-C3 固件，WiFi AP + UDP 服务 + BLE HID 复合设备（Appearance 0x03C2） |
+| `esp32/platformio.ini` | 新增：PlatformIO 构建配置（board=esp32-c3-devkitm-1） |
+| `.github/workflows/esp32-build.yml` | 新增：ESP32 固件编译并上传 `firmware.bin` 产物 |
+| `README.md` | 新增本节 |
+
+### 注意
+
+- **iOS 局域网权限**：首次走桥模式时系统会弹「本地网络」授权，必须点允许，否则 UDP 发不出去（App 内状态会卡在「等待硬件桥应答」）。
+- **ESP32 AP 是开放的**：默认无密码，仅用于本地转发，不要把它当长期热点。
+- **Windows 配对**：首次连接 Windows 可能弹蓝牙配对提示，配对一次即可；之后即插即用。
+- **报告布局必须保持一致**：若以后改了 iOS 端 `compositeReportMap`，ESP32 端 `reportMap[]` 要同步改，否则按键/位移错位。
+- 本机（Windows）无 ESP32 工具链，固件**未实机烧录验证**，仅靠 PlatformIO CI 编译通过；iPhone↔ESP32↔Windows 的端到端链路待你拿到开发板后真机确认。

@@ -1,0 +1,38 @@
+name: Build ESP32 firmware
+
+on:
+  push:
+    branches: [main, esp32-bridge]
+    paths:
+      - 'esp32/**'
+      - '.github/workflows/esp32-build.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache PlatformIO
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/platformio
+          key: platformio-esp32-${{ hashFiles('esp32/platformio.ini') }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install PlatformIO
+        run: pip install -U platformio
+
+      - name: Build firmware
+        run: pio run -d esp32
+
+      - name: Upload firmware artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pockettrackpad-esp32-firmware
+          path: esp32/.pio/build/esp32-c3/firmware.bin
