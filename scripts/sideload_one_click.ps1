@@ -68,7 +68,7 @@ function Write-Todo([string]$Number, [string]$Text) {
 }
 
 function Get-GhJson([string[]]$Arguments) {
-    $Raw = (& gh @Arguments 2>$null) -join "`n"
+    $Raw = (& $script:GhExe @Arguments 2>$null) -join "`n"
     if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($Raw)) { return @() }
     try { return @($Raw | ConvertFrom-Json) } catch { return @() }
 }
@@ -94,34 +94,51 @@ if (-not $SkipGitHub) {
     }
     Write-Host "  OK    git found"
 
-    $Gh = Get-Command gh -ErrorAction SilentlyContinue
-    if ($null -eq $Gh) {
+    $script:GhExe = ""
+    $GhCmd = Get-Command gh -ErrorAction SilentlyContinue
+    if ($null -ne $GhCmd) { $script:GhExe = $GhCmd.Source }
+
+    # winget / MSI 刚装完时，当前会话的 PATH 可能还没刷新，直接查默认安装路径
+    if ([string]::IsNullOrWhiteSpace($script:GhExe)) {
+        foreach ($Candidate in @("C:\Program Files\GitHub CLI\gh.exe", "C:\Program Files (x86)\GitHub CLI\gh.exe", (Join-Path $env:LOCALAPPDATA "Programs\GitHub CLI\gh.exe"))) {
+            if (Test-Path $Candidate) { $script:GhExe = $Candidate; break }
+        }
+    }
+
+    if ([string]::IsNullOrWhiteSpace($script:GhExe)) {
         Write-Host "  GitHub CLI missing, trying winget..."
         $Winget = Get-Command winget -ErrorAction SilentlyContinue
         if ($null -ne $Winget) {
-            & winget install --id GitHub.cli -e --accept-source-agreements --accept-package-agreements
+            & winget install --id GitHub.cli -e --accept-source-agreements --accept-package-agreements --disable-interactivity
         }
         $env:Path = [Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [Environment]::GetEnvironmentVariable("Path", "User")
-        $Gh = Get-Command gh -ErrorAction SilentlyContinue
+        $GhCmd = Get-Command gh -ErrorAction SilentlyContinue
+        if ($null -ne $GhCmd) { $script:GhExe = $GhCmd.Source }
+        if ([string]::IsNullOrWhiteSpace($script:GhExe)) {
+            foreach ($Candidate in @("C:\Program Files\GitHub CLI\gh.exe", "C:\Program Files (x86)\GitHub CLI\gh.exe")) {
+                if (Test-Path $Candidate) { $script:GhExe = $Candidate; break }
+            }
+        }
     }
-    if ($null -eq $Gh) {
+
+    if ([string]::IsNullOrWhiteSpace($script:GhExe)) {
         Write-Host ""
         Write-Host "  Cannot install GitHub CLI automatically."
         Write-Host "  Install it manually: https://cli.github.com"
         Write-Host "  Then re-run this script."
         throw "GitHub CLI (gh) is not available."
     }
-    Write-Host "  OK    GitHub CLI found"
+    Write-Host ("  OK    GitHub CLI: {0}" -f $script:GhExe)
 
     # ------------------------------------------------------------ Phase 2 ---
     Write-Phase "2/6  GitHub sign-in"
-    & gh auth status 2>$null | Out-Null
+    & $script:GhExe auth status 2>$null | Out-Null
     if ($LASTEXITCODE -ne 0) {
         Write-Host "  A browser window will open. Approve the GitHub sign-in there."
-        & gh auth login --web --git-protocol https --scopes "repo,workflow"
+        & $script:GhExe auth login --web --git-protocol https --scopes "repo,workflow"
         if ($LASTEXITCODE -ne 0) { throw "GitHub sign-in failed or was cancelled." }
     }
-    $Account = (& gh api user --jq .login 2>$null)
+    $Account = (& $script:GhExe api user --jq .login 2>$null)
     Write-Host ("  OK    signed in as {0}" -f $Account)
 
     # ------------------------------------------------------------ Phase 3 ---
@@ -158,7 +175,7 @@ if (-not $SkipGitHub) {
     try { $Remote = (& git remote get-url origin 2>$null) } catch { }
     if ([string]::IsNullOrWhiteSpace($Remote)) {
         Write-Host ("  Creating PUBLIC repo '{0}' (public repos get free macOS runners)" -f $RepoName)
-        & gh repo create $RepoName --public --source=. --push --remote=origin
+        & $script:GhExe repo create $RepoName --public --source=. --push --remote=origin
         if ($LASTEXITCODE -ne 0) {
             Write-Host "  Repo creation failed. If the name is taken, re-run with -RepoName <other-name>."
             throw "gh repo create failed"
@@ -176,7 +193,7 @@ if (-not $SkipGitHub) {
     $BeforeId = [int64]0
     if ($Before.Count -gt 0) { $BeforeId = [int64]$Before[0].databaseId }
 
-    & gh workflow run "unsigned-ipa.yml"
+    & $script:GhExe workflow run "unsigned-ipa.yml"
     if ($LASTEXITCODE -ne 0) {
         Write-Host "  Could not trigger workflow via CLI; the push may already have triggered it."
     }
@@ -213,9 +230,9 @@ if (-not $SkipGitHub) {
     $Tag = $Releases[0].tagName
     Write-Host ("  Latest release: {0}" -f $Tag)
 
-    & gh release download $Tag --pattern "*.ipa" --dir $OutDir --clobber
+    & $script:GhExe release download $Tag --pattern "*.ipa" --dir $OutDir --clobber
     if ($LASTEXITCODE -ne 0) { throw "IPA download failed." }
-    & gh release download $Tag --pattern "SHA256SUMS" --dir $OutDir --clobber 2>$null | Out-Null
+    & $script:GhExe release download $Tag --pattern "SHA256SUMS" --dir $OutDir --clobber 2>$null | Out-Null
 
     $IpaFiles = @(Get-ChildItem -Path $OutDir -Filter "*.ipa" -File | Sort-Object LastWriteTime -Descending)
     if ($IpaFiles.Count -eq 0) { throw "No .ipa file appeared in $OutDir" }

@@ -475,8 +475,12 @@ powershell -ExecutionPolicy Bypass -File scripts\sideload_one_click.ps1 -OpenDow
 | iCloud / Sideloadly / Apple 设备服务 | 均未安装 |
 | USB 连接的 iPhone | 未检测到 |
 | 本机 iOS 签名证书 | 0 个 |
+| GitHub CLI (`gh`) | 已通过 winget 安装 2.104.0，位于 `C:\Program Files\GitHub CLI\gh.exe` |
+| `gh` 授权状态 | **未授权**。网页登录 GitHub 与命令行授权是两回事，需跑一次 `gh auth login --web` |
 
-也就是说：软件环境需要你装三样（网页版 iTunes、iCloud、Sideloadly），外加一次 GitHub 浏览器授权。这三样都涉及系统安装或账号凭证，脚本已给出下载链接并自动打开页面，但不能代替你点确认。
+也就是说：软件环境需要你装三样（网页版 iTunes、iCloud、Sideloadly），外加一次 GitHub 命令行授权。这三样都涉及系统安装或账号凭证，脚本已给出下载链接并自动打开页面，但不能代替你点确认。
+
+> **网络限制（实测）**：本会话执行环境的代理 `127.0.0.1:11061` 只放行 `api.github.com`，`github.com` 整域返回连接失败，因此设备码授权（`https://github.com/login/device/code`）和 `git push` 都无法由助手侧代跑。请在**你自己打开的 PowerShell 窗口**里运行一键脚本 —— 你的浏览器既然能登录 GitHub，说明该窗口的网络不受此限制。若你那边同样报 `Bad Gateway`，改用网页生成 Personal Access Token 后执行 `gh auth login --with-token`，不要聊天里粘贴 token。
 
 ### 比一键更省事的选择
 
