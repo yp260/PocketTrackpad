@@ -260,6 +260,8 @@ input[type=range] { width:100%; accent-color:var(--accent); margin:10px 0 2px; c
 .kb-rows.compact .kb-key.arrow { font-size:14px; }
 /* 键区再往上挪：顶部内边距 6px → 2px，工具条下方已无空状态条 */
 .kb-rows.top { padding:2px 6px 0; }
+/* 极简选词提示：单行、次级色，不挤占键区 */
+.kb-imehint { font-size:10px; color:var(--ios-2); line-height:1.4; padding:2px 10px 4px; }
 .kb-minipad {
   flex:1 1 auto; min-height:0; box-sizing:border-box;
   padding:4px 10px 6px;
@@ -383,20 +385,22 @@ body.shot .phone { margin:0; }
             <tr><td>12</td><td>设置：指针速度 0.4~3.5，默认 1.4×（连接后从这里调）</td><td>ContentView.swift:201-215</td></tr>
             <tr><td>13</td><td>设置：滚动速度 0.3~3.0，默认 1.0× / 自然滚动开关（默认关 = 上滑滚轮下滑，连接后从这里调）</td><td>ContentView.swift:217-232</td></tr>
             <tr><td>14</td><td>设置：按键说明五行（新增全键盘、组合键两行）</td><td>ContentView.swift:234-240</td></tr>
-            <tr><td>15</td><td>设置：关于四行（不再回显整机名）+ 底部三步改名说明</td><td>ContentView.swift:254-264</td></tr>
-            <tr><td>16</td><td>顶部「断开」按钮（仅已连接显示）：移除 GATT 服务并停止广播，可重新广播切换到 Windows / Mac</td><td>ContentView.swift:59</td></tr>
+            <tr><td>15</td><td>设置：切换设备分组（iPad 自动重连 / 切 Windows / 切 Android / 本 App）+ 关于四行（不再回显整机名）+ 底部三步改名说明</td><td>ContentView.swift:255-278</td></tr>
+            <tr><td>16</td><td>顶部「断开」按钮（仅已连接显示）：移除 GATT 服务并停止广播；断开后弹出「切换设备」指引（配对信息在主机侧，iPad 会自动回连）</td><td>ContentView.swift:513-525</td></tr>
             <tr><td>17</td><td>设置：「实验功能 · 全键盘与回桌面」分组（键鼠复合开关、三指上滑、全键盘、输入报告字节数、风险与回退说明）</td><td>ContentView.swift:242-252</td></tr>
             <tr><td>18</td><td>已连接触控区顶部切换栏：「触控板模式」+ 蓝色主按钮「全键盘」；键盘未就绪时多一行橙色提示</td><td>ContentView.swift:292-331</td></tr>
             <tr><td>19</td><td>全键盘顶部工具条：「‹ 触控板」返回按钮 + 主键位 / 符号 两页分段控件（功能页已并入主键位）+ 粘滞生效时右侧的极短徽标</td><td>KeyboardView.swift:242-282</td></tr>
             <tr><td>20</td><td>粘滞状态改为工具条内短徽标（⌃ ⇧ ⌥ ⌘ + 清除），不再单独占一行；默认完全不显示，Ctrl / Opt / Cmd / Shift 仍为一次性粘滞</td><td>KeyboardView.swift:262-276<br>KeyboardView.swift:287-303</td></tr>
             <tr><td>21</td><td>键帽区：主键位 7 行（F1~F12 + 数字 + QWERTY 三行 + 导航/方向键 + 控制行）、符号页 5 行，两页统一 42pt 键帽</td><td>KeyboardView.swift:127-190</td></tr>
-            <tr><td>22</td><td>HID 键码解析与发送：US ANSI 布局，符号自带 Shift；一次按键 = 按下 0.06 秒 + 连发空帧松键</td><td>KeyboardView.swift:11-75<br>HIDPeripheral.swift:552-584</td></tr>
+            <tr><td>22</td><td>HID 键码解析与发送：US ANSI 布局，符号自带 Shift；一次按键 = 按下 0.09 秒（延长以兼容 iPad 中文输入法选词）+ 连发空帧松键</td><td>KeyboardView.swift:11-75<br>HIDPeripheral.swift:552-584</td></tr>
             <tr><td>23</td><td>键盘不可用橙色警告（键鼠复合关闭 / Boot Protocol / 未订阅 2A4D 时显示，属于条件错误提示，予以保留）</td><td>KeyboardView.swift:305-319</td></tr>
             <tr><td>24</td><td>主键位第 5 行：Esc 贴 Z 左侧（键区左边缘）、↑ 贴 M 右侧（键区右边缘）；第 6 行剩 Tab / Caps / Del / Home / End / ← / ↓ / →</td><td>KeyboardView.swift:164-190</td></tr>
             <tr><td>25</td><td>键区整体上移；下方小触控区吃掉键区以下全部空间、紧贴键区，复用 TrackpadSurface（compact）且不显示提示文字</td><td>KeyboardView.swift:205-228<br>KeyboardView.swift:232-238<br>TrackpadSurface.swift:72-88</td></tr>
             <tr><td>26</td><td>底部三键高度 116pt → 76pt；键盘页上下四处说明文字删除（粘滞长句、小触控区标题、触控区内提示、底部 footer）</td><td>ContentView.swift:363-377<br>KeyboardView.swift:205-228<br>TrackpadSurface.swift:72-88</td></tr>
             <tr><td>27</td><td>键区再往上挪一点点：删掉工具条下方 24pt 空状态条，键区顶部间距 8pt → 2pt，小触控区顶部 6pt → 4pt；省下约 30pt 全部给小触控区，键盘页切页／粘滞时不再有垂直跳动</td><td>KeyboardView.swift:205-228<br>KeyboardView.swift:242-282<br>KeyboardView.swift:232-238</td></tr>
             <tr><td>28</td><td>引导页三张卡片统一显式通栏：状态卡片 / 指针与滚动 / 连接日志各加 maxWidth 无限宽约束；日志内层 VStack、ScrollView 也撑满。初始只有一行短日志时不再缩成窄卡片并居中</td><td>ContentView.swift:120-121<br>ContentView.swift:153<br>ContentView.swift:172-177</td></tr>
+            <tr><td>29</td><td>全键盘页新增极简选词提示（单行、次级色）：按 1-9 或空格选词，或移动下方小触控区指针去点 iPad 顶部候选条；键帽按住时长 60ms → 90ms 以兼容中文输入法组合态</td><td>KeyboardView.swift:244-252<br>HIDPeripheral.swift:579</td></tr>
+            <tr><td>30</td><td>断开后弹「切换设备」指引：要连 Windows / Android 须先在 iPad 蓝牙里「忽略此设备」，否则 iPad 已配对会自动抢连；设置新增「切换设备」分组说明（Android 支持因机型而异，Win+D / F11 回桌面）</td><td>ContentView.swift:76<br>ContentView.swift:513-525<br>ContentView.swift:255-278</td></tr>
           </tbody>
         </table>
       </div>
@@ -724,6 +728,7 @@ body.shot .phone { margin:0; }
         "<div class=\"kb-seg\">" + seg + "</div>" + badge +
       "</div>" + warn +
       "<div class=\"kb-rows top" + (compact ? " compact" : "") + "\">" + rows + "</div>" +
+      "<div class=\"kb-imehint\" data-code=\"KeyboardView.swift:244-252\">选词：按 1-9 或空格；或移动下方触控区指针去点 iPad 顶部的候选条</div>" +
       miniPadHTML() +
       "</div>";
   }
@@ -765,7 +770,15 @@ body.shot .phone { margin:0; }
         row("输入报告", s.compositeDevice ? "12 字节（鼠标 4 + 键盘 8）" : "4 字节（纯鼠标）") +
       "</div>" +
       "<div class=\"form-footer\" data-code=\"ContentView.swift:250-252\">开启后本设备同时声明为鼠标和键盘，全键盘与三指上滑都依赖这个开关。iPad 可能弹出键盘配对验证，也可能拒绝接管整个设备导致鼠标失效。切换开关会自动断开并移除 GATT 服务：请在 iPad 蓝牙里「忽略此设备」，回到主页面点「开始广播」，再重新配对。若指针或点击失效，关掉本开关、同样忽略设备重新配对即可回到纯鼠标，不需要重装 App。Command + H 只对 iPadOS 有效；Windows 显示桌面是 Win + D，macOS 是 F11。</div>" +
-      "<div class=\"sec-head\" data-code=\"ContentView.swift:254\">关于</div>" +
+      "<div class=\"sec-head\" data-code=\"ContentView.swift:255\">切换设备</div>" +
+      "<div class=\"group\" data-code=\"ContentView.swift:255-264\">" +
+        row("iPad 自动重连", "已配对会主动回连") +
+        row("切到 Windows", "iPad 忽略本设备 → 配对 PT-Pad") +
+        row("切到 Android", "同样先忽略本设备再配对") +
+        row("本 App", "断开后点「开始广播」") +
+      "</div>" +
+      "<div class=\"form-footer\" data-code=\"ContentView.swift:255-264\">蓝牙 HID 的配对信息存在主机侧：本 App 作为外设无法远程解除 iPad 的配对。要连 Windows / Android，请先在 iPad 蓝牙里「忽略此设备」，否则它会因已配对自动抢连。Android 对 BLE HID 的支持因机型而异，部分旧机型可能无法识别；Windows 回桌面是 Win + D，本 App 的三指上滑（Command + H）只对 iPadOS 有效。</div>" +
+      "<div class=\"sec-head\" data-code=\"ContentView.swift:266\">关于</div>" +
       "<div class=\"group\" data-code=\"ContentView.swift:254-261\">" +
         row("广播名称", "PT-Pad") +
         row("iPad 显示名称", s.displayName) +
@@ -924,7 +937,12 @@ body.shot .phone { margin:0; }
       s.sticky = 0;
       log("主动断开：停止广播并移除 GATT 服务");
       log("点「开始广播」重建服务后，Windows / Mac 等主机即可发现");
+      log("若 iPad 仍在附近且保留配对，可能自动重连；必要时先在 iPad 蓝牙里忽略此设备");
       render();
+      // 预览复刻真机的「切换设备」指引
+      setTimeout(function () {
+        alert("已断开\n\n要连接到其他设备（Windows / Android）：\n\n1. 在刚断开的设备（如 iPad）蓝牙设置里「忽略此设备」，否则它会因已配对而自动抢连。\n2. 打开目标设备蓝牙，搜索并配对 PT-Pad。\n3. 回到本 App 点右上角「开始广播」。\n\n提示：三指上滑（Command + H）只对 iPadOS 有效；Windows 回桌面用 Win + D，macOS 用 F11。");
+      }, 60);
     }
     else if (act === "toggle") {
       s.naturalScrolling = !s.naturalScrolling;

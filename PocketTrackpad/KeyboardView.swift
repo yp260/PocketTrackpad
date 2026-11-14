@@ -221,6 +221,7 @@ struct KeyboardPanel: View {
             }
             .padding(.horizontal, 6)
             .padding(.top, 2)
+            imeHint
             miniTrackpad
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -235,6 +236,18 @@ struct KeyboardPanel: View {
             .padding(.horizontal, 10)
             .padding(.top, 4)
             .padding(.bottom, 6)
+    }
+
+    /// 极简选词提示：数字键 / 空格是最直接的选词方式，备选是用下方小触控区
+    /// 把 iPad 系统指针移到屏幕顶部的候选条上点选（不受输入法键盘处理差异影响）。
+    /// 仅一行、次级色，不打断键区紧凑布局。
+    private var imeHint: some View {
+        Text("选词：按 1-9 或空格；或移动下方触控区指针去点 iPad 顶部的候选条")
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 10)
+            .padding(.top, 2)
     }
 
     // MARK: 顶部工具条

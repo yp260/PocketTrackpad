@@ -7,6 +7,8 @@ struct ContentView: View {
     @State private var showSettings = false
     /// true = 全键盘，false = 触控板。只在已连接时生效，断开自动回到触控板。
     @State private var showKeyboard = false
+    /// 断开后弹出「切换设备」指引（配对信息在主机侧，iPad 会自动回连）。
+    @State private var showSwitchHelp = false
 
     /// 主机订阅了 Input Report 才算真正连上；仅广播中不算连接。
     private var connected: Bool { hid.subscribers > 0 }
@@ -56,7 +58,7 @@ struct ContentView: View {
                         Text("已连接")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
-                        DisconnectButton()
+                        DisconnectButton(onDisconnected: { showSwitchHelp = true })
                     }
                     Button {
                         if hid.isAdvertising { hid.stopAdvertising() } else { hid.start() }
@@ -70,6 +72,11 @@ struct ContentView: View {
             }
             .navigationDestination(isPresented: $showSettings) {
                 SettingsView()
+            }
+            .alert("已断开", isPresented: $showSwitchHelp) {
+                Button("知道了", role: .cancel) {}
+            } message: {
+                Text("要连接到其他设备（Windows / Android）：\n\n1. 在刚断开的设备（如 iPad）蓝牙设置里「忽略此设备」，否则它会因已配对而自动抢连。\n2. 打开目标设备蓝牙，搜索并配对 PT-Pad。\n3. 回到本 App 点右上角「开始广播」。\n\n提示：三指上滑（Command + H）只对 iPadOS 有效；Windows 回桌面用 Win + D，macOS 用 F11。")
             }
         }
     }
@@ -249,6 +256,18 @@ struct SettingsView: View {
                 Text("实验功能 · 全键盘与回桌面")
             } footer: {
                 Text("开启后本设备同时声明为鼠标和键盘，全键盘与三指上滑都依赖这个开关。iPad 可能弹出键盘配对验证，也可能拒绝接管整个设备导致鼠标失效。切换开关会自动断开并移除 GATT 服务：请在 iPad 蓝牙里「忽略此设备」，回到主页面点「开始广播」，再重新配对。若指针或点击失效，关掉本开关、同样忽略设备重新配对即可回到纯鼠标，不需要重装 App。Command + H 只对 iPadOS 有效；Windows 显示桌面是 Win + D，macOS 是 F11。")
+                    .font(.caption)
+            }
+
+            Section {
+                LabeledRow(title: "iPad 自动重连", detail: "已配对会主动回连")
+                LabeledRow(title: "切到 Windows", detail: "iPad 忽略本设备 → 配对 PT-Pad")
+                LabeledRow(title: "切到 Android", detail: "同样先忽略本设备再配对")
+                LabeledRow(title: "本 App", detail: "断开后点「开始广播」")
+            } header: {
+                Text("切换设备")
+            } footer: {
+                Text("蓝牙 HID 的配对信息存在主机侧：本 App 作为外设无法远程解除 iPad 的配对。要连 Windows / Android，请先在 iPad 蓝牙里「忽略此设备」，否则它会因已配对自动抢连。Android 对 BLE HID 的支持因机型而异，部分旧机型可能无法识别；Windows 回桌面是 Win + D，本 App 的三指上滑（Command + H）只对 iPadOS 有效。")
                     .font(.caption)
             }
 
@@ -490,15 +509,21 @@ private struct WheelButton: View {
 
 /// 仅在已连接时出现在顶部工具栏。断开后保持停止广播，让用户决定何时重新广播，
 /// 避免 iPad 立刻自动重连；点「开始广播」即可让 Windows / Mac 等其他主机发现。
+/// onDisconnected 由父视图传入，用来弹出「切换设备」指引（alert 必须挂在常驻视图上，
+/// 因为本按钮在断开后随 toolbar 一起被移除）。
 private struct DisconnectButton: View {
 
     @EnvironmentObject private var hid: HIDPeripheral
+    var onDisconnected: () -> Void
 
     var body: some View {
-        Button("断开") { hid.disconnect() }
-            .font(.caption2)
-            .buttonStyle(.bordered)
-            .controlSize(.mini)
-            .accessibilityLabel("断开当前连接")
+        Button("断开") {
+            hid.disconnect()
+            onDisconnected()
+        }
+        .font(.caption2)
+        .buttonStyle(.bordered)
+        .controlSize(.mini)
+        .accessibilityLabel("断开当前连接")
     }
 }
