@@ -44,6 +44,7 @@ struct ContentView: View {
                         Text("已连接")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
+                        DisconnectButton()
                     }
                     Button {
                         if hid.isAdvertising { hid.stopAdvertising() } else { hid.start() }
@@ -207,7 +208,7 @@ struct SettingsView: View {
                     Slider(value: $hid.scrollSensitivity, in: 0.3...3.0, step: 0.1)
                 }
                 Toggle("自然滚动", isOn: $hid.naturalScrolling)
-                Text("同时作用于双指滚动和底部滚轮键。设置会自动保存。")
+                Text("默认：双指或滚轮键向上滑 = 滚轮下滑。打开自然滚动后方向整体反转（跟手）。同时作用于双指滚动和底部滚轮键，设置会自动保存。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -254,14 +255,40 @@ private struct LabeledRow: View {
 // MARK: - 底部按键条
 
 /// 固定在屏幕最底部，不随引导页滚动，也不随连接状态切换。
+/// 三键宽度按 左键 : 滚轮 : 右键 = 3 : 2 : 3 分配：滚轮键只需要上下拖动，
+/// 收窄后把宽度让给更常用的左右键。
 private struct ButtonBar: View {
-    var body: some View {
-        HStack(spacing: 10) {
+    private static let spacing: CGFloat = 10
+    private static let leftWeight: CGFloat = 3
+    private static let wheelWeight: CGFloat = 2
+    private static let rightWeight: CGFloat = 3
+
+    private func keyWidths(for total: CGFloat) -> (CGFloat, CGFloat, CGFloat) {
+        let sum = ButtonBar.leftWeight + ButtonBar.wheelWeight + ButtonBar.rightWeight
+        let usable = max(0, total - ButtonBar.spacing * 2)
+        return (usable * ButtonBar.leftWeight / sum,
+                usable * ButtonBar.wheelWeight / sum,
+                usable * ButtonBar.rightWeight / sum)
+    }
+
+    private func keys(width: CGFloat) -> some View {
+        let w = keyWidths(for: width)
+        return HStack(spacing: ButtonBar.spacing) {
             HoldButton(title: "左键", mask: 0x01)
+                .frame(width: w.0, maxHeight: .infinity)
             WheelButton()
+                .frame(width: w.1, maxHeight: .infinity)
             HoldButton(title: "右键", mask: 0x02)
+                .frame(width: w.2, maxHeight: .infinity)
         }
-        .frame(height: 58)
+    }
+
+    var body: some View {
+        GeometryReader { geo in
+            keys(width: geo.size.width)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .frame(height: 116)   // 原 58pt 的 2 倍
         .padding(.horizontal, 12)
         .padding(.top, 8)
         .padding(.bottom, 10)
@@ -324,11 +351,13 @@ private struct WheelButton: View {
         VStack(spacing: 2) {
             Text("滚轮")
                 .font(.subheadline.weight(.medium))
-            Text("拖动滚动 · 双击按下")
+            // 滚轮键只有 2/8 宽度，副标题改成两行，避免被压成看不清的小字。
+            Text("拖动滚动\n双击按下")
                 .font(.system(size: 9))
                 .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
                 .minimumScaleFactor(0.8)
-                .lineLimit(1)
+                .lineLimit(2)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(isDragging ? Color.accentColor.opacity(0.85)
@@ -351,7 +380,7 @@ private struct WheelButton: View {
                         abs(value.translation.width) > tapThreshold {
                         moved = true
                     }
-                    // 与触控区双指滚动使用同一套倍率和方向定义。
+                    // 默认上滑 = 滚轮下滑；与触控区双指滚动共用倍率、方向和自然滚动开关。
                     let scale = CGFloat(hid.scrollSensitivity) / 4.0
                     let direction: CGFloat = hid.naturalScrolling ? -1 : 1
                     let raw = step * scale * direction + residual
@@ -377,5 +406,22 @@ private struct WheelButton: View {
         } else {
             lastTap = now
         }
+    }
+}
+
+// MARK: - 主动断开
+
+/// 仅在已连接时出现在顶部工具栏。断开后保持停止广播，让用户决定何时重新广播，
+/// 避免 iPad 立刻自动重连；点「开始广播」即可让 Windows / Mac 等其他主机发现。
+private struct DisconnectButton: View {
+
+    @EnvironmentObject private var hid: HIDPeripheral
+
+    var body: some View {
+        Button("断开") { hid.disconnect() }
+            .font(.caption2)
+            .buttonStyle(.bordered)
+            .controlSize(.mini)
+            .accessibilityLabel("断开当前连接")
     }
 }

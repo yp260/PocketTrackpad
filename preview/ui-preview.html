@@ -166,17 +166,20 @@ input[type=range] { width:100%; accent-color:var(--accent); margin:10px 0 2px; c
 
 /* ---------- 底部按键条 ---------- */
 .buttonbar {
-  flex:0 0 auto; display:flex; gap:10px; padding:8px 12px 26px; height:92px;
+  flex:0 0 auto; display:flex; gap:10px; padding:8px 12px 26px; height:150px;
   background:var(--ios-bg); border-top:.5px solid var(--ios-sep);
 }
 .key {
-  flex:1; border-radius:12px; border:.5px solid var(--ios-btn-border);
+  flex:3 1 0; min-width:0; border-radius:12px; border:.5px solid var(--ios-btn-border);
   background:var(--ios-btn); color:var(--ios-text); font:inherit;
   font-size:15px; font-weight:500; cursor:pointer; touch-action:none;
   display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px;
   transition:background .1s,color .1s; user-select:none;
 }
-.key small { font-size:9px; color:var(--ios-2); font-weight:400; white-space:nowrap; }
+.key small { font-size:9px; color:var(--ios-2); font-weight:400; white-space:nowrap; max-width:100%; overflow:hidden; }
+/* 滚轮键宽度只有 2/8，副标题改为两行，保持 9px 字号不被压缩 */
+.key[data-act="wheel"] { flex:2 1 0; }
+.key[data-act="wheel"] small { font-size:9px; white-space:normal; text-align:center; line-height:1.3; }
 .key.is-down { background:var(--accent); color:#fff; }
 .key.is-down small { color:rgba(255,255,255,.85); }
 .homebar {
@@ -285,18 +288,19 @@ body.shot .phone { margin:0; }
             <tr><td>1</td><td>顶部标题：未连接「口袋触控板」／已连接「PT-Pad」</td><td>ContentView.swift:26</td></tr>
             <tr><td>2</td><td>左上角设置齿轮</td><td>ContentView.swift:29-38</td></tr>
             <tr><td>3</td><td>连接状态：绿点 +「已连接」</td><td>ContentView.swift:40-47</td></tr>
-            <tr><td>4</td><td>右上角「开始广播／停止广播」小按钮</td><td>ContentView.swift:48-56</td></tr>
-            <tr><td>5</td><td>状态卡片：状态文字、订阅数、两行引导（已删「重新广播」按钮）</td><td>ContentView.swift:88-109</td></tr>
-            <tr><td>6</td><td>引导页「指针与滚动」卡片：指针速度 / 滚动速度（连接前可调）</td><td>ContentView.swift:111-140</td></tr>
+            <tr><td>4</td><td>右上角「开始广播／停止广播」小按钮</td><td>ContentView.swift:49-57</td></tr>
+            <tr><td>5</td><td>状态卡片：状态文字、订阅数、两行引导（已删「重新广播」按钮）</td><td>ContentView.swift:89-110</td></tr>
+            <tr><td>6</td><td>引导页「指针与滚动」卡片：指针速度 / 滚动速度（连接前可调）</td><td>ContentView.swift:112-141</td></tr>
             <tr><td>7</td><td>触控区中央提示：单指移动 · 轻点左键 · 双击左键 · 双指滚动 · 长按右键</td><td>TrackpadSurface.swift:60-67</td></tr>
-            <tr><td>8</td><td>连接日志卡片（108pt，等宽字体）</td><td>ContentView.swift:143-161</td></tr>
-            <tr><td>9</td><td>底部按键条高度 58pt、三键等宽、间距 10pt</td><td>ContentView.swift:257-274</td></tr>
-            <tr><td>10</td><td>左键／右键：按住变蓝，松手复原</td><td>ContentView.swift:277-306</td></tr>
-            <tr><td>11</td><td>滚轮键：上下拖动滚动、双击按下中键、单击无动作</td><td>ContentView.swift:310-381</td></tr>
-            <tr><td>12</td><td>设置：指针速度 0.4~3.5，默认 1.4×（连接后从这里调）</td><td>ContentView.swift:182-196</td></tr>
-            <tr><td>13</td><td>设置：滚动速度 0.3~3.0，默认 1.0× / 自然滚动开关（默认开，连接后从这里调）</td><td>ContentView.swift:198-213</td></tr>
-            <tr><td>14</td><td>设置：按键说明三行</td><td>ContentView.swift:215-219</td></tr>
-            <tr><td>15</td><td>设置：关于四行（不再回显整机名）+ 底部三步改名说明</td><td>ContentView.swift:221-231</td></tr>
+            <tr><td>8</td><td>连接日志卡片（108pt，等宽字体）</td><td>ContentView.swift:144-162</td></tr>
+            <tr><td>9</td><td>底部按键条高度 116pt（原 58pt 的 2 倍）、宽度比 左键:滚轮:右键 = 3:2:3、间距 10pt</td><td>ContentView.swift:258-301</td></tr>
+            <tr><td>10</td><td>左键／右键：按住变蓝，松手复原</td><td>ContentView.swift:304-333</td></tr>
+            <tr><td>11</td><td>滚轮键：上下拖动滚动（默认上滑 = 滚轮下滑）、双击按下中键、单击无动作</td><td>ContentView.swift:337-410</td></tr>
+            <tr><td>12</td><td>设置：指针速度 0.4~3.5，默认 1.4×（连接后从这里调）</td><td>ContentView.swift:183-197</td></tr>
+            <tr><td>13</td><td>设置：滚动速度 0.3~3.0，默认 1.0× / 自然滚动开关（默认关 = 上滑滚轮下滑，连接后从这里调）</td><td>ContentView.swift:199-214</td></tr>
+            <tr><td>14</td><td>设置：按键说明三行</td><td>ContentView.swift:216-220</td></tr>
+            <tr><td>15</td><td>设置：关于四行（不再回显整机名）+ 底部三步改名说明</td><td>ContentView.swift:222-232</td></tr>
+            <tr><td>16</td><td>顶部「断开」按钮（仅已连接显示）：移除 GATT 服务并停止广播，可重新广播切换到 Windows / Mac</td><td>ContentView.swift:47</td></tr>
           </tbody>
         </table>
       </div>
@@ -310,6 +314,9 @@ body.shot .phone { margin:0; }
         <b>说明</b>：预览用 HTML/CSS 近似 iOS 系统控件，字体、间距、圆角与真机可能有数像素差异；
         双指滚动无法用鼠标模拟，已在触控区提示中标注。这里改的是预览文件，<b>不会改动 App 代码</b>，
         也不会触发打包。确认要改界面后，我改 Swift 源码并提交，push 后 GitHub Actions 才会出新 IPA。
+        <br><b>断开功能</b>：已连接时顶部出现「断开」，点了会移除 GATT 服务、停止广播并回到引导页；
+        再点「开始广播」重建服务，Windows / Mac 等其他主机即可发现。若 iPad 仍在附近且保留配对，
+        可能自动重连，必要时先在 iPad 蓝牙里「忽略此设备」。
       </div>
     </div>
   </div>
@@ -322,7 +329,7 @@ body.shot .phone { margin:0; }
   var DEFAULTS = {
     screen: "setup", prevScreen: "setup", advertising: false, connected: false,
     subscribers: 0, statusText: "尚未启动",
-    sensitivity: 1.4, scrollSensitivity: 1.0, naturalScrolling: true,
+    sensitivity: 1.4, scrollSensitivity: 1.0, naturalScrolling: false,
     displayName: "跟随 iPhone 整机名",
     showDiag: false, annotate: false, dark: false
   };
@@ -381,12 +388,13 @@ body.shot .phone { margin:0; }
     var isSettings = s.screen === "settings";
     var conn = s.connected;
     var left = isSettings
-      ? "<button class=\"nav-btn\" data-act=\"back\" data-code=\"ContentView.swift:58-60\">‹ 返回</button>"
+      ? "<button class=\"nav-btn\" data-act=\"back\" data-code=\"ContentView.swift:59-61\">‹ 返回</button>"
       : "<button class=\"nav-btn\" data-act=\"settings\" data-code=\"ContentView.swift:29-38\" aria-label=\"设置\">" + gearSVG() + "</button>";
     var right = "";
     if (!isSettings) {
-      right = (conn ? "<span class=\"dotgreen\" data-code=\"ContentView.swift:40-47\"></span><span class=\"nav-sub\" data-code=\"ContentView.swift:40-47\">已连接</span>" : "") +
-        "<button class=\"nav-btn border\" data-act=\"advertise\" data-code=\"ContentView.swift:48-56\">" +
+      right = (conn ? "<span class=\"dotgreen\" data-code=\"ContentView.swift:40-47\"></span><span class=\"nav-sub\" data-code=\"ContentView.swift:40-47\">已连接</span>" +
+        "<button class=\"nav-btn border\" data-act=\"disconnect\" data-code=\"ContentView.swift:47\">断开</button>" : "") +
+        "<button class=\"nav-btn border\" data-act=\"advertise\" data-code=\"ContentView.swift:49-57\">" +
         (s.advertising ? "停止广播" : "开始广播") + "</button>";
     }
     var title = isSettings ? "设置" : (conn ? "PT-Pad" : "口袋触控板");
@@ -407,7 +415,7 @@ body.shot .phone { margin:0; }
 
   function setupHTML() {
     var diag = s.showDiag
-      ? "<div class=\"diag\" data-code=\"ContentView.swift:71-85\"><b>上次运行记录</b><code>7 运行中（广播正常）</code><div class=\"sub3\">若每次都停在同一步，把这段文字发回即可定位。</div></div>"
+      ? "<div class=\"diag\" data-code=\"ContentView.swift:72-86\"><b>上次运行记录</b><code>7 运行中（广播正常）</code><div class=\"sub3\">若每次都停在同一步，把这段文字发回即可定位。</div></div>"
       : "";
     var logs = [
       "16:02:11  已创建 CBPeripheralManager",
@@ -420,25 +428,25 @@ body.shot .phone { margin:0; }
     ];
     if (!s.advertising) logs = ["--  尚未开始广播，点右上角「开始广播」启动蓝牙  --"];
     return "<div class=\"scroll\"><div class=\"setup\">" + diag +
-      "<div class=\"card\" data-code=\"ContentView.swift:88-109\">" +
+      "<div class=\"card\" data-code=\"ContentView.swift:89-110\">" +
         "<div class=\"status-row\"><span class=\"status-dot" + (s.advertising ? " on" : "") + "\"></span>" +
         "<span class=\"status-title\">" + esc(s.statusText) + "</span><span class=\"spacer\"></span>" +
         "<span class=\"sub\">订阅 " + s.subscribers + "</span></div>" +
         "<div class=\"sub\">iPad 上打开 设置 &gt; 蓝牙，在「其他设备」里选择 PT-Pad 完成配对。</div>" +
         "<div class=\"sub3\">用右上角的「开始广播」启动蓝牙；连接成功后会自动出现全屏触控区。</div>" +
       "</div>" +
-      "<div class=\"card\" data-code=\"ContentView.swift:111-140\">" +
+      "<div class=\"card\" data-code=\"ContentView.swift:112-141\">" +
         "<div class=\"sub\" style=\"font-weight:600;margin:0 0 6px\">指针与滚动</div>" +
         "<div class=\"slider-label\"><span>指针速度</span><span class=\"spacer\"></span><span class=\"slider-val\" id=\"valSens\">" + s.sensitivity.toFixed(1) + "×</span></div>" +
         "<input type=\"range\" id=\"sens\" min=\"0.4\" max=\"3.5\" step=\"0.1\" value=\"" + s.sensitivity + "\">" +
         "<div class=\"slider-label\" style=\"margin-top:8px\"><span>滚动速度</span><span class=\"spacer\"></span><span class=\"slider-val\" id=\"valScroll\">" + s.scrollSensitivity.toFixed(1) + "×</span></div>" +
         "<input type=\"range\" id=\"scroll\" min=\"0.3\" max=\"3.0\" step=\"0.1\" value=\"" + s.scrollSensitivity + "\">" +
       "</div>" +
-      "<div class=\"card\" data-code=\"ContentView.swift:143-161\">" +
+      "<div class=\"card\" data-code=\"ContentView.swift:144-162\">" +
         "<div class=\"sub\" style=\"font-weight:600;margin:0 0 6px\">连接日志</div>" +
         "<div class=\"logbox\">" + logs.map(function (l) { return "<div>" + esc(l) + "</div>"; }).join("") + "</div>" +
       "</div>" +
-      "<div class=\"footnote\" data-code=\"ContentView.swift:163-166\">请保持本 App 在前台、屏幕常亮。锁屏或切到后台后 iOS 会停止 BLE 广播。</div>" +
+      "<div class=\"footnote\" data-code=\"ContentView.swift:164-167\">请保持本 App 在前台、屏幕常亮。锁屏或切到后台后 iOS 会停止 BLE 广播。</div>" +
       "</div></div>";
   }
 
@@ -448,38 +456,38 @@ body.shot .phone { margin:0; }
 
   function settingsHTML() {
     return "<div class=\"scroll\"><div class=\"form\">" +
-      "<div class=\"sec-head\" data-code=\"ContentView.swift:182\">指针</div>" +
+      "<div class=\"sec-head\" data-code=\"ContentView.swift:183\">指针</div>" +
       "<div class=\"group\">" +
-        "<div class=\"form-row\" data-code=\"ContentView.swift:183-191\">" +
+        "<div class=\"form-row\" data-code=\"ContentView.swift:184-192\">" +
           "<div class=\"slider-label\"><span>指针速度</span><span class=\"spacer\"></span><span class=\"slider-val\" id=\"valSens\">" + s.sensitivity.toFixed(1) + "×</span></div>" +
           "<input type=\"range\" id=\"sens\" min=\"0.4\" max=\"3.5\" step=\"0.1\" value=\"" + s.sensitivity + "\">" +
         "</div>" +
-        "<div class=\"form-row cap\" data-code=\"ContentView.swift:193-195\">单指拖动换算成指针位移的倍率。</div>" +
+        "<div class=\"form-row cap\" data-code=\"ContentView.swift:194-196\">单指拖动换算成指针位移的倍率。</div>" +
       "</div>" +
-      "<div class=\"sec-head\" data-code=\"ContentView.swift:198\">滚动</div>" +
+      "<div class=\"sec-head\" data-code=\"ContentView.swift:199\">滚动</div>" +
       "<div class=\"group\">" +
-        "<div class=\"form-row\" data-code=\"ContentView.swift:199-207\">" +
+        "<div class=\"form-row\" data-code=\"ContentView.swift:200-208\">" +
           "<div class=\"slider-label\"><span>滚动速度</span><span class=\"spacer\"></span><span class=\"slider-val\" id=\"valScroll\">" + s.scrollSensitivity.toFixed(1) + "×</span></div>" +
           "<input type=\"range\" id=\"scroll\" min=\"0.3\" max=\"3.0\" step=\"0.1\" value=\"" + s.scrollSensitivity + "\">" +
         "</div>" +
-        "<div class=\"form-row line\" data-code=\"ContentView.swift:209\"><span>自然滚动</span><span class=\"spacer\"></span>" +
+        "<div class=\"form-row line\" data-code=\"ContentView.swift:210\"><span>自然滚动</span><span class=\"spacer\"></span>" +
           "<button class=\"toggle" + (s.naturalScrolling ? " on" : "") + "\" data-act=\"toggle\" aria-label=\"自然滚动\"></button></div>" +
-        "<div class=\"form-row cap\" data-code=\"ContentView.swift:210-212\">同时作用于双指滚动和底部滚轮键。设置会自动保存。</div>" +
+        "<div class=\"form-row cap\" data-code=\"ContentView.swift:211-213\">默认：双指或滚轮键向上滑 = 滚轮下滑。打开自然滚动后方向整体反转（跟手）。同时作用于双指滚动和底部滚轮键，设置会自动保存。</div>" +
       "</div>" +
-      "<div class=\"sec-head\" data-code=\"ContentView.swift:215\">按键</div>" +
-      "<div class=\"group\" data-code=\"ContentView.swift:215-219\">" +
+      "<div class=\"sec-head\" data-code=\"ContentView.swift:216\">按键</div>" +
+      "<div class=\"group\" data-code=\"ContentView.swift:216-220\">" +
         row("左键 / 右键", "按住 = 按下，松手 = 抬起") +
         row("滚轮", "上下拖动 = 滚动，双击 = 按下滚轮键") +
         row("触控区", "轻点左键 · 双击左键 · 长按右键") +
       "</div>" +
-      "<div class=\"sec-head\" data-code=\"ContentView.swift:221\">关于</div>" +
-      "<div class=\"group\" data-code=\"ContentView.swift:221-226\">" +
+      "<div class=\"sec-head\" data-code=\"ContentView.swift:222\">关于</div>" +
+      "<div class=\"group\" data-code=\"ContentView.swift:222-227\">" +
         row("广播名称", "PT-Pad") +
         row("iPad 显示名称", s.displayName) +
         row("连接方式", "蓝牙 HID over GATT") +
         row("前台要求", "锁屏后 iOS 会停止广播") +
       "</div>" +
-      "<div class=\"form-footer\" data-code=\"ContentView.swift:227-231\">iPad 蓝牙列表优先显示 iPhone 整机名（GAP Device Name），不是广播名称，App 无权改写。要显示 PT-Pad：① 在 iPad 设置 → 蓝牙 → 已连接设备旁的更多信息按钮 → 名称，改成 PT-Pad（改完不要再忽略此设备）；或 ② 把 iPhone 设置 → 通用 → 关于本机 → 名称 改成 PT-Pad，再到 iPad 蓝牙里「忽略此设备」后重新配对。两条路径都不需要重装 App。</div>" +
+      "<div class=\"form-footer\" data-code=\"ContentView.swift:228-232\">iPad 蓝牙列表优先显示 iPhone 整机名（GAP Device Name），不是广播名称，App 无权改写。要显示 PT-Pad：① 在 iPad 设置 → 蓝牙 → 已连接设备旁的更多信息按钮 → 名称，改成 PT-Pad（改完不要再忽略此设备）；或 ② 把 iPhone 设置 → 通用 → 关于本机 → 名称 改成 PT-Pad，再到 iPad 蓝牙里「忽略此设备」后重新配对。两条路径都不需要重装 App。</div>" +
       "</div></div>";
   }
   function row(t, d) {
@@ -487,9 +495,9 @@ body.shot .phone { margin:0; }
   }
 
   function buttonbarHTML() {
-    return "<button class=\"key\" data-act=\"hold\" data-label=\"左键\" data-code=\"ContentView.swift:277-306\">左键</button>" +
-      "<button class=\"key\" data-act=\"wheel\" data-code=\"ContentView.swift:310-381\">滚轮<small>拖动滚动 · 双击按下</small></button>" +
-      "<button class=\"key\" data-act=\"hold\" data-label=\"右键\" data-code=\"ContentView.swift:277-306\">右键</button>";
+    return "<button class=\"key\" data-act=\"hold\" data-label=\"左键\" data-code=\"ContentView.swift:304-333\">左键</button>" +
+      "<button class=\"key\" data-act=\"wheel\" data-code=\"ContentView.swift:337-410\">滚轮<small>拖动滚动<br>双击按下</small></button>" +
+      "<button class=\"key\" data-act=\"hold\" data-label=\"右键\" data-code=\"ContentView.swift:304-333\">右键</button>";
   }
 
   /* ---------- 渲染 ---------- */
@@ -513,6 +521,7 @@ body.shot .phone { margin:0; }
       kv("指针速度", s.sensitivity.toFixed(1) + "×") +
       kv("滚动速度", s.scrollSensitivity.toFixed(1) + "×") +
       kv("自然滚动", s.naturalScrolling ? "开" : "关") +
+      kv("滚动方向", s.naturalScrolling ? "上滑 = 滚轮上滑（跟手）" : "上滑 = 滚轮下滑") +
       kv("iPad 显示名称", s.displayName);
   }
   function kv(k, v) {
@@ -605,6 +614,14 @@ body.shot .phone { margin:0; }
     if (act === "settings") { setScreen("settings"); log("点齿轮进入设置子页面"); }
     else if (act === "back") { setScreen(s.prevScreen); log("从设置返回 " + s.prevScreen); }
     else if (act === "advertise") { toggleAdvertise(); }
+    else if (act === "disconnect") {
+      s.connected = false; s.subscribers = 0; s.advertising = false;
+      s.statusText = "已断开连接";
+      if (s.screen === "connected") s.screen = "setup";
+      log("主动断开：停止广播并移除 GATT 服务");
+      log("点「开始广播」重建服务后，Windows / Mac 等主机即可发现");
+      render();
+    }
     else if (act === "toggle") {
       s.naturalScrolling = !s.naturalScrolling;
       el.classList.toggle("on", s.naturalScrolling);
@@ -638,6 +655,7 @@ body.shot .phone { margin:0; }
       kv("指针速度", s.sensitivity.toFixed(1) + "×") +
       kv("滚动速度", s.scrollSensitivity.toFixed(1) + "×") +
       kv("自然滚动", s.naturalScrolling ? "开" : "关") +
+      kv("滚动方向", s.naturalScrolling ? "上滑 = 滚轮上滑（跟手）" : "上滑 = 滚轮下滑") +
       kv("iPad 显示名称", s.displayName);
   }
 

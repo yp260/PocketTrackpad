@@ -23,7 +23,9 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
     // 设置页的三项参数做本地持久化，重开 App 不需重调。
     private static let sensKey = "PocketTrackpad.sensitivity"
     private static let scrollKey = "PocketTrackpad.scrollSensitivity"
-    private static let naturalKey = "PocketTrackpad.naturalScrolling"
+    // 方向默认值已反转（上滑 = 滚轮下滑）。换新 key，避免侧载覆盖安装后
+    // 残留的旧 UserDefaults 值把方向带回旧行为。
+    private static let naturalKey = "PocketTrackpad.naturalScrolling.v2"
 
     private static func savedDouble(_ key: String, fallback: Double) -> Double {
         let v = UserDefaults.standard.double(forKey: key)
@@ -40,8 +42,10 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
             didSet { UserDefaults.standard.set(scrollSensitivity, forKey: HIDPeripheral.scrollKey) }
         }
 
+    // 默认关：双指 / 滚轮键向上滑发出负 wheel（滚轮下滑），向下滑发出正 wheel。
+    // 打开后整体取反，回到跟手方向。
     @Published var naturalScrolling: Bool =
-        (UserDefaults.standard.object(forKey: HIDPeripheral.naturalKey) as? Bool) ?? true {
+        (UserDefaults.standard.object(forKey: HIDPeripheral.naturalKey) as? Bool) ?? false {
             didSet { UserDefaults.standard.set(naturalScrolling, forKey: HIDPeripheral.naturalKey) }
         }
 
@@ -107,6 +111,41 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         isAdvertising = false
         statusText = "广播已停止"
         note("停止广播")
+    }
+
+    /// 主动断开当前主机，让 Windows / Mac 等其他主机可以重新发现本设备。
+    ///
+    /// CBPeripheralManager 没有公开的 disconnect(central:) 接口：stopAdvertising()
+    /// 只是不再被新主机发现，已经建立的 BLE 连接仍然存在。这里先移除全部已发布
+    /// 服务，再释放 manager 实例，由系统拆掉当前链路；下次调用 start() 会重新创建
+    /// manager、重建 GATT 数据库并重新广播。
+    func disconnect() {
+        note("主动断开：停止广播并移除 GATT 服务")
+        manager?.stopAdvertising()
+        manager?.removeAllServices()
+        manager?.delegate = nil
+        manager = nil
+
+        isAdvertising = false
+        subscribers = 0
+        inputSubscribed = false
+        bootSubscribed = false
+        inputReport = nil
+        bootReport = nil
+        servicesToAdd.removeAll()
+        databaseBuilt = false
+        serviceFailed = false
+        advertisingFallbackUsed = false
+        buttonBits = 0
+        pendingX = 0
+        pendingY = 0
+        pendingWheel = 0
+        queuedPacket = nil
+        readyToUpdate = true
+        statusText = "已断开连接"
+        note("已断开；点「开始广播」重建服务后，Windows / Mac 等主机即可发现")
+        note("若 iPad 仍在附近且保留配对，可能自动重连；必要时先在 iPad 蓝牙里忽略此设备")
+        mark("7 运行中（已主动断开）")
     }
 
     // MARK: - GATT 数据库

@@ -154,6 +154,8 @@ struct TrackpadSurface: UIViewRepresentable {
                 lastScroll = t
 
                 let s = CGFloat(hid.scrollSensitivity) / 6.0
+                // 默认（自然滚动关）：上滑 -> 负 wheel（滚轮下滑），下滑 -> 正 wheel（滚轮上滑）。
+                // 打开自然滚动后整体取反；底部滚轮键使用完全相同的定义。
                 let direction: CGFloat = hid.naturalScrolling ? -1 : 1
                 let raw = stepY * s * direction + residualWheel
                 let iw = Int(raw.rounded(.toNearestOrAwayFromZero))
