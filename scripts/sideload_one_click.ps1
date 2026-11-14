@@ -134,7 +134,15 @@ if (-not $SkipGitHub) {
     Write-Phase "2/6  GitHub sign-in"
     & $script:GhExe auth status 2>$null | Out-Null
     if ($LASTEXITCODE -ne 0) {
-        Write-Host "  A browser window will open. Approve the GitHub sign-in there."
+        Write-Host "  The terminal will print an 8-character one-time code like ABCD-1234."
+        Write-Host "  COPY THAT CODE FIRST, then press Enter when asked."
+        Write-Host ""
+        Write-Host "  The 'Authorize GitHub CLI' button is NOT on the GitHub home page."
+        Write-Host "  Go to https://github.com/login/device (open it manually if needed),"
+        Write-Host "  paste the code, click Continue, then click 'Authorize GitHub CLI'."
+        Write-Host ""
+        Write-Host "  Waiting for authorization..."
+        Write-Host ""
         & $script:GhExe auth login --web --git-protocol https --scopes "repo,workflow"
         if ($LASTEXITCODE -ne 0) { throw "GitHub sign-in failed or was cancelled." }
     }

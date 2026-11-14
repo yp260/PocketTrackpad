@@ -482,6 +482,26 @@ powershell -ExecutionPolicy Bypass -File scripts\sideload_one_click.ps1 -OpenDow
 
 > **网络限制（实测）**：本会话执行环境的代理 `127.0.0.1:11061` 只放行 `api.github.com`，`github.com` 整域返回连接失败，因此设备码授权（`https://github.com/login/device/code`）和 `git push` 都无法由助手侧代跑。请在**你自己打开的 PowerShell 窗口**里运行一键脚本 —— 你的浏览器既然能登录 GitHub，说明该窗口的网络不受此限制。若你那边同样报 `Bad Gateway`，改用网页生成 Personal Access Token 后执行 `gh auth login --with-token`，不要聊天里粘贴 token。
 
+### 没看到 Authorize 按钮
+
+GitHub 首页（Dashboard）上**不会**出现 Authorize 按钮。授权是两步：先在终端拿一次性码，再去设备验证页输入，之后才会看到 `Authorize GitHub CLI` 按钮。
+
+| 步骤 | 位置 | 做什么 |
+| --- | --- | --- |
+| 1 | 你自己的 PowerShell 窗口 | 运行下方命令，终端打印 `! First copy your one-time code: ABCD-1234` |
+| 2 | 终端 | **先复制这 8 位码**，再按 Enter 让浏览器打开 |
+| 3 | 浏览器 | 地址栏手动输入 `https://github.com/login/device`（浏览器若只打开了首页，必须手动改地址） |
+| 4 | 该页面 | 粘贴 8 位码 → Continue → 点绿色 `Authorize GitHub CLI` |
+| 5 | 终端 | 出现 `✓ Logged in as <你的用户名>` 即成功 |
+
+单独完成授权的命令（授权成功后一键脚本会自动跳过这一步）：
+
+```powershell
+& "C:\Program Files\GitHub CLI\gh.exe" auth login --web --git-protocol https --scopes "repo,workflow"
+```
+
+如果终端里根本没出现 8 位码，或者报 `Bad Gateway`，改用 Personal Access Token：网页打开 `https://github.com/settings/tokens/new?scopes=repo,workflow&description=PocketTrackpad`，生成后把 token 存到本地文件，再执行 `Get-Content <文件> -Raw | gh auth login --with-token`，用完删掉文件。**不要把 token 贴进聊天窗口或提交进仓库。**
+
 ### 比一键更省事的选择
 
 如果只是想让 iPhone 立刻变成 iPad 的鼠标，不需要自研包：在 iPhone 的 App Store 搜 **Bluetouch**、**Tracepad** 或 **AirBoard**，点安装即可，iPad 端不用装任何东西。这是唯一连电脑都不用开的做法。
