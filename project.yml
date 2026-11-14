@@ -22,10 +22,12 @@ targets:
         excludes:
           - "Info.plist"
           - "Resources"
-    # 资源单独声明：按键音 keyclick.wav（scripts/gen_keyclick.py 生成）。
-    # 放在 Resources 目录并从 sources 里排除，避免同一文件被加进两次。
-    resources:
+      # 按键音 keyclick.wav（scripts/gen_keyclick.py 生成）必须进 Resources 构建阶段，
+      # 否则 Bundle.main 找不到资源，App 静默无声。
+      # 注意：XcodeGen 的 target 级 resources: 键并不生效，必须在 sources 里
+      # 用 buildPhase: resources 显式声明。
       - path: PocketTrackpad/Resources
+        buildPhase: resources
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.example.PocketTrackpad

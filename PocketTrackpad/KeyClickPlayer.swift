@@ -1,5 +1,6 @@
 import Foundation
 import AVFoundation
+import AudioToolbox
 
 /// 虚拟键盘 / 鼠标的按键音。
 ///
@@ -91,8 +92,13 @@ final class KeyClickPlayer: ObservableObject {
 
     /// 按一次键音。音量 0 / 总开关关闭时直接返回，不做任何音频调用。
     func play() {
-        guard effectiveVolume > 0.01, !players.isEmpty else { return }
+        guard effectiveVolume > 0.01 else { return }
         activateSessionIfNeeded()
+        // 资源缺失时的兜底：改用系统键盘音（音量不可调），总比完全无声好。
+        if players.isEmpty {
+            AudioServicesPlaySystemSound(1104)
+            return
+        }
         let player = players[nextIndex]
         nextIndex = (nextIndex + 1) % players.count
         player.volume = Float(effectiveVolume)
@@ -130,7 +136,8 @@ final class KeyClickPlayer: ObservableObject {
 
     private func loadPlayers() {
         guard let url = Bundle.main.url(forResource: "keyclick", withExtension: "wav") else {
-            // 资源缺失时静默降级：没有按键音，但键盘功能完全不受影响。
+            // 资源缺失时降级为系统键盘音：没有自定义音色，但仍有反馈声。
+            print("[KeyClickPlayer] 未找到 keyclick.wav，降级为系统键盘音")
             return
         }
         for _ in 0..<4 {
@@ -138,6 +145,9 @@ final class KeyClickPlayer: ObservableObject {
             p.volume = Float(effectiveVolume)
             p.prepareToPlay()
             players.append(p)
+        }
+        if players.isEmpty {
+            print("[KeyClickPlayer] keyclick.wav 加载失败，降级为系统键盘音")
         }
     }
 
