@@ -6,15 +6,23 @@
 
 ## 一、结论先行
 
-**可以做，但走的是一条非公开通道，不是苹果支持的官方能力。**
+> **状态更新（2026-11-14，真机验证后）：可行性需要下调，不建议在纯软件路径上继续投入。**
+> 源码已在 macOS runner 编译通过并侧载安装到 iPhone，App 能正常打开并开始 BLE 广播，
+> 但 iPad 与 Windows 的蓝牙设置里都搜不到这台虚拟鼠标。广播 UUID 的具体错误已修复（第十四节），
+> 但 iOS 不允许 App 设置 GAP Appearance、也不向 App 暴露系统级 HID 外设能力，这是无法通过改代码绕过的平台限制。
+> 若要「马上能用」，请直接装 Bluetouch，或改走 ESP32-C3 硬件桥。
 
-| 判断 | 说明 |
-| --- | --- |
-| 官方 API 是否支持 | 不支持。Apple DTS 明确回复「Core Bluetooth doesn't expose HID peripheral service capabilities to apps」 |
-| 实际能否实现 | 能。用完整 128 位 Bluetooth Base UUID 注册 HID Service，绕开系统对 16 位 UUID 的封锁 |
-| iPad 端是否需要装 App | 不需要。iPadOS 13.4+ 原生接管标准蓝牙 HID 鼠标 |
-| 是否系统级指针 | 是。配对成功后 iPad 出现圆形指针，可跨 App 使用 |
-| 主要风险 | 非公开行为，未来 iOS 版本可能封堵；App Store 审核存在不确定性 |
+以下是立项时的原始判断，保留作为技术背景，其中「实际能否实现」一条已被真机结果推翻。
+
+**原始判断：可以走一条非公开通道，但不是苹果支持的官方能力。**
+
+| 判断 | 说明 | 真机验证 |
+| --- | --- | --- |
+| 官方 API 是否支持 | 不支持。Apple DTS 明确回复「Core Bluetooth doesn't expose HID peripheral service capabilities to apps」 | 已证实 |
+| 实际能否实现 | 原以为：用完整 128 位 Bluetooth Base UUID 注册 HID Service，绕开系统对 16 位 UUID 的封锁即可 | **未通过**：服务能注册、广播能发，但主机发现列表不显示 |
+| iPad 端是否需要装 App | 不需要。iPadOS 13.4+ 原生接管标准蓝牙 HID 鼠标 | 前提不成立，未能走到这一步 |
+| 是否系统级指针 | 是。配对成功后 iPad 出现圆形指针，可跨 App 使用 | 未验证 |
+| 主要风险 | 非公开行为，未来 iOS 版本可能封堵；App Store 审核存在不确定性 | 风险已实际发生 |
 
 ### 技术依据
 
@@ -144,7 +152,8 @@ open PocketTrackpad.xcodeproj
 | 症状 | 原因 | 处理 |
 | --- | --- | --- |
 | 日志出现「HID 服务被系统拒绝」 | 当前 iOS 版本封堵了 128 位 UUID 绕过 | 改用现成 App 或 ESP32 硬件桥方案，见第八节 |
-| iPad 蓝牙列表看不到 PT-Pad | 广播包被截断 / App 未前台 / 蓝牙未就绪 | 点「重新广播」；保持前台；确认 iPhone 蓝牙已开启；设备名不要改长 |
+| iPad 和电脑都搜不到 PT-Pad，但 App 显示广播正常 | 广播里放了 128 位完整 UUID，被主机按「自定义未知服务」屏蔽；且 iOS 不允许 App 设置 GAP Appearance | v0.0.3 已改为 16 位广播 UUID；用 nRF Connect 扫描确认；若仍不显示即为系统限制，见第十四节 |
+| iPad 蓝牙列表看不到 PT-Pad（偶发） | App 未前台 / 蓝牙未就绪 / 名称过长 | 点「重新广播」；保持前台；确认 iPhone 蓝牙已开启；设备名不要改长 |
 | 能配对，但 iPad 不出现指针 | HID 配置未通过 iOS 归类审查 | 把 `HIDSpec.useReportID` 改为 `true` 重新编译配对；确认 Report Map 是纯鼠标；检查 2908 Report Reference |
 | 指针能动，点击无效 | iPadOS 对非标准 HID 的按键映射 | 打开辅助触控；检查 `辅助点按` 设置；在 App 日志确认 Report 已被订阅 |
 | 指针跳动 / 卡顿 | BLE Notify 队列溢出或事件频率过高 | 降低指针速度；确认 `updateValue` 补发逻辑生效；两台设备靠近 |
@@ -550,3 +559,57 @@ NSInternalInconsistencyException: "Characteristics with cached values must be re
 3. 把 `.ips` 文件发回来即可解析（内含异常类型、终止原因与调用栈）。
 
 同时确认三件事：开发者模式已开启、设置 → 通用 → VPN 与设备管理里证书已信任、签名未超过 7 天。
+
+## 十四、广播正常但 iPad / 电脑都搜不到（v0.0.3）
+
+### 现象
+
+v0.0.2 安装后能正常打开，点「开始广播」显示「等待 iPad 配对」，`peripheralManagerDidStartAdvertising` 未返回错误 —— 广播确实在发。但 iPad 的 设置 → 蓝牙 与 Windows 的添加设备里都看不到 `PT-Pad`。
+
+### 直接原因：广播里放了 128 位完整 UUID
+
+旧版 `advertise()` 把 `HIDSpec.hidService`（`00001812-0000-1000-8000-00805F9B34FB`）直接塞进 `CBAdvertisementDataServiceUUIDsKey`。这在主机侧有两个独立后果：
+
+| 后果 | 依据 |
+| --- | --- |
+| 发现列表按 16 位服务 UUID 判断设备类别，128 位完整形式被当成「自定义未知服务」屏蔽 | Nordic 官方论坛实测：广播里放 `0x1812` 设备可见，换成任意 128 位 UUID 立刻不可见；iOS 设置里的未配对设备列表只显示实现了系统原生支持 profile（HID、HRM、ANCS 等）的设备 |
+| 单个 128 位 UUID 在空中占 18 字节，加设备名后容易挤进 overflow 区域 | Apple `startAdvertising(_:)` 文档：overflow 区域里的服务 UUID「只有显式扫描这些服务的 iOS 设备才能发现」，系统蓝牙设置与非 iOS 主机一律看不到 |
+
+前台广播可用空间只有 28 字节（不含每种数据类型 2 字节头），这是硬约束。
+
+### 本次修复
+
+| 项 | 做法 |
+| --- | --- |
+| 广播 UUID | 改成 16 位短形式 `1812 / 180F / 180A`，三个共 6 字节数据，宽裕放进初始广播包 |
+| GATT 数据库 | **保持不变，仍用 128 位**。广播数据与 GATT 注册是两件事：`CBPeripheralManager.add()` 禁止 16 位 SIG UUID（CBError Code 8），这个限制只作用于注册，不作用于广播 |
+| 自动回退 | 若某 iOS 版本拒绝广播 16 位 SIG UUID，`didStartAdvertising` 收到 error 后自动改用 128 位重试，保证广播不中断 |
+| 日志 | 明确写出当前是「16 位标准模式」还是「128 位回退模式」，回退时直接提示主机大概率不会显示 |
+
+### 仍未消除的第二道天花板
+
+标准 BLE HID 设备的广播包还带 **GAP Appearance = 0x03C2（Mouse）** 和 Class of Device。iOS 的 `startAdvertising(_:)` 只支持 `CBAdvertisementDataLocalNameKey` 与 `CBAdvertisementDataServiceUUIDsKey` 两个键，App 无法设置 Appearance、厂商数据、发射功率；CoreBluetooth 的 GATT 服务也只是整机共享外设的一部分，App 不控制 GAP。
+
+Apple 工程师在开发者论坛的正式回复是：**「Core Bluetooth doesn't expose HID peripheral service capabilities to apps.」** 系统 HID 主机栈由蓝牙守护进程管理，App 用户态提供的 GATT 服务未必会被注册成系统级 HID 设备。因此修复 16 位 UUID 能让主机「看见」，但能否被归类为鼠标，仍取决于系统实现，这一版没有真机把握。
+
+App Store 上的 Bluetouch 宣称「对端无需装软件、纯蓝牙直连」且 2026 年仍在更新，说明存在尚未复现的实现细节；本项目没有它的源码，无法反推。
+
+### 决定性诊断（出包后先做这一步）
+
+用 **nRF Connect**（iOS / Android 免费，Windows 可用 nRF Connect for Desktop）扫描 `PT-Pad`，这是区分两类问题的唯一手段：
+
+| 扫描结果 | 结论 | 下一步 |
+| --- | --- | --- |
+| 扫得到，广播里能看到 `0x1812` | 广播正常，问题在系统类别识别（Appearance 缺失） | 纯软件方案基本走到头，转 ESP32 硬件桥 |
+| 扫得到，但只有 128 位 UUID | 触发了回退模式 | 看 App 日志里的拒绝原因，发回定位 |
+| 完全扫不到 | 广播没真正发出 | 检查 `didStartAdvertising` 的 error 与蓝牙权限 |
+
+### 方案结论
+
+| 路径 | 可靠性 | 代价 |
+| --- | --- | --- |
+| 继续调纯软件广播 | 不确定，受 iOS 系统 HID 栈限制，可能无解 | 每轮都要重新编译、重签、重装 |
+| ESP32-C3 硬件桥 | 可靠。固件可自由设置 Appearance `0x03C2`、16 位 `0x1812` 广播、标准 HOGP，iPad 当普通蓝牙鼠标识别 | 约 10～20 元硬件；iPhone 通过 BLE 中央或 Wi-Fi 把触摸数据发给 ESP32，需新写两端代码 |
+| 直接装 Bluetouch / Tracepad | 最省事，对端不用装软件 | 约 3 欧元去广告，代码不可控 |
+
+一句话：**广播搜不到这个具体 bug 已修好，但「iPhone 纯软件伪装成 iPad 系统级鼠标」这件事的可行性需要下调，不建议在纯软件路径上继续投入。** 若目标是「马上能用」，选现成 App 或 ESP32 硬件桥。

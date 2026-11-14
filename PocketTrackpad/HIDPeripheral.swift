@@ -30,6 +30,8 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
     private var servicesToAdd: [CBMutableService] = []
     private var databaseBuilt = false
     private var serviceFailed = false
+    /// 某些 iOS 版本可能拒绝在广播中放 16 位 SIG UUID，此时自动回退到 128 位。
+    private var advertisingFallbackUsed = false
 
     // MARK: - 报告状态
     private var buttonBits: UInt8 = 0
@@ -183,14 +185,31 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
     private func advertise() {
         guard let manager = manager, manager.state == .poweredOn, !isAdvertising else { return }
         mark("6 全部服务注册完成，准备广播")
-        // 广播包只有 31 字节，设备名必须短；128 位 UUID 单独占 18 字节。
-        // 这里只放 HID Service，不放 Device Info，避免被系统截断。
-        manager.startAdvertising([
-            CBAdvertisementDataLocalNameKey: "PT-Pad",
-            CBAdvertisementDataServiceUUIDsKey: [HIDSpec.hidService]
-        ])
+        // 广播包里必须放 16 位 SIG UUID，不能放 128 位完整形式。两个独立原因：
+        //
+        // 1) iPadOS / Windows 的「设置 > 蓝牙」发现列表按 16 位服务 UUID 过滤设备类别。
+        //    128 位完整形式 00001812-... 会被当成「自定义未知服务」直接屏蔽，
+        //    设备根本不会出现在列表里（Nordic 官方论坛实测：换成任意 128 位 UUID 即不可见）。
+        // 2) 一个 128 位 UUID 在空中占 18 字节，加设备名很容易挤进 overflow 区域。
+        //    Apple 文档明确：overflow 里的服务 UUID「只有显式扫描该服务的 iOS 设备」能发现，
+        //    系统蓝牙设置和非 iOS 主机一律看不到。
+        //
+        // 注意区分：GATT 数据库里的服务仍必须用 128 位注册，
+        // 因为 CBPeripheralManager.add() 禁止 16 位 SIG UUID（CBError Code 8）。
+        // 广播数据与 GATT 数据库是两回事，这里只在广播里用短 UUID。
+        startAdvertising(with: HIDSpec.advertisedServiceUUIDs, fallback: false)
         statusText = "正在广播"
-        note("广播 HID Service 00001812-0000-1000-8000-00805F9B34FB")
+    }
+
+    private func startAdvertising(with uuids: [CBUUID], fallback: Bool) {
+        advertisingFallbackUsed = fallback
+        manager?.startAdvertising([
+            CBAdvertisementDataLocalNameKey: "PT-Pad",
+            CBAdvertisementDataServiceUUIDsKey: uuids
+        ])
+        note(fallback
+             ? "广播回退模式：128 位完整 UUID（主机可能不显示）"
+             : "广播 16 位 SIG UUID：1812 / 180F / 180A")
     }
 
     // MARK: - CBPeripheralManagerDelegate
@@ -230,13 +249,26 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
     func peripheralManagerDidStartAdvertising(_ peripheral: CBPeripheralManager,
                                               error: Error?) {
         if let error = error {
+            if !advertisingFallbackUsed {
+                // 16 位 SIG UUID 被系统拒绝时，退回 128 位，至少保证广播不中断。
+                note("16 位 UUID 广播被拒: \(error.localizedDescription)")
+                note("自动回退到 128 位完整 UUID")
+                startAdvertising(with: [HIDSpec.hidService], fallback: true)
+                return
+            }
             statusText = "广播失败"
             note("广播失败: \(error.localizedDescription)")
         } else {
             isAdvertising = true
-            statusText = "等待 iPad 配对"
+            statusText = advertisingFallbackUsed ? "广播中（兼容模式）" : "等待 iPad 配对"
             mark("7 运行中（广播正常）")
-            note("请在 iPad：设置 > 蓝牙 > 其他设备 > 选择 PT-Pad")
+            if advertisingFallbackUsed {
+                note("当前 iOS 版本禁止广播 16 位 SIG UUID，主机大概率不会显示本设备")
+                note("这是系统限制，需要改用 ESP32 硬件桥方案")
+            } else {
+                note("请在 iPad：设置 > 蓝牙 > 其他设备 > 选择 PT-Pad")
+                note("若仍不显示，请用 nRF Connect 扫描 PT-Pad 确认广播内容")
+            }
         }
     }
 

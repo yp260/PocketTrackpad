@@ -32,6 +32,26 @@ enum HIDSpec {
     static let deviceInformation = sig("180A")   // Device Information
     static let batteryService    = sig("180F")   // Battery Service
 
+    // MARK: - 广播数据（必须用 16 位短 UUID）
+    //
+    // GATT 数据库注册用上面的 128 位形式（绕过 CBPeripheralManager.add 的 CBError 8），
+    // 但广播包里必须用 16 位短形式，这是两件不同的事：
+    //   - iPadOS / Windows 的蓝牙发现列表按 16 位服务 UUID 判断设备类别；
+    //     128 位完整形式会被当成「自定义未知服务」直接屏蔽，设备不出现在列表里。
+    //   - 128 位 UUID 占 18 字节，容易挤进 overflow 区域；Apple 文档说明
+    //     overflow 中的 UUID 只有「显式扫描该服务的 iOS App」可见。
+    static let advertisedServiceUUIDs: [CBUUID] = [
+        CBUUID(string: "1812"),   // HID Service
+        CBUUID(string: "180F"),   // Battery Service
+        CBUUID(string: "180A")    // Device Information
+    ]
+
+    // 注意：标准 HID 设备还会在广播里带 GAP Appearance = 0x03C2 (Mouse)。
+    // iOS 的 startAdvertising 只支持 LocalName 与 ServiceUUIDs 两个键，
+    // App 无法设置 Appearance AD Type / Class of Device / 厂商数据，
+    // 也无法改写整机共享外设的 GAP 服务。这是本方案的固有天花板：
+    // 16 位 HID UUID 能让主机「看见」，但能否被归类为鼠标仍取决于系统实现。
+
     // MARK: - HID Characteristics
     static let hidInformation       = sig("2A4A")
     static let reportMap            = sig("2A4B")
