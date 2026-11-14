@@ -208,10 +208,16 @@ struct SettingsView: View {
                 LabeledRow(title: "触控区", detail: "轻点左键 · 双击左键 · 长按右键")
             }
 
-            Section("关于") {
-                LabeledRow(title: "设备名称", detail: "PT-Pad")
+            Section {
+                LabeledRow(title: "广播名称", detail: "PT-Pad")
+                LabeledRow(title: "系统设备名", detail: hid.systemDeviceName)
                 LabeledRow(title: "连接方式", detail: "蓝牙 HID over GATT")
                 LabeledRow(title: "前台要求", detail: "锁屏后 iOS 会停止广播")
+            } header: {
+                Text("关于")
+            } footer: {
+                Text("iPad 蓝牙列表显示的是「系统设备名」（GAP Device Name），不是广播名称，App 无法修改它。要让 iPad 显示 PT-Pad：在 iPad 的 设置 → 蓝牙 里，点已连接设备旁的更多信息按钮 → 名称，改成 PT-Pad；或把 iPhone 名称改成 PT-Pad，再在 iPad 上忽略此设备重新配对。")
+                    .font(.caption)
             }
         }
         .navigationTitle("设置")

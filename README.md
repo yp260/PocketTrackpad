@@ -157,8 +157,9 @@ open PocketTrackpad.xcodeproj
 | 症状 | 原因 | 处理 |
 | --- | --- | --- |
 | 日志出现「HID 服务被系统拒绝」 | 当前 iOS 版本封堵了 128 位 UUID 绕过 | 改用现成 App 或 ESP32 硬件桥方案，见第八节 |
-| iPad 和电脑都搜不到 PT-Pad，但 App 显示广播正常 | 广播里放了 128 位完整 UUID，被主机按「自定义未知服务」屏蔽；且 iOS 不允许 App 设置 GAP Appearance | v0.0.3 已改为 16 位广播 UUID；用 nRF Connect 扫描确认；若仍不显示即为系统限制，见第十四节 |
+| iPad 和电脑都搜不到 PT-Pad，但 App 显示广播正常 | v0.0.3 之前的 bug：广播里放了 128 位完整 UUID，被主机按「自定义未知服务」屏蔽 | 已改为 16 位广播 UUID，真机验证可用；若仍不显示，用 nRF Connect 扫描确认，见第十四节 |
 | iPad 蓝牙列表看不到 PT-Pad（偶发） | App 未前台 / 蓝牙未就绪 / 名称过长 | 点「重新广播」；保持前台；确认 iPhone 蓝牙已开启；设备名不要改长 |
+| iPad 上显示的设备名不是 PT-Pad，而是手机名或别的名字 | iPad 显示的是整机 GAP Device Name，不是广播名，App 无法修改 | 在 iPad 蓝牙设置里重命名，或改 iPhone 名称后忽略此设备重新配对，见第十六节 |
 | 能配对，但 iPad 不出现指针 | HID 配置未通过 iOS 归类审查 | 把 `HIDSpec.useReportID` 改为 `true` 重新编译配对；确认 Report Map 是纯鼠标；检查 2908 Report Reference |
 | 指针能动，点击无效 | iPadOS 对非标准 HID 的按键映射 | 打开辅助触控；检查 `辅助点按` 设置；在 App 日志确认 Report 已被订阅 |
 | 指针跳动 / 卡顿 | BLE Notify 队列溢出或事件频率过高 | 降低指针速度；确认 `updateValue` 补发逻辑生效；两台设备靠近 |
@@ -643,3 +644,58 @@ App Store 上的 Bluetouch 宣称「对端无需装软件、纯蓝牙直连」�
 顺带修正了触控区提示文案里一处重复词的笔误（第二项应为「双击左键」）。
 
 **版本兼容性**：设置页和全屏布局用到的 `navigationDestination`、`Form`、`ToolbarItemGroup`、`.background { }` 均支持工程最低部署目标 iOS 16.0。
+
+---
+
+## 十六、iPad 上显示的蓝牙设备名（v0.0.5）
+
+### 现象
+
+App 广播里明确写了 `CBAdvertisementDataLocalNameKey: "PT-Pad"`，但 iPad 的 设置 → 蓝牙 里显示的是 `Xiaomi Smart Band 9Pro 44AE`（即这台 iPhone 的整机名称，或 iPad 缓存下来的旧 GAP 名称）。
+
+### 原因：显示的是 GAP Device Name，不是广播名
+
+蓝牙里有两个互不相干的名称：
+
+| 名称 | 位置 | 谁控制 | 优先级 |
+| --- | --- | --- | --- |
+| Local Name | 广播包 AD Type 0x08 / 0x09 | App 通过 `CBAdvertisementDataLocalNameKey` 设置，本项目已设为 `PT-Pad` | 仅首次主动扫描时可见 |
+| GAP Device Name | GATT `0x1800` 服务的 `0x2A00` 特征 | **iPhone 整机蓝牙栈**，等于 设置 → 通用 → 关于本机 → 名称 | **优先**，且连接后被系统缓存 |
+
+Apple 开发者论坛（thread 72343）的官方回复：当外设同时有这两种名称时，`CBPeripheral.name` 返回 GAP 名称；首次发现时可显示广播 Local Name，一旦连接就会读取并缓存 GAP 名称，之后即使广播名改了也继续显示缓存值。
+
+### 为什么 App 改不了这个名字
+
+| 依据 | 结论 |
+| --- | --- |
+| Apple DTS（thread 35100）：「iOS restricts direct access to certain characteristics. The Device Name characteristic is one of them」，`CBPeripheral.name` 只读 | App 不能写 `0x2A00` |
+| Apple DTS：iOS 对 App 隐藏 Generic Access（0x1800）服务 | App 读不到系统 GAP 服务 |
+| Stack Overflow 42208870：App 的服务不是独立外设，只是「整机共享外设」的一部分；实测自己 `add(0x1800)` 后扫描列表仍显示系统值 | App 自建 GAP 服务会被忽略 |
+| `UIDevice.current.name` 是只读属性，无公开 API 修改整机名称 | App 不能改 iPhone 名称 |
+
+因此这不是代码缺陷，也无法靠改 `startAdvertising` 的参数绕过。`Xiaomi Smart Band 9Pro 44AE` 这类带地址后缀的名字，来自整机名称或被缓存的配对记录。
+
+### 两条真正有效的改名路径
+
+| 路径 | 操作位置 | 影响范围 | 是否需要重装 App |
+| --- | --- | --- | --- |
+| **A. iPad 侧重命名（推荐）** | iPad 设置 → 蓝牙 → 已连接设备旁的「更多信息」按钮 → 名称 → 输入 `PT-Pad` | 只改这台 iPad 上的显示，不动 iPhone 名称 | 不需要 |
+| B. 改 iPhone 整机名称 | iPhone 设置 → 通用 → 关于本机 → 名称 → 改成 `PT-Pad` | 所有设备看到的名称都变（含 AirDrop、个人热点） | 不需要 |
+
+路径 A 是 Apple 官方支持文档《更改蓝牙配件的名称》给出的做法，适用于已连接的键盘、鼠标、触控板。要求设备处于「已连接」状态，改完点完成即可。
+
+路径 B 改完后，因为 iPad 会缓存旧的 GAP 名称，**必须先在 iPad 蓝牙设置里「忽略此设备」，再重新扫描配对**，否则仍显示旧名。
+
+> 注意：走路径 A 改名之后，不要再点「忽略此设备」或取消配对，否则 iPad 会丢掉这个自定义名称、恢复成手机原名。
+
+### 本次 App 侧改动
+
+代码只做诊断增强，**蓝牙链路一行未动**（仍是 HID / Device Info / Battery 三个服务，广播 UUID 与报告逻辑全部不变）：
+
+| 文件 | 改动 |
+| --- | --- |
+| `HIDPeripheral.swift` | 新增 `systemDeviceName`（`UIDevice.current.name`）供界面显示；广播时写两行日志，明确区分「广播 Local Name = PT-Pad」与「iPad 实际显示的整机 GAP 名称 = …」，名称不是 PT-Pad 时给出改名提示 |
+| `ContentView.swift` | 设置 → 关于 里新增「系统设备名」一行，页脚写清两条改名路径 |
+| `README.md` | 本节 |
+
+如果不想为了看这段说明而重新签名安装，**不装这一版也完全可以改名**——直接在 iPad 的蓝牙设置里重命名即可，v0.0.4 的功能不受影响。
