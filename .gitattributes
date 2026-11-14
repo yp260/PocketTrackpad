@@ -11,3 +11,7 @@
 
 # Windows 上的脚本用 CRLF，PowerShell 5.1 读取更稳
 *.ps1  text eol=crlf
+*.bat  text eol=crlf
+
+# Python 脚本用 LF（Python 两种都能读，但 LF 更通用）
+*.py   text eol=lf

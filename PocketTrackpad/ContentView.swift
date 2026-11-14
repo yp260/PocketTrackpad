@@ -10,7 +10,7 @@ struct ContentView: View {
     /// 断开后弹出「切换设备」指引（配对信息在主机侧，iPad 会自动回连）。
     @State private var showSwitchHelp = false
 
-    /// 主机订阅了 Input Report（BLE），或硬件桥已连上（ESP32），都算真正连上。
+    /// 主机订阅了 Input Report（BLE），或桥接端已连上（ESP32 / Windows 电脑接收器），都算真正连上。
     private var connected: Bool { hid.isLinkActive }
 
     var body: some View {
@@ -79,7 +79,7 @@ struct ContentView: View {
                         }
                     } label: {
                         if hid.bridgeMode {
-                            Text(hid.bridgeActive ? "断开硬件桥" : "连接硬件桥")
+                            Text(hid.bridgeActive ? "断开桥接" : "连接桥接")
                                 .font(.caption2)
                         } else {
                             Text(hid.isAdvertising ? "停止广播" : "开始广播")
@@ -96,7 +96,7 @@ struct ContentView: View {
             .alert("已断开", isPresented: $showSwitchHelp) {
                 Button("知道了", role: .cancel) {}
             } message: {
-                Text("要连接到其他设备（Windows / Android）：\n\n1. 在刚断开的设备（如 iPad）蓝牙设置里「忽略此设备」，否则它会因已配对而自动抢连。\n2. Windows：先在电脑上打开 设置 → 蓝牙和其他设备 → 添加设备 → 蓝牙（保持窗口开着），再回本 App 点「开始广播」——Windows 对 BLE HID 外设发现窗口很短，两边要几乎同时操作。Android 同样先忽略旧配对再搜 PT-Pad。\n3. 搜到后配对；iPad 端若仍自动抢连，先去 iPad 忽略本设备。\n\n提示：三指上滑（Command + H）只对 iPadOS 有效；Windows 回桌面用 Win + D，macOS 用 F11。注意 Windows / 部分 Android 与 iOS HID 外设的配对流程不完全兼容，可能搜到却卡在配对，这类情况需改用 ESP32 硬件桥方案。")
+                Text("要连接到其他设备（Windows / Android）：\n\n1. 在刚断开的设备（如 iPad）蓝牙设置里「忽略此设备」，否则它会因已配对而自动抢连。\n2. Windows：先在电脑上打开 设置 → 蓝牙和其他设备 → 添加设备 → 蓝牙（保持窗口开着），再回本 App 点「开始广播」——Windows 对 BLE HID 外设发现窗口很短，两边要几乎同时操作。Android 同样先忽略旧配对再搜 PT-Pad。\n3. 搜到后配对；iPad 端若仍自动抢连，先去 iPad 忽略本设备。\n\n【Windows 搜不到 / 卡在配对？用零硬件方案】设置里打开「桥接（WiFi 转发）」，电脑上运行 windows\\pt_receiver.py，地址填电脑局域网 IP，即可直接控制 Windows，无需任何硬件。\n\n提示：三指上滑（Command + H）只对 iPadOS 有效；Windows 回桌面用 Win + D，macOS 用 F11。")
             }
         }
     }
@@ -138,10 +138,12 @@ struct ContentView: View {
                             .foregroundStyle(.secondary)
                     }
                     if hid.bridgeMode {
-                        Text("先让 iPhone 连上 ESP32 的 PT-Bridge 热点（无线局域网里选择，无需密码）。")
+                        Text("桥接模式：iPhone 只采集输入，经 WiFi 发给桥接端。")
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                        Text("再点右上角「连接硬件桥」；连上后 ESP32 会被 Windows / Android 当作标准蓝牙鼠标。")
+                        Text("连 Windows：电脑上先运行 windows\\pt_receiver.py（无需硬件），"
+                             + "再到设置里把地址填成电脑的局域网 IP；"
+                             + "连 Android / 无线方案：手机连 ESP32 的 PT-Bridge 热点，地址用 192.168.4.1。")
                             .font(.caption2)
                             .foregroundStyle(.tertiary)
                     } else {
@@ -233,6 +235,10 @@ struct SettingsView: View {
     @EnvironmentObject private var hid: HIDPeripheral
     @EnvironmentObject private var clicks: KeyClickPlayer
 
+    /// 桥接端地址：初次进入时从 BridgeTransport 读回已保存的值。
+    @State private var bridgeHost: String = ""
+    @State private var bridgePort: String = ""
+
     var body: some View {
         Form {
             Section("指针") {
@@ -312,14 +318,49 @@ struct SettingsView: View {
             }
 
             Section {
-                Toggle("启用硬件桥（ESP32）", isOn: $hid.bridgeMode)
-                LabeledRow(title: "桥热点", detail: "PT-Bridge（无密码）")
-                LabeledRow(title: "iPhone 发送", detail: "WiFi UDP → 12 字节复合报告")
-                LabeledRow(title: "目标系统", detail: "Windows / Android（标准 BLE HID）")
+                Toggle("启用桥接（WiFi 转发）", isOn: $hid.bridgeMode)
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("桥接端地址")
+                        .font(.subheadline)
+                    HStack(spacing: 8) {
+                        TextField("192.168.1.100", text: $bridgeHost)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .keyboardType(.numbersAndPunctuation)
+                            .multilineTextAlignment(.trailing)
+                            .frame(maxWidth: .infinity)
+                            .onSubmit { applyBridgeTarget() }
+                        TextField("5000", text: $bridgePort)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .keyboardType(.numberPad)
+                            .multilineTextAlignment(.trailing)
+                            .frame(width: 68)
+                            .onSubmit { applyBridgeTarget() }
+                    }
+                    Button("保存地址", action: applyBridgeTarget)
+                        .font(.caption)
+                        .buttonStyle(.bordered)
+                        .controlSize(.mini)
+
+                    Button {
+                        hid.resendBridgeHello()
+                    } label: {
+                        Label("重新握手", systemImage: "arrow.triangle.2.circlepath")
+                    }
+                    .font(.caption)
+                    .buttonStyle(.bordered)
+                    .controlSize(.mini)
+                }
+
+                LabeledRow(title: "当前状态", detail: hid.bridge.statusText)
+                LabeledRow(title: "电脑端程序", detail: "windows/pt_receiver.py")
+                LabeledRow(title: "ESP32 热点", detail: "PT-Bridge（无密码）")
             } header: {
-                Text("硬件桥（ESP32）")
+                Text("桥接（连 Windows / Android）")
             } footer: {
-                Text("iOS 的蓝牙外设无法设置 GAP Appearance，Windows 因此搜不到本机虚拟键鼠；ESP32 可以，所以把「被主机发现」交给它。开启后本机不再广播，改为把输入通过 WiFi 发给 ESP32，由 ESP32 以标准 BLE HID（Appearance 0x03C1 键盘，键盘描述符在前）连上 Windows / Android / iPad。需要一台 ESP32-C3 开发板并烧录本仓库 esp32/ 目录的固件，详见 README。")
+                Text("iOS 的蓝牙外设无法设置 GAP Appearance，Windows 因此搜不到本机虚拟键鼠。开启桥接后本机不再广播，改为把输入通过 WiFi 发给「桥接端」。\n\n【连 Windows，不需要任何硬件】在电脑上装 Python 3.8+，运行 windows\\pt_receiver.py，然后把上面地址填成电脑的局域网 IP（Windows 用 ipconfig 查看，格式如 192.168.1.100），点「保存地址」再点右上角「连接桥接」。\n\n【连 Android / 也想无线】用 ESP32：手机先连 PT-Bridge 热点，地址填默认的 192.168.4.1。\n\n手机与电脑必须连同一个 WiFi。Windows 防火墙首次会询问是否允许 Python 访问网络，选「允许」。")
                     .font(.caption)
             }
 
@@ -349,6 +390,20 @@ struct SettingsView: View {
         }
         .navigationTitle("设置")
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            // 进入设置页时把已保存的桥接端地址回填到输入框。
+            if bridgeHost.isEmpty {
+                bridgeHost = hid.bridge.currentHost
+                bridgePort = String(hid.bridge.currentPort)
+            }
+        }
+    }
+
+    /// 把输入框里的地址写回桥接传输层（正在连接时会自动按新地址重连）。
+    private func applyBridgeTarget() {
+        hid.setBridgeTarget(host: bridgeHost, port: bridgePort)
+        bridgeHost = hid.bridge.currentHost
+        bridgePort = String(hid.bridge.currentPort)
     }
 }
 

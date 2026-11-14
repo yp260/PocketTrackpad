@@ -18,14 +18,14 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
     /// 键鼠复合模式开启、主机处于 Report Protocol、且已订阅 2A4D 输入报告。
     @Published private(set) var keyboardReady = false
 
-    /// 硬件桥（ESP32）是否已真正连上：以收到 ESP32 的欢迎回包为准。
+    /// 桥接端是否已真正连上：以收到 welcome 回包为准。
     @Published private(set) var bridgeActive = false
 
-    /// BLE 已订阅，或硬件桥已连上，都算「链路已建立」，界面据此切换全屏触控区。
+    /// BLE 已订阅，或桥接端已连上，都算「链路已建立」，界面据此切换全屏触控区。
     var isLinkActive: Bool { subscribers > 0 || bridgeActive }
 
-    /// 硬件桥传输层：把 12 字节复合 HID 报告通过 UDP 发给 ESP32。
-    /// 仅在「硬件桥模式」下参与输入上报；关闭时完全不触碰网络。
+    /// 桥接传输层：把 12 字节复合 HID 报告通过 UDP 发给桥接端。
+    /// 仅在「桥接模式」下参与输入上报；关闭时完全不触碰网络。
     lazy var bridge: BridgeTransport = {
         let b = BridgeTransport()
         b.onConnectionChange = { [weak self, weak b] in
@@ -86,12 +86,15 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
             }
         }
 
-    // MARK: - 硬件桥（ESP32）模式
+    // MARK: - 桥接模式（ESP32 或 Windows 电脑软件接收器）
     //
     // 开启后，本 App 不再作为 BLE HID 外设广播，而是把采集到的输入通过 WiFi UDP
-    // 发给 ESP32，由 ESP32 以标准 BLE HID（带正确 GAP Appearance = 0x03C1 Keyboard）连上
-    // Windows / Android。原因：iOS 的 CoreBluetooth 外设无法设置 GAP Appearance，
-    // 导致 Windows 搜不到 / 配对失败；ESP32 可以，因此把「被主机发现」这件事交给它。
+    // 发给「桥接端」。原因：iOS 的 CoreBluetooth 外设无法设置 GAP Appearance，
+    // 导致 Windows 搜不到 / 配对失败。
+    //
+    // 桥接端有两种，UDP 协议完全一致：
+    //   - ESP32：把报告以标准 BLE HID 转发给 Windows / Android（需要硬件）。
+    //   - Windows 电脑：直接用 SendInput 注入鼠标键盘（零硬件，见 windows/ 目录）。
     private static let bridgeKey = "PocketTrackpad.bridgeMode.v1"
 
     @Published var bridgeMode: Bool =
@@ -101,10 +104,11 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
                 if bridgeMode {
                     // 启用桥模式时先关掉本地 BLE 广播，避免两个发射源冲突、互相抢连接。
                     disconnect()
-                    note("已启用硬件桥模式：iPhone 只采集输入，ESP32 负责被主机发现")
-                    note("请先在 iPhone 无线局域网里连接 ESP32 的 PT-Bridge 热点，再点「连接硬件桥」")
+                    note("已启用桥接模式：iPhone 只采集输入，经 WiFi 发给桥接端")
+                    note("Windows 电脑：在电脑上运行 windows/pt_receiver.py，无需任何硬件")
+                    note("ESP32：手机先连 PT-Bridge 热点，再用默认地址 192.168.4.1")
                 } else {
-                    note("已关闭硬件桥模式：恢复本机直接广播（iPad 直连）")
+                    note("已关闭桥接模式：恢复本机直接广播（iPad 直连）")
                 }
                 refreshKeyboardReady()
             }
@@ -200,7 +204,7 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         }
     }
 
-    /// 硬件桥模式下的「开始」：不创建 BLE 外设，只连接 UDP 并把采集到的输入发给 ESP32。
+    /// 桥接模式下的「开始」：不创建 BLE 外设，只连接 UDP 并把采集到的输入发给桥接端。
     func startBridge() {
         mark("1 调用 startBridge()")
         if link == nil {
@@ -208,20 +212,34 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
             l.add(to: .main, forMode: .common)
             link = l
         }
-        statusText = "正在连接硬件桥"
-        note("硬件桥模式：iPhone 采集输入 → WiFi UDP → ESP32 → 标准 BLE HID → Windows/Android")
-        note("请先在 iPhone 无线局域网里连接 ESP32 的 PT-Bridge 热点（无需密码）")
+        statusText = "正在连接桥接端"
+        note("桥接模式：iPhone 采集输入 → WiFi UDP → 桥接端 → Windows 鼠标键盘")
+        note("当前桥接端地址：\(bridge.currentHost):\(bridge.currentPort)")
+        note("Windows 电脑请先运行 windows/pt_receiver.py，并把地址设成电脑的局域网 IP")
         bridge.connect()
     }
 
-    /// 断开硬件桥 UDP 连接；不影响本机 BLE 路径（关掉桥模式后用「开始广播」即可直连 iPad）。
+    /// 断开桥接端 UDP 连接；不影响本机 BLE 路径（关掉桥模式后用「开始广播」即可直连 iPad）。
     func disconnectBridge() {
         bridge.disconnect()
         subscribers = 0
-        statusText = "硬件桥已断开"
-        note("已断开硬件桥；回到 iPad 直连请关掉「硬件桥」开关，或点「连接硬件桥」重试")
-        mark("7 运行中（已断开硬件桥）")
+        statusText = "桥接端已断开"
+        note("已断开桥接端；回到 iPad 直连请关掉「桥接」开关，或点「连接桥接端」重试")
+        mark("7 运行中（已断开桥接端）")
         refreshKeyboardReady()
+    }
+
+    /// 设置桥接端地址（Windows 电脑 IP / ESP32 IP）。
+    func setBridgeTarget(host: String, port: String) {
+        let p = UInt16(port.trimmingCharacters(in: .whitespaces)) ?? 5000
+        bridge.updateTarget(host: host, port: p)
+        note("桥接端地址设为 \(bridge.currentHost):\(bridge.currentPort)")
+    }
+
+    /// 重新发送握手包：PC 上的接收器若在 App 之后才启动，用它立刻建立链路。
+    func resendBridgeHello() {
+        bridge.resendHello()
+        note("已重新发送握手包；若电脑端接收器正在运行，应立刻显示「已连接」")
     }
 
     func stopAdvertising() {
@@ -454,7 +472,7 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
             note("服务 \(id) 注册失败: \(error.localizedDescription)")
             if id == "1812" {
                 statusText = "HID 服务被系统拒绝"
-                note("当前 iOS 版本可能已封堵 128 位 UUID 绕过，请改用 ESP32 硬件桥方案")
+                note("当前 iOS 版本可能已封堵 128 位 UUID 绕过，请改用桥接模式（Windows 电脑接收器 / ESP32）")
             }
         } else {
             note("服务 \(id) 注册成功")
@@ -480,7 +498,7 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
             mark("7 运行中（广播正常）")
             if advertisingFallbackUsed {
                 note("当前 iOS 版本禁止广播 16 位 SIG UUID，主机大概率不会显示本设备")
-                note("这是系统限制，需要改用 ESP32 硬件桥方案")
+                note("这是系统限制，请改用桥接模式（Windows 电脑接收器 / ESP32）")
             } else {
                 note("请在 iPad：设置 > 蓝牙 > 其他设备 > 选择 PT-Pad")
                 note("若仍不显示，请用 nRF Connect 扫描 PT-Pad 确认广播内容")
@@ -650,7 +668,7 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
     func sendKey(_ keycode: UInt8, modifiers: UInt8 = 0,
                  label: String = "按键", reason: String = "按键未发送") {
         guard compositeDevice || bridgeMode else {
-            note("\(reason)：当前是纯鼠标模式，请到设置里开启「键鼠复合模式」或硬件桥")
+            note("\(reason)：当前是纯鼠标模式，请到设置里开启「键鼠复合模式」或桥接模式")
             return
         }
         guard bridgeMode || protocolMode != 0 else {
@@ -737,8 +755,8 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         let keyboardPending = mod != 0 || !keys.isEmpty || keyReleased
         guard force || x != 0 || y != 0 || w != 0 || keyboardPending else { return }
 
-        // 硬件桥模式：直接把 12 字节复合报告发给 ESP32，由它转发给主机。
-        // 布局与 ESP32 端 HID 描述符逐字节对应，App 这侧的手势 / 键盘逻辑完全不变。
+        // 桥接模式：直接把 12 字节复合报告发给桥接端（ESP32 或 Windows 电脑接收器）。
+        // 布局与 HIDSpec.compositeReportMap 逐字节对应，App 这侧的手势 / 键盘逻辑完全不变。
         if bridgeMode {
             let packet = HIDSpec.makeReport(buttons: buttonBits, x: x, y: y, wheel: w,
                                             composite: true, modifier: mod, keycodes: keys)
