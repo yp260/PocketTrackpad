@@ -123,8 +123,8 @@ open PocketTrackpad.xcodeproj
 1. iPhone 打开 App，点**右上角的小按钮「开始广播」**（左上角齿轮是设置）。
 2. iPad 打开 **设置 → 蓝牙**，保持蓝牙开启。
 3. 在「其他设备」里选择 **PT-Pad**，按提示完成配对。
-4. iPad 屏幕出现圆形指针即成功；iPhone 上的触控区会**自动切换成全屏**，顶部显示「已连接」。
-5. 想断开点顶部小按钮「停止广播」；首次配对若失败，在 iPad 上「忽略此设备」，App 里点「重新广播」后再试一次。
+4. iPad 屏幕出现圆形指针即成功；iPhone 上会**自动出现全屏触控区**，顶部显示「已连接」。
+5. 想断开点顶部小按钮「停止广播」；首次配对若失败，在 iPad 上「忽略此设备」，再点「开始广播」重新广播一次。
 6. 指针速度、滚动速度、自然滚动在**左上角齿轮 → 设置**里调，设置会自动保存。
 
 ### iPad 侧推荐设置
@@ -158,7 +158,7 @@ open PocketTrackpad.xcodeproj
 | --- | --- | --- |
 | 日志出现「HID 服务被系统拒绝」 | 当前 iOS 版本封堵了 128 位 UUID 绕过 | 改用现成 App 或 ESP32 硬件桥方案，见第八节 |
 | iPad 和电脑都搜不到 PT-Pad，但 App 显示广播正常 | v0.0.3 之前的 bug：广播里放了 128 位完整 UUID，被主机按「自定义未知服务」屏蔽 | 已改为 16 位广播 UUID，真机验证可用；若仍不显示，用 nRF Connect 扫描确认，见第十四节 |
-| iPad 蓝牙列表看不到 PT-Pad（偶发） | App 未前台 / 蓝牙未就绪 / 名称过长 | 点「重新广播」；保持前台；确认 iPhone 蓝牙已开启；设备名不要改长 |
+| iPad 蓝牙列表看不到 PT-Pad（偶发） | App 未前台 / 蓝牙未就绪 / 名称过长 | 点「停止广播」再点「开始广播」；保持前台；确认 iPhone 蓝牙已开启；设备名不要改长 |
 | iPad 上显示的设备名不是 PT-Pad，而是手机名或别的名字 | iPad 显示的是整机 GAP Device Name，不是广播名，App 无法修改 | 在 iPad 蓝牙设置里重命名，或改 iPhone 名称后忽略此设备重新配对，见第十六节 |
 | 能配对，但 iPad 不出现指针 | HID 配置未通过 iOS 归类审查 | 把 `HIDSpec.useReportID` 改为 `true` 重新编译配对；确认 Report Map 是纯鼠标；检查 2908 Report Reference |
 | 指针能动，点击无效 | iPadOS 对非标准 HID 的按键映射 | 打开辅助触控；检查 `辅助点按` 设置；在 App 日志确认 Report 已被订阅 |
@@ -632,7 +632,7 @@ App Store 上的 Bluetouch 宣称「对端无需装软件、纯蓝牙直连」�
 | --- | --- |
 | 指针速度、滚动速度移入设置子页面 | 主页面不再出现滑杆；左上角齿轮进入 `SettingsView`（`Form` 分页：指针 / 滚动 / 按键 / 关于）。自然滚动开关一并移入 |
 | 设置能记住 | 三项参数加 `UserDefaults` 持久化，`didSet` 写盘，重开 App 不用重调 |
-| 连接后触控区全屏 | 以 `hid.subscribers > 0` 判定连接；切换后隐藏状态卡片、日志、诊断与提示，`TrackpadSurface(edgeToEdge: true)` 用 `maxHeight: .infinity` 吃掉顶部栏与底部按键条之间的全部空间，并忽略左右安全区 |
+| 连接后触控区全屏 | 以 `hid.subscribers > 0` 判定连接；未连接时引导页不显示触控区，连接后才出现 `TrackpadSurface(edgeToEdge: true)`，用 `maxHeight: .infinity` 吃掉顶部栏与底部按键条之间的全部空间，并忽略左右安全区；连接后同时隐藏状态卡片、日志、诊断与提示 |
 | 全屏样式 | `TrackpadSurface` 新增 `edgeToEdge` 参数：圆角 22 → 0、边框 1 → 0、灰底 → 系统背景色，避免边缘留白 |
 | 停止广播放在顶部且变小 | 移到导航栏右侧，`.font(.caption2)` + `.buttonStyle(.bordered)` + `.controlSize(.mini)`；文案随状态在「开始广播 / 停止广播」间切换，左侧显示绿色小圆点与「已连接」 |
 | 三个键固定在最下面 | `ButtonBar` 放在外层 `VStack` 最后一个元素，不随引导页 `ScrollView` 滚动，连接前后位置不变；底部背景延伸到 home indicator 安全区 |
@@ -695,7 +695,41 @@ Apple 开发者论坛（thread 72343）的官方回复：当外设同时有这�
 | 文件 | 改动 |
 | --- | --- |
 | `HIDPeripheral.swift` | 新增 `systemDeviceName`（`UIDevice.current.name`）供界面显示；广播时写两行日志，明确区分「广播 Local Name = PT-Pad」与「iPad 实际显示的整机 GAP 名称 = …」，名称不是 PT-Pad 时给出改名提示 |
-| `ContentView.swift` | 设置 → 关于 里新增「系统设备名」一行，页脚写清两条改名路径 |
+| `ContentView.swift` | 设置 → 关于 里新增「系统设备名」一行，页脚写清两条改名路径（后续已改为不回显整机名，见第十七节） |
 | `README.md` | 本节 |
 
 如果不想为了看这段说明而重新签名安装，**不装这一版也完全可以改名**——直接在 iPad 的蓝牙设置里重命名即可，v0.0.4 的功能不受影响。
+
+---
+
+## 十七、设置页不再回显整机名
+
+反馈：设置 → 关于 里的「系统设备名」仍显示 `Xiaomi Smart Band 9Pro 44AE`。该值来自
+`UIDevice.current.name`（只读），App 无权改写；把它显示在界面里既不能改变 iPad 上的名字，
+也容易被误认为是可修改的名称设置项。因此本次改为不再回显，并把改名步骤直接写进页脚：
+
+| 文件 | 改动 |
+| --- | --- |
+| `HIDPeripheral.swift` | 移除 `systemDeviceName` 属性；广播日志改为固定说明，不再打印整机名 |
+| `ContentView.swift` | 关于段改为「iPad 显示名称 / 跟随 iPhone 整机名」；页脚写清路径 A、B 的完整操作与「改完不要再忽略此设备」的注意事项 |
+| `preview/ui-preview.html` | 界面预览同步，右侧元素清单第 15 项同步 |
+| `preview/shot-3-settings.png` | 设置页静态截图重新生成 |
+| `README.md` | 本节 |
+
+蓝牙链路一行未动：仍是 HID / Device Information / Battery 三个服务、16 位广播 UUID、
+相对鼠标报告与 Boot Mouse 报告。**真机上让 iPad 显示 `PT-Pad` 依旧按第十六节路径 A 或 B
+操作，不需要重装 App，也不需要新 IPA。**
+
+---
+
+## 十八、引导页精简与参数入口（本轮界面微调）
+
+| 调整 | 改动 |
+| --- | --- |
+| 删除「重新广播」按钮 | 顶部「开始广播／停止广播」已能完成同样的停止再启动，状态卡片里不再重复放一个按钮 |
+| 未连接时不再显示缩小版触控区 | 删掉 `setupBody` 里的 `TrackpadSurface()`（原 240pt 高的灰底圆角区域）。未连接时发出的位移没有主机接收，留着只会误导；连接成功后才出现全屏触控区 |
+| 引导页增加指针速度 / 滚动速度 | 用一张「指针与滚动」卡片填补删除触控区后的留白；两个滑块绑定同一个 `HIDPeripheral`，与设置子页面共用 `UserDefaults` 持久化。**设置子页面的同名控件保留**：连接后引导页会被全屏触控区替换，届时只能从设置页调整 |
+
+状态卡片的两行引导文案也随之调整口径：连接成功后是「出现」全屏触控区，而不是「切换」。
+两处都只改 `ContentView.swift` 的界面结构，**蓝牙链路、报告逻辑、广播 UUID 一行未动**；
+界面预览 `preview/ui-preview.html` 与静态截图同步更新。

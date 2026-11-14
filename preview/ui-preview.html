@@ -1,0 +1,760 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PocketTrackpad 界面预览</title>
+<style>
+:root {
+  --page:#eef0f4; --panel:#ffffff; --panel-border:#dfe2e8; --panel-text:#1c1e24;
+  --panel-sub:#6b7280; --code-bg:#f4f6f9; --chip:#ffffff; --accent:#007aff;
+  --ios-bg:#f2f2f7; --ios-nav:rgba(249,249,249,.94); --ios-card:#ffffff;
+  --ios-text:#000000; --ios-2:rgba(60,60,67,.60); --ios-3:rgba(60,60,67,.30);
+  --ios-sep:rgba(60,60,67,.16); --ios-btn:#ffffff; --ios-btn-border:rgba(60,60,67,.10);
+  --ios-orange:#ff9f0a; --ios-green:#34c759; --ios-gray:#8e8e93; --shadow:rgba(20,25,40,.16);
+}
+body.dark {
+  --page:#14161a; --panel:#1e2026; --panel-border:#34373f; --panel-text:#f2f3f6;
+  --panel-sub:#a2a8b4; --code-bg:#262931; --chip:#272a31; --accent:#0a84ff;
+  --ios-bg:#000000; --ios-nav:rgba(28,28,30,.94); --ios-card:#1c1c1e;
+  --ios-text:#ffffff; --ios-2:rgba(235,235,245,.60); --ios-3:rgba(235,235,245,.30);
+  --ios-sep:rgba(84,84,88,.60); --ios-btn:#2c2c2e; --ios-btn-border:rgba(235,235,245,.10);
+  --shadow:rgba(0,0,0,.55);
+}
+* { box-sizing:border-box; }
+html,body { margin:0; padding:0; }
+body {
+  background:var(--page); color:var(--panel-text);
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","Microsoft YaHei",sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+.page { max-width:1240px; margin:0 auto; padding:26px 24px 56px; }
+h1 { font-size:21px; margin:0 0 6px; letter-spacing:.2px; }
+.lead { font-size:13px; color:var(--panel-sub); line-height:1.7; margin:0 0 20px; }
+.lead b { color:var(--panel-text); font-weight:600; }
+.stage { display:flex; gap:30px; align-items:flex-start; flex-wrap:wrap; }
+.left { flex:0 0 auto; }
+.right { flex:1 1 420px; min-width:340px; }
+
+/* ---------- 控制台 ---------- */
+.console {
+  background:var(--panel); border:1px solid var(--panel-border); border-radius:14px;
+  padding:14px 16px; margin-bottom:16px; width:412px;
+}
+.console h2 { font-size:12px; margin:0 0 10px; color:var(--panel-sub); font-weight:600; letter-spacing:.4px; }
+.chips { display:flex; gap:7px; flex-wrap:wrap; margin-bottom:12px; }
+.chip {
+  font:inherit; font-size:12px; padding:7px 11px; border-radius:8px; cursor:pointer;
+  border:1px solid var(--panel-border); background:var(--chip); color:var(--panel-text);
+  transition:.15s;
+}
+.chip:hover { border-color:var(--accent); }
+.chip.active { background:var(--accent); border-color:var(--accent); color:#fff; }
+.opts { display:flex; gap:16px; align-items:center; flex-wrap:wrap; font-size:12px; color:var(--panel-sub); }
+.opt { display:flex; gap:6px; align-items:center; cursor:pointer; user-select:none; }
+.opt input { accent-color:var(--accent); margin:0; cursor:pointer; }
+.mini-btn {
+  font:inherit; font-size:11px; padding:5px 9px; border-radius:7px; cursor:pointer;
+  border:1px solid var(--panel-border); background:var(--code-bg); color:var(--panel-text);
+}
+.mini-btn:hover { border-color:var(--accent); }
+
+/* ---------- 手机外框 ---------- */
+.phone {
+  width:412px; height:872px; padding:11px; border-radius:56px;
+  background:linear-gradient(150deg,#5b5e66,#23252b 38%,#54575f 72%,#1c1e22);
+  box-shadow:0 24px 60px var(--shadow), inset 0 0 0 1px rgba(255,255,255,.16);
+}
+.screen {
+  position:relative; width:100%; height:100%; border-radius:46px; overflow:hidden;
+  background:var(--ios-bg); color:var(--ios-text);
+  display:flex; flex-direction:column;
+}
+.statusbar { height:54px; flex:0 0 54px; position:relative; font-size:14px; font-weight:600; }
+.statusbar .time { position:absolute; left:31px; top:16px; letter-spacing:.2px; }
+.statusbar .icons { position:absolute; right:25px; top:17px; display:flex; align-items:center; gap:5px; }
+.island {
+  position:absolute; left:50%; transform:translateX(-50%); top:11px;
+  width:118px; height:33px; border-radius:20px; background:#000;
+}
+.navbar {
+  height:44px; flex:0 0 44px; background:var(--ios-nav);
+  border-bottom:.5px solid var(--ios-sep); position:relative;
+  display:flex; align-items:center; justify-content:space-between; padding:0 12px;
+  backdrop-filter:blur(12px);
+}
+.nav-title {
+  position:absolute; left:0; right:0; text-align:center; font-size:16px; font-weight:600;
+  pointer-events:none;
+}
+.nav-left,.nav-right { display:flex; align-items:center; gap:6px; z-index:1; }
+.nav-btn {
+  font:inherit; color:var(--accent); background:transparent; border:0; cursor:pointer;
+  font-size:13px; padding:4px 2px; display:flex; align-items:center; gap:3px;
+}
+.nav-btn.border {
+  border:.5px solid var(--ios-sep); border-radius:6px; padding:3px 7px;
+  font-size:11px; background:var(--ios-card);
+}
+.nav-btn:active { opacity:.55; }
+.dotgreen { width:6px; height:6px; border-radius:50%; background:var(--ios-green); }
+.nav-sub { font-size:10px; color:var(--ios-2); }
+.content { flex:1 1 auto; min-height:0; overflow:hidden; position:relative; }
+.scroll { height:100%; overflow-y:auto; -webkit-overflow-scrolling:touch; }
+.scroll::-webkit-scrollbar { width:0; }
+
+/* ---------- 引导页 ---------- */
+.setup { padding:16px; }
+.card {
+  background:var(--ios-card); border-radius:14px; padding:14px; margin-bottom:14px;
+}
+.diag { background:rgba(255,159,10,.14); border-radius:12px; padding:12px; margin-bottom:14px; }
+.diag b { font-size:12px; }
+.diag code { display:block; font-size:11px; margin:6px 0; font-family:ui-monospace,Menlo,Consolas,monospace; }
+.status-row { display:flex; align-items:center; gap:8px; }
+.status-dot { width:9px; height:9px; border-radius:50%; background:var(--ios-gray); }
+.status-dot.on { background:var(--ios-orange); }
+.status-title { font-size:15px; font-weight:600; }
+.spacer { flex:1; }
+.sub { font-size:12px; color:var(--ios-2); line-height:1.55; }
+.sub3 { font-size:11px; color:var(--ios-3); line-height:1.55; }
+.card .sub { margin-top:9px; }
+.card .sub3 { margin-top:5px; }
+.pad-full { position:relative; width:100%; height:100%; background:var(--ios-card); overflow:hidden; }
+.pad-hint {
+  position:absolute; left:16px; right:16px; top:50%; transform:translateY(-50%);
+  text-align:center; font-size:13px; line-height:1.8; color:var(--ios-2); pointer-events:none;
+}
+.pad-dot {
+  position:absolute; width:12px; height:12px; border-radius:50%;
+  background:var(--accent); opacity:.85; left:50%; top:50%; margin:-6px 0 0 -6px;
+  pointer-events:none; box-shadow:0 0 0 5px rgba(0,122,255,.14);
+}
+.pad-badge {
+  position:absolute; top:12px; left:50%; transform:translateX(-50%);
+  font-size:11px; color:var(--ios-2); background:var(--ios-bg);
+  border:.5px solid var(--ios-sep); border-radius:20px; padding:4px 10px; pointer-events:none;
+}
+.logbox { height:108px; overflow-y:auto; font-family:ui-monospace,Menlo,Consolas,monospace; font-size:10px; color:var(--ios-2); line-height:1.7; }
+.logbox::-webkit-scrollbar { width:0; }
+.logbox div { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.footnote { font-size:11px; color:var(--ios-3); line-height:1.6; }
+
+/* ---------- 设置页 ---------- */
+.form { padding:0 0 64px; }
+.sec-head { font-size:12px; color:var(--ios-2); padding:18px 30px 7px; text-transform:none; }
+.group { background:var(--ios-card); margin:0 16px; border-radius:10px; overflow:hidden; }
+.form-row { padding:11px 16px; border-bottom:.5px solid var(--ios-sep); font-size:15px; }
+.group .form-row:last-child { border-bottom:0; }
+.form-row.line { display:flex; align-items:center; gap:10px; }
+.form-row .detail { font-size:12px; color:var(--ios-2); text-align:right; }
+.form-row.cap { font-size:12px; color:var(--ios-2); line-height:1.6; background:transparent; padding-top:7px; }
+.slider-label { display:flex; align-items:center; font-size:15px; }
+.slider-val { color:var(--ios-2); font-variant-numeric:tabular-nums; font-family:ui-monospace,Menlo,monospace; font-size:14px; }
+input[type=range] { width:100%; accent-color:var(--accent); margin:10px 0 2px; cursor:pointer; }
+.toggle {
+  width:50px; height:30px; border-radius:16px; background:#e5e5ea; position:relative;
+  cursor:pointer; transition:.2s; flex:0 0 auto; border:0; padding:0;
+}
+.toggle.on { background:var(--ios-green); }
+.toggle::after {
+  content:""; position:absolute; width:26px; height:26px; border-radius:50%; background:#fff;
+  top:2px; left:2px; box-shadow:0 1px 3px rgba(0,0,0,.22); transition:.2s;
+}
+.toggle.on::after { left:22px; }
+.form-footer { font-size:12px; color:var(--ios-2); line-height:1.7; padding:8px 30px 0; }
+
+/* ---------- 底部按键条 ---------- */
+.buttonbar {
+  flex:0 0 auto; display:flex; gap:10px; padding:8px 12px 26px; height:92px;
+  background:var(--ios-bg); border-top:.5px solid var(--ios-sep);
+}
+.key {
+  flex:1; border-radius:12px; border:.5px solid var(--ios-btn-border);
+  background:var(--ios-btn); color:var(--ios-text); font:inherit;
+  font-size:15px; font-weight:500; cursor:pointer; touch-action:none;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px;
+  transition:background .1s,color .1s; user-select:none;
+}
+.key small { font-size:9px; color:var(--ios-2); font-weight:400; white-space:nowrap; }
+.key.is-down { background:var(--accent); color:#fff; }
+.key.is-down small { color:rgba(255,255,255,.85); }
+.homebar {
+  position:absolute; bottom:8px; left:50%; transform:translateX(-50%);
+  width:134px; height:5px; border-radius:3px; background:var(--ios-text); opacity:.85; pointer-events:none;
+}
+
+/* ---------- 标注 ---------- */
+body.annotate [data-code] { outline:1px dashed var(--accent); outline-offset:1px; cursor:crosshair; }
+body.annotate [data-code]:hover { background:rgba(0,122,255,.10); }
+.annot-tip {
+  font-size:12px; color:var(--panel-text); background:var(--code-bg);
+  border:1px solid var(--panel-border); border-radius:9px; padding:9px 11px; margin-bottom:14px;
+  line-height:1.6; min-height:38px;
+}
+.annot-tip code { font-family:ui-monospace,Menlo,Consolas,monospace; font-size:11px; }
+
+/* ---------- 右侧面板 ---------- */
+.panel {
+  background:var(--panel); border:1px solid var(--panel-border); border-radius:14px;
+  padding:16px 18px; margin-bottom:16px;
+}
+.panel h2 { font-size:13px; margin:0 0 12px; font-weight:600; }
+.kv { display:grid; grid-template-columns:112px 1fr; gap:7px 10px; font-size:12px; line-height:1.5; }
+.kv .k { color:var(--panel-sub); }
+.kv .v { font-family:ui-monospace,Menlo,Consolas,monospace; overflow-wrap:anywhere; }
+table { width:100%; border-collapse:collapse; font-size:12px; }
+th,td { text-align:left; padding:8px 7px; border-bottom:1px solid var(--panel-border); vertical-align:top; line-height:1.5; }
+th { color:var(--panel-sub); font-weight:600; font-size:11px; }
+td:first-child { color:var(--accent); font-family:ui-monospace,Menlo,monospace; width:30px; }
+td:last-child { font-family:ui-monospace,Menlo,Consolas,monospace; font-size:10.5px; color:var(--panel-sub); white-space:nowrap; }
+tr:last-child td { border-bottom:0; }
+#eventLog { font-family:ui-monospace,Menlo,Consolas,monospace; font-size:11px; line-height:1.8; max-height:190px; overflow-y:auto; }
+#eventLog div { border-bottom:1px dashed var(--panel-border); padding:2px 0; }
+#eventLog .t { color:var(--panel-sub); }
+.note { font-size:11.5px; color:var(--panel-sub); line-height:1.75; }
+.note b { color:var(--panel-text); }
+
+/* ---------- 单屏截图模式（?shot=1） ---------- */
+body.shot .page { max-width:none; padding:0; }
+body.shot h1, body.shot .lead, body.shot .console,
+body.shot .annot-tip, body.shot .right { display:none; }
+body.shot .stage { display:block; }
+body.shot .phone { margin:0; }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>PocketTrackpad 界面预览</h1>
+  <p class="lead">
+    按 <b>ContentView.swift / TrackpadSurface.swift</b> 当前代码 1:1 近似还原，<b>不是 Xcode 渲染截图</b>，仅用于看布局和讨论修改。
+    四种状态可切换，滑块、开关、三个按键、触控区都能操作。打开「元素标注」后点手机里的任意元素，会显示它对应的代码行，你可以直接说「把第 N 项改成…」。
+  </p>
+
+  <div class="stage">
+    <div class="left">
+      <div class="console">
+        <h2>状态切换</h2>
+        <div class="chips" id="chips">
+          <button class="chip" data-screen="setup">未启动</button>
+          <button class="chip" data-screen="adv">广播中待配对</button>
+          <button class="chip" data-screen="connected">已连接 · 全屏</button>
+          <button class="chip" data-screen="settings">设置子页面</button>
+        </div>
+        <div class="opts">
+          <label class="opt"><input type="checkbox" id="optDark"> 深色外观</label>
+          <label class="opt"><input type="checkbox" id="optAnnot"> 元素标注</label>
+          <label class="opt"><input type="checkbox" id="optDiag"> 诊断卡片</label>
+          <button class="mini-btn" id="btnPair">模拟 iPad 连接／断开</button>
+        </div>
+      </div>
+
+      <div class="annot-tip" id="annotTip">元素标注关闭。打开后点击手机内元素可查看对应 SwiftUI 代码位置。</div>
+
+      <div class="phone">
+        <div class="screen" id="screen">
+          <div class="statusbar">
+            <div class="island"></div>
+            <div class="time">9:41</div>
+            <div class="icons">
+              <svg width="17" height="12" viewBox="0 0 17 12" fill="currentColor"><rect x="0" y="8" width="3" height="4" rx="1"/><rect x="4.5" y="6" width="3" height="6" rx="1"/><rect x="9" y="3.5" width="3" height="8.5" rx="1"/><rect x="13.5" y="1" width="3" height="11" rx="1"/></svg>
+              <svg width="16" height="12" viewBox="0 0 16 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1 4.2a10.5 10.5 0 0 1 14 0"/><path d="M3.6 6.9a6.8 6.8 0 0 1 8.8 0"/><path d="M6.2 9.5a3 3 0 0 1 3.6 0"/><circle cx="8" cy="11" r=".8" fill="currentColor" stroke="none"/></svg>
+              <svg width="25" height="12" viewBox="0 0 25 12" fill="none"><rect x=".6" y=".6" width="20" height="10.8" rx="3" stroke="currentColor" stroke-width="1.1" opacity=".45"/><rect x="2.2" y="2.2" width="15" height="7.6" rx="1.8" fill="currentColor"/><path d="M22.4 4.2v3.6a2 2 0 0 0 0-3.6z" fill="currentColor" opacity=".45"/></svg>
+            </div>
+          </div>
+          <div class="navbar" id="navbar"></div>
+          <div class="content" id="content"></div>
+          <div class="buttonbar" id="buttonbar"></div>
+          <div class="homebar"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="right">
+      <div class="panel">
+        <h2>当前状态（与界面联动）</h2>
+        <div class="kv" id="stateKV"></div>
+        <div style="margin-top:12px"><button class="mini-btn" id="btnReset">重置预览状态</button></div>
+      </div>
+
+      <div class="panel">
+        <h2>界面元素清单 · 说序号即可改</h2>
+        <table>
+          <thead><tr><th>#</th><th>位置 / 当前内容</th><th>代码位置</th></tr></thead>
+          <tbody>
+            <tr><td>1</td><td>顶部标题：未连接「口袋触控板」／已连接「PT-Pad」</td><td>ContentView.swift:26</td></tr>
+            <tr><td>2</td><td>左上角设置齿轮</td><td>ContentView.swift:29-38</td></tr>
+            <tr><td>3</td><td>连接状态：绿点 +「已连接」</td><td>ContentView.swift:40-47</td></tr>
+            <tr><td>4</td><td>右上角「开始广播／停止广播」小按钮</td><td>ContentView.swift:48-56</td></tr>
+            <tr><td>5</td><td>状态卡片：状态文字、订阅数、两行引导（已删「重新广播」按钮）</td><td>ContentView.swift:88-109</td></tr>
+            <tr><td>6</td><td>引导页「指针与滚动」卡片：指针速度 / 滚动速度（连接前可调）</td><td>ContentView.swift:111-140</td></tr>
+            <tr><td>7</td><td>触控区中央提示：单指移动 · 轻点左键 · 双击左键 · 双指滚动 · 长按右键</td><td>TrackpadSurface.swift:60-67</td></tr>
+            <tr><td>8</td><td>连接日志卡片（108pt，等宽字体）</td><td>ContentView.swift:143-161</td></tr>
+            <tr><td>9</td><td>底部按键条高度 58pt、三键等宽、间距 10pt</td><td>ContentView.swift:257-274</td></tr>
+            <tr><td>10</td><td>左键／右键：按住变蓝，松手复原</td><td>ContentView.swift:277-306</td></tr>
+            <tr><td>11</td><td>滚轮键：上下拖动滚动、双击按下中键、单击无动作</td><td>ContentView.swift:310-381</td></tr>
+            <tr><td>12</td><td>设置：指针速度 0.4~3.5，默认 1.4×（连接后从这里调）</td><td>ContentView.swift:182-196</td></tr>
+            <tr><td>13</td><td>设置：滚动速度 0.3~3.0，默认 1.0× / 自然滚动开关（默认开，连接后从这里调）</td><td>ContentView.swift:198-213</td></tr>
+            <tr><td>14</td><td>设置：按键说明三行</td><td>ContentView.swift:215-219</td></tr>
+            <tr><td>15</td><td>设置：关于四行（不再回显整机名）+ 底部三步改名说明</td><td>ContentView.swift:221-231</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="panel">
+        <h2>操作事件记录（模拟，不发送蓝牙数据）</h2>
+        <div id="eventLog"><div>暂无操作。</div></div>
+      </div>
+
+      <div class="panel note">
+        <b>说明</b>：预览用 HTML/CSS 近似 iOS 系统控件，字体、间距、圆角与真机可能有数像素差异；
+        双指滚动无法用鼠标模拟，已在触控区提示中标注。这里改的是预览文件，<b>不会改动 App 代码</b>，
+        也不会触发打包。确认要改界面后，我改 Swift 源码并提交，push 后 GitHub Actions 才会出新 IPA。
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var DEFAULTS = {
+    screen: "setup", prevScreen: "setup", advertising: false, connected: false,
+    subscribers: 0, statusText: "尚未启动",
+    sensitivity: 1.4, scrollSensitivity: 1.0, naturalScrolling: true,
+    displayName: "跟随 iPhone 整机名",
+    showDiag: false, annotate: false, dark: false
+  };
+  var s = Object.assign({}, DEFAULTS);
+  // 支持 ?state=adv|connected|settings|setup 与 ?dark=1，便于直接打开某个状态的静态预览
+  (function initFromURL() {
+    var q = new URLSearchParams(location.search);
+    if (q.get("shot") === "1") document.body.classList.add("shot");
+    var v = q.get("state");
+    if (v === "adv") { s.advertising = true; s.statusText = "等待 iPad 配对"; }
+    else if (v === "connected") {
+      s.screen = "connected"; s.connected = true; s.advertising = true;
+      s.subscribers = 1; s.statusText = "已连接 · 可以移动指针";
+    } else if (v === "settings") { s.screen = "settings"; s.prevScreen = "setup"; }
+    if (q.get("dark") === "1") {
+      s.dark = true;
+      document.body.classList.add("dark");
+      document.getElementById("optDark").checked = true;
+    }
+  })();
+  var events = [];
+  var drag = null;
+  var lastTap = 0;
+  var longTimer = null;
+
+  var screen = document.getElementById("screen");
+  var navbar = document.getElementById("navbar");
+  var content = document.getElementById("content");
+  var buttonbar = document.getElementById("buttonbar");
+  var annotTip = document.getElementById("annotTip");
+
+  function esc(t) {
+    return String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+  function stamp() {
+    var d = new Date();
+    return ("0" + d.getHours()).slice(-2) + ":" + ("0" + d.getMinutes()).slice(-2) + ":" + ("0" + d.getSeconds()).slice(-2);
+  }
+  function log(text) {
+    events.unshift({ t: stamp(), text: text });
+    if (events.length > 14) events.pop();
+    var box = document.getElementById("eventLog");
+    box.innerHTML = events.map(function (e) {
+      return "<div><span class=\"t\">" + e.t + "</span>  " + esc(e.text) + "</div>";
+    }).join("");
+  }
+
+  /* ---------- 片段 ---------- */
+  function gearSVG() {
+    return "<svg viewBox=\"0 0 24 24\" width=\"15\" height=\"15\" fill=\"currentColor\">" +
+      "<path d=\"M19.14 12.94a7.1 7.1 0 0 0 .05-.94 7.1 7.1 0 0 0-.05-.94l2.03-1.58a.5.5 0 0 0 .12-.61l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7.3 7.3 0 0 0-1.62-.94l-.36-2.54a.5.5 0 0 0-.5-.42h-3.84a.5.5 0 0 0-.5.42l-.36 2.54a7.3 7.3 0 0 0-1.62.94l-2.39-.96a.5.5 0 0 0-.6.22L2.74 8.87a.5.5 0 0 0 .12.61l2.03 1.58a7.1 7.1 0 0 0 0 1.88l-2.03 1.58a.5.5 0 0 0-.12.61l1.92 3.32a.5.5 0 0 0 .6.22l2.39-.96c.5.4 1.04.72 1.62.94l.36 2.54a.5.5 0 0 0 .5.42h3.84a.5.5 0 0 0 .5-.42l.36-2.54a7.3 7.3 0 0 0 1.62-.94l2.39.96a.5.5 0 0 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.61l-2.03-1.58zM12 15.6a3.6 3.6 0 1 1 0-7.2 3.6 3.6 0 0 1 0 7.2z\"/>" +
+      "</svg>";
+  }
+
+  function navHTML() {
+    var isSettings = s.screen === "settings";
+    var conn = s.connected;
+    var left = isSettings
+      ? "<button class=\"nav-btn\" data-act=\"back\" data-code=\"ContentView.swift:58-60\">‹ 返回</button>"
+      : "<button class=\"nav-btn\" data-act=\"settings\" data-code=\"ContentView.swift:29-38\" aria-label=\"设置\">" + gearSVG() + "</button>";
+    var right = "";
+    if (!isSettings) {
+      right = (conn ? "<span class=\"dotgreen\" data-code=\"ContentView.swift:40-47\"></span><span class=\"nav-sub\" data-code=\"ContentView.swift:40-47\">已连接</span>" : "") +
+        "<button class=\"nav-btn border\" data-act=\"advertise\" data-code=\"ContentView.swift:48-56\">" +
+        (s.advertising ? "停止广播" : "开始广播") + "</button>";
+    }
+    var title = isSettings ? "设置" : (conn ? "PT-Pad" : "口袋触控板");
+    return "<div class=\"nav-left\">" + left + "</div>" +
+      "<div class=\"nav-title\" data-code=\"ContentView.swift:26\">" + title + "</div>" +
+      "<div class=\"nav-right\">" + right + "</div>";
+  }
+
+  function padHint() {
+    return "单指移动指针  ·  轻点左键  ·  双击左键<br>双指滚动  ·  长按右键";
+  }
+  function padInner(cls) {
+    return "<div class=\"" + cls + "\" data-act=\"pad\" data-code=\"TrackpadSurface.swift:60-67\">" +
+      "<div class=\"pad-hint\">" + padHint() + "</div>" +
+      "<div class=\"pad-badge\" style=\"opacity:0\"></div>" +
+      "<div class=\"pad-dot\" style=\"opacity:0\"></div></div>";
+  }
+
+  function setupHTML() {
+    var diag = s.showDiag
+      ? "<div class=\"diag\" data-code=\"ContentView.swift:71-85\"><b>上次运行记录</b><code>7 运行中（广播正常）</code><div class=\"sub3\">若每次都停在同一步，把这段文字发回即可定位。</div></div>"
+      : "";
+    var logs = [
+      "16:02:11  已创建 CBPeripheralManager",
+      "16:02:11  服务 1812 注册成功",
+      "16:02:11  服务 180A 注册成功",
+      "16:02:11  服务 180F 注册成功",
+      "16:02:11  广播 16 位 SIG UUID：1812 / 180F / 180A",
+      "16:02:11  广播 Local Name = PT-Pad；iPad 实际显示整机 GAP 名称",
+      "16:02:12  请在 iPad：设置 > 蓝牙 > 其他设备 > 选择 PT-Pad"
+    ];
+    if (!s.advertising) logs = ["--  尚未开始广播，点右上角「开始广播」启动蓝牙  --"];
+    return "<div class=\"scroll\"><div class=\"setup\">" + diag +
+      "<div class=\"card\" data-code=\"ContentView.swift:88-109\">" +
+        "<div class=\"status-row\"><span class=\"status-dot" + (s.advertising ? " on" : "") + "\"></span>" +
+        "<span class=\"status-title\">" + esc(s.statusText) + "</span><span class=\"spacer\"></span>" +
+        "<span class=\"sub\">订阅 " + s.subscribers + "</span></div>" +
+        "<div class=\"sub\">iPad 上打开 设置 &gt; 蓝牙，在「其他设备」里选择 PT-Pad 完成配对。</div>" +
+        "<div class=\"sub3\">用右上角的「开始广播」启动蓝牙；连接成功后会自动出现全屏触控区。</div>" +
+      "</div>" +
+      "<div class=\"card\" data-code=\"ContentView.swift:111-140\">" +
+        "<div class=\"sub\" style=\"font-weight:600;margin:0 0 6px\">指针与滚动</div>" +
+        "<div class=\"slider-label\"><span>指针速度</span><span class=\"spacer\"></span><span class=\"slider-val\" id=\"valSens\">" + s.sensitivity.toFixed(1) + "×</span></div>" +
+        "<input type=\"range\" id=\"sens\" min=\"0.4\" max=\"3.5\" step=\"0.1\" value=\"" + s.sensitivity + "\">" +
+        "<div class=\"slider-label\" style=\"margin-top:8px\"><span>滚动速度</span><span class=\"spacer\"></span><span class=\"slider-val\" id=\"valScroll\">" + s.scrollSensitivity.toFixed(1) + "×</span></div>" +
+        "<input type=\"range\" id=\"scroll\" min=\"0.3\" max=\"3.0\" step=\"0.1\" value=\"" + s.scrollSensitivity + "\">" +
+      "</div>" +
+      "<div class=\"card\" data-code=\"ContentView.swift:143-161\">" +
+        "<div class=\"sub\" style=\"font-weight:600;margin:0 0 6px\">连接日志</div>" +
+        "<div class=\"logbox\">" + logs.map(function (l) { return "<div>" + esc(l) + "</div>"; }).join("") + "</div>" +
+      "</div>" +
+      "<div class=\"footnote\" data-code=\"ContentView.swift:163-166\">请保持本 App 在前台、屏幕常亮。锁屏或切到后台后 iOS 会停止 BLE 广播。</div>" +
+      "</div></div>";
+  }
+
+  function connectedHTML() {
+    return "<div style=\"height:100%;width:100%\">" + padInner("pad-full") + "</div>";
+  }
+
+  function settingsHTML() {
+    return "<div class=\"scroll\"><div class=\"form\">" +
+      "<div class=\"sec-head\" data-code=\"ContentView.swift:182\">指针</div>" +
+      "<div class=\"group\">" +
+        "<div class=\"form-row\" data-code=\"ContentView.swift:183-191\">" +
+          "<div class=\"slider-label\"><span>指针速度</span><span class=\"spacer\"></span><span class=\"slider-val\" id=\"valSens\">" + s.sensitivity.toFixed(1) + "×</span></div>" +
+          "<input type=\"range\" id=\"sens\" min=\"0.4\" max=\"3.5\" step=\"0.1\" value=\"" + s.sensitivity + "\">" +
+        "</div>" +
+        "<div class=\"form-row cap\" data-code=\"ContentView.swift:193-195\">单指拖动换算成指针位移的倍率。</div>" +
+      "</div>" +
+      "<div class=\"sec-head\" data-code=\"ContentView.swift:198\">滚动</div>" +
+      "<div class=\"group\">" +
+        "<div class=\"form-row\" data-code=\"ContentView.swift:199-207\">" +
+          "<div class=\"slider-label\"><span>滚动速度</span><span class=\"spacer\"></span><span class=\"slider-val\" id=\"valScroll\">" + s.scrollSensitivity.toFixed(1) + "×</span></div>" +
+          "<input type=\"range\" id=\"scroll\" min=\"0.3\" max=\"3.0\" step=\"0.1\" value=\"" + s.scrollSensitivity + "\">" +
+        "</div>" +
+        "<div class=\"form-row line\" data-code=\"ContentView.swift:209\"><span>自然滚动</span><span class=\"spacer\"></span>" +
+          "<button class=\"toggle" + (s.naturalScrolling ? " on" : "") + "\" data-act=\"toggle\" aria-label=\"自然滚动\"></button></div>" +
+        "<div class=\"form-row cap\" data-code=\"ContentView.swift:210-212\">同时作用于双指滚动和底部滚轮键。设置会自动保存。</div>" +
+      "</div>" +
+      "<div class=\"sec-head\" data-code=\"ContentView.swift:215\">按键</div>" +
+      "<div class=\"group\" data-code=\"ContentView.swift:215-219\">" +
+        row("左键 / 右键", "按住 = 按下，松手 = 抬起") +
+        row("滚轮", "上下拖动 = 滚动，双击 = 按下滚轮键") +
+        row("触控区", "轻点左键 · 双击左键 · 长按右键") +
+      "</div>" +
+      "<div class=\"sec-head\" data-code=\"ContentView.swift:221\">关于</div>" +
+      "<div class=\"group\" data-code=\"ContentView.swift:221-226\">" +
+        row("广播名称", "PT-Pad") +
+        row("iPad 显示名称", s.displayName) +
+        row("连接方式", "蓝牙 HID over GATT") +
+        row("前台要求", "锁屏后 iOS 会停止广播") +
+      "</div>" +
+      "<div class=\"form-footer\" data-code=\"ContentView.swift:227-231\">iPad 蓝牙列表优先显示 iPhone 整机名（GAP Device Name），不是广播名称，App 无权改写。要显示 PT-Pad：① 在 iPad 设置 → 蓝牙 → 已连接设备旁的更多信息按钮 → 名称，改成 PT-Pad（改完不要再忽略此设备）；或 ② 把 iPhone 设置 → 通用 → 关于本机 → 名称 改成 PT-Pad，再到 iPad 蓝牙里「忽略此设备」后重新配对。两条路径都不需要重装 App。</div>" +
+      "</div></div>";
+  }
+  function row(t, d) {
+    return "<div class=\"form-row line\"><span>" + esc(t) + "</span><span class=\"spacer\"></span><span class=\"detail\">" + esc(d) + "</span></div>";
+  }
+
+  function buttonbarHTML() {
+    return "<button class=\"key\" data-act=\"hold\" data-label=\"左键\" data-code=\"ContentView.swift:277-306\">左键</button>" +
+      "<button class=\"key\" data-act=\"wheel\" data-code=\"ContentView.swift:310-381\">滚轮<small>拖动滚动 · 双击按下</small></button>" +
+      "<button class=\"key\" data-act=\"hold\" data-label=\"右键\" data-code=\"ContentView.swift:277-306\">右键</button>";
+  }
+
+  /* ---------- 渲染 ---------- */
+  function render() {
+    navbar.innerHTML = navHTML();
+    content.innerHTML = s.screen === "settings" ? settingsHTML() : (s.connected ? connectedHTML() : setupHTML());
+    buttonbar.innerHTML = buttonbarHTML();
+    buttonbar.style.display = s.screen === "settings" ? "none" : "flex";
+    var chips = document.querySelectorAll("#chips .chip");
+    for (var i = 0; i < chips.length; i++) {
+      var v = chips[i].getAttribute("data-screen");
+      var active = (v === s.screen) || (v === "adv" && s.screen === "setup" && s.advertising && !s.connected) ||
+        (v === "setup" && s.screen === "setup" && !s.advertising && !s.connected);
+      chips[i].className = "chip" + (active ? " active" : "");
+    }
+    document.getElementById("stateKV").innerHTML =
+      kv("当前页面", s.screen === "settings" ? "设置子页面" : (s.connected ? "已连接 · 全屏触控" : "引导页")) +
+      kv("广播", s.advertising ? "开启" : "关闭") +
+      kv("主机订阅", String(s.subscribers)) +
+      kv("状态文字", s.statusText) +
+      kv("指针速度", s.sensitivity.toFixed(1) + "×") +
+      kv("滚动速度", s.scrollSensitivity.toFixed(1) + "×") +
+      kv("自然滚动", s.naturalScrolling ? "开" : "关") +
+      kv("iPad 显示名称", s.displayName);
+  }
+  function kv(k, v) {
+    return "<div class=\"k\">" + esc(k) + "</div><div class=\"v\">" + esc(v) + "</div>";
+  }
+
+  /* ---------- 状态动作 ---------- */
+  function setScreen(name) {
+    if (name === "setup") {
+      s.screen = "setup"; s.connected = false; s.advertising = false; s.subscribers = 0; s.statusText = "尚未启动";
+    } else if (name === "adv") {
+      s.screen = "setup"; s.connected = false; s.advertising = true; s.subscribers = 0; s.statusText = "等待 iPad 配对";
+    } else if (name === "connected") {
+      s.screen = "connected"; s.connected = true; s.advertising = true; s.subscribers = 1; s.statusText = "已连接 · 可以移动指针";
+    } else if (name === "settings") {
+      s.prevScreen = s.connected ? "connected" : (s.advertising ? "adv" : "setup");
+      s.screen = "settings";
+    }
+    render();
+  }
+
+  function toggleAdvertise() {
+    s.advertising = !s.advertising;
+    if (s.advertising) {
+      s.statusText = s.connected ? "已连接 · 可以移动指针" : "等待 iPad 配对";
+      log("开始广播（16 位 SIG UUID 1812 / 180F / 180A）");
+    } else {
+      s.connected = false; s.subscribers = 0; s.statusText = "广播已停止";
+      if (s.screen === "connected") s.screen = "setup";
+      log("停止广播");
+    }
+    render();
+  }
+  function togglePair() {
+    if (s.connected) {
+      s.connected = false; s.subscribers = 0; s.statusText = s.advertising ? "等待 iPad 配对" : "广播已停止";
+      if (s.screen === "connected") s.screen = "setup";
+      log("模拟 iPad 断开连接");
+    } else {
+      s.connected = true; s.advertising = true; s.subscribers = 1;
+      s.statusText = "已连接 · 可以移动指针"; s.screen = "connected";
+      log("模拟 iPad 配对成功：触控区自动全屏");
+    }
+    render();
+  }
+
+  /* ---------- 事件：点击 ---------- */
+  document.getElementById("chips").addEventListener("click", function (e) {
+    var c = e.target.closest(".chip");
+    if (c) setScreen(c.getAttribute("data-screen"));
+  });
+  document.getElementById("btnPair").addEventListener("click", togglePair);
+  document.getElementById("btnReset").addEventListener("click", function () {
+    s = Object.assign({}, DEFAULTS); events = [];
+    document.getElementById("optDark").checked = false;
+    document.getElementById("optAnnot").checked = false;
+    document.getElementById("optDiag").checked = false;
+    document.body.className = "";
+    annotTip.textContent = "元素标注关闭。打开后点击手机内元素可查看对应 SwiftUI 代码位置。";
+    log("重置预览状态");
+    render();
+  });
+  document.getElementById("optDark").addEventListener("change", function (e) {
+    s.dark = e.target.checked; document.body.classList.toggle("dark", s.dark);
+  });
+  document.getElementById("optAnnot").addEventListener("change", function (e) {
+    s.annotate = e.target.checked; document.body.classList.toggle("annotate", s.annotate);
+    annotTip.textContent = s.annotate
+      ? "元素标注已开启：点击手机内任意带虚线框的元素，这里会显示对应的代码行。"
+      : "元素标注关闭。打开后点击手机内元素可查看对应 SwiftUI 代码位置。";
+  });
+  document.getElementById("optDiag").addEventListener("change", function (e) {
+    s.showDiag = e.target.checked; render();
+  });
+
+  // 标注模式：捕获阶段拦截，只显示代码位置，不触发控件原本的动作
+  screen.addEventListener("click", function (e) {
+    if (!s.annotate) return;
+    var el = e.target.closest("[data-code]");
+    if (!el) return;
+    e.preventDefault(); e.stopPropagation();
+    annotTip.innerHTML = "<code>" + esc(el.getAttribute("data-code")) + "</code><br>" +
+      esc((el.textContent || "").trim().replace(/\s+/g, " ").slice(0, 60) || "该元素");
+  }, true);
+
+  screen.addEventListener("click", function (e) {
+    var el = e.target.closest("[data-act]");
+    if (!el) return;
+    var act = el.getAttribute("data-act");
+    if (act === "settings") { setScreen("settings"); log("点齿轮进入设置子页面"); }
+    else if (act === "back") { setScreen(s.prevScreen); log("从设置返回 " + s.prevScreen); }
+    else if (act === "advertise") { toggleAdvertise(); }
+    else if (act === "toggle") {
+      s.naturalScrolling = !s.naturalScrolling;
+      el.classList.toggle("on", s.naturalScrolling);
+      log("自然滚动 → " + (s.naturalScrolling ? "开" : "关"));
+      render();
+    }
+  });
+
+  // 滑块：不重建 DOM，避免拖动被打断
+  screen.addEventListener("input", function (e) {
+    var id = e.target.id;
+    if (id === "sens") {
+      s.sensitivity = parseFloat(e.target.value);
+      document.getElementById("valSens").textContent = s.sensitivity.toFixed(1) + "×";
+      log("指针速度 → " + s.sensitivity.toFixed(1) + "×");
+    } else if (id === "scroll") {
+      s.scrollSensitivity = parseFloat(e.target.value);
+      document.getElementById("valScroll").textContent = s.scrollSensitivity.toFixed(1) + "×";
+      log("滚动速度 → " + s.scrollSensitivity.toFixed(1) + "×");
+    }
+    renderStateOnly();
+  });
+  function renderStateOnly() {
+    // 只重建键值区，滑块元素本身不重建，避免拖动被打断
+    var box = document.getElementById("stateKV");
+    box.innerHTML =
+      kv("当前页面", s.screen === "settings" ? "设置子页面" : (s.connected ? "已连接 · 全屏触控" : "引导页")) +
+      kv("广播", s.advertising ? "开启" : "关闭") +
+      kv("主机订阅", String(s.subscribers)) +
+      kv("状态文字", s.statusText) +
+      kv("指针速度", s.sensitivity.toFixed(1) + "×") +
+      kv("滚动速度", s.scrollSensitivity.toFixed(1) + "×") +
+      kv("自然滚动", s.naturalScrolling ? "开" : "关") +
+      kv("iPad 显示名称", s.displayName);
+  }
+
+  /* ---------- 事件：按下 / 拖动 / 抬起 ---------- */
+  screen.addEventListener("pointerdown", function (e) {
+    if (s.annotate) return;
+    var hold = e.target.closest('[data-act="hold"]');
+    var wheel = e.target.closest('[data-act="wheel"]');
+    var pad = e.target.closest('[data-act="pad"]');
+    if (hold) {
+      e.preventDefault();
+      hold.classList.add("is-down");
+      hold.setPointerCapture && hold.setPointerCapture(e.pointerId);
+      drag = { type: "hold", el: hold, label: hold.getAttribute("data-label") };
+      log("按住" + drag.label + "（按键按下）");
+    } else if (wheel) {
+      e.preventDefault();
+      wheel.classList.add("is-down");
+      wheel.setPointerCapture && wheel.setPointerCapture(e.pointerId);
+      drag = { type: "wheel", el: wheel, lastY: e.clientY, moved: false, total: 0 };
+    } else if (pad) {
+      e.preventDefault();
+      drag = { type: "pad", el: pad, x: e.clientX, y: e.clientY, dx: 0, dy: 0, moved: false };
+      var dot = pad.querySelector(".pad-dot");
+      var r = pad.getBoundingClientRect();
+      dot.style.left = (e.clientX - r.left) + "px";
+      dot.style.top = (e.clientY - r.top) + "px";
+      dot.style.opacity = "1";
+      longTimer = setTimeout(function () {
+        if (drag && drag.type === "pad" && !drag.moved) {
+          showBadge(pad, "长按右键"); log("触控区长按 → 右键");
+        }
+      }, 500);
+    }
+  });
+
+  window.addEventListener("pointermove", function (e) {
+    if (!drag) return;
+    if (drag.type === "wheel") {
+      var step = e.clientY - drag.lastY;
+      drag.lastY = e.clientY;
+      if (Math.abs(step) > 0) drag.moved = true;
+      var scale = s.scrollSensitivity / 4;
+      var dir = s.naturalScrolling ? -1 : 1;
+      drag.total += Math.round(step * scale * dir);
+      showBadge(drag.el, "滚动 " + (drag.total > 0 ? "+" : "") + drag.total);
+    } else if (drag.type === "pad") {
+      var ddx = e.clientX - drag.x, ddy = e.clientY - drag.y;
+      drag.x = e.clientX; drag.y = e.clientY;
+      drag.dx += ddx; drag.dy += ddy;
+      if (Math.abs(drag.dx) + Math.abs(drag.dy) > 8) {
+        drag.moved = true;
+        clearTimeout(longTimer);
+      }
+      var dot = drag.el.querySelector(".pad-dot");
+      var r = drag.el.getBoundingClientRect();
+      dot.style.left = (e.clientX - r.left) + "px";
+      dot.style.top = (e.clientY - r.top) + "px";
+      if (drag.moved) showBadge(drag.el, "指针 " + Math.round(drag.dx * s.sensitivity) + ", " + Math.round(drag.dy * s.sensitivity));
+    }
+  });
+
+  window.addEventListener("pointerup", function () {
+    if (!drag) return;
+    clearTimeout(longTimer);
+    if (drag.type === "hold") {
+      drag.el.classList.remove("is-down");
+      log("松开" + drag.label + "（按键抬起）");
+    } else if (drag.type === "wheel") {
+      drag.el.classList.remove("is-down");
+      if (drag.moved) {
+        log("滚轮拖动结束，累计滚动 " + (drag.total > 0 ? "+" : "") + drag.total + " 格");
+      } else {
+        var now = Date.now();
+        if (now - lastTap < 320) {
+          lastTap = 0;
+          showBadge(drag.el, "按下滚轮键（中键）");
+          log("滚轮双击 → 按下滚轮键（中键 0x04）");
+        } else {
+          lastTap = now;
+          showBadge(drag.el, "单击不产生按键");
+          log("滚轮单击 → 不产生按键（防误触）");
+        }
+      }
+    } else if (drag.type === "pad") {
+      if (drag.moved) {
+        log("触控区单指移动 → 指针 " + Math.round(drag.dx * s.sensitivity) + ", " + Math.round(drag.dy * s.sensitivity));
+      } else {
+        var t = Date.now();
+        if (t - lastTap < 320) {
+          lastTap = 0;
+          showBadge(drag.el, "双击左键"); log("触控区双击 → 双击左键");
+        } else {
+          lastTap = t;
+          showBadge(drag.el, "轻点左键"); log("触控区轻点 → 左键");
+        }
+      }
+    }
+    drag = null;
+  });
+  window.addEventListener("pointercancel", function () {
+    if (drag && drag.el) drag.el.classList.remove("is-down");
+    clearTimeout(longTimer); drag = null;
+  });
+
+  var badgeTimer = null;
+  function showBadge(el, text) {
+    var b = el.querySelector(".pad-badge");
+    if (!b) return;
+    b.textContent = text;
+    b.style.opacity = "1";
+    clearTimeout(badgeTimer);
+    badgeTimer = setTimeout(function () { b.style.opacity = "0"; }, 1400);
+  }
+
+  render();
+})();
+</script>
+</body>
+</html>

@@ -15,11 +15,10 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
     @Published private(set) var subscribers = 0
     @Published private(set) var logLines: [String] = []
 
-    /// 主机（iPad）蓝牙列表显示的是整机 GAP Device Name（0x1800 / 0x2A00），
+    /// iPad 蓝牙列表显示的是 iPhone 整机 GAP Device Name（0x1800 / 0x2A00），
     /// 不是广播包里的 CBAdvertisementDataLocalNameKey。iOS 不向 App 开放
-    /// Device Name 特征，CoreBluetooth 也隐藏 Generic Access 服务，因此
-    /// App 无法改写这个名字。这里只做显示，让使用者一眼看出名称来源。
-    @Published private(set) var systemDeviceName: String = UIDevice.current.name
+    /// Device Name 特征，CoreBluetooth 也隐藏 Generic Access 服务，App 无法
+    /// 改写这个名字。因此界面不再回显整机名，只在设置页给出改名步骤。
 
     // 设置页的三项参数做本地持久化，重开 App 不需重调。
     private static let sensKey = "PocketTrackpad.sensitivity"
@@ -238,10 +237,8 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         note(fallback
              ? "广播回退模式：128 位完整 UUID（主机可能不显示）"
              : "广播 16 位 SIG UUID：1812 / 180F / 180A")
-        note("广播 Local Name = PT-Pad；iPad 实际显示整机 GAP 名称 = \(systemDeviceName)")
-        if systemDeviceName != "PT-Pad" {
-            note("需要 iPad 显示 PT-Pad：在 iPad 蓝牙设置里重命名，或把 iPhone 名称改为 PT-Pad")
-        }
+        note("广播 Local Name = PT-Pad；iPad 列表显示的是 iPhone 整机名（App 无法改写）")
+        note("要显示 PT-Pad：iPad 蓝牙里重命名，或改 iPhone 名称后忽略此设备重新配对")
     }
 
     // MARK: - CBPeripheralManagerDelegate

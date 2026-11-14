@@ -100,34 +100,44 @@ struct ContentView: View {
                     Text("iPad 上打开 设置 > 蓝牙，在「其他设备」里选择 PT-Pad 完成配对。")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    Text("用右上角的「开始广播」启动蓝牙；连接成功后触控区会自动全屏。")
+                    Text("用右上角的「开始广播」启动蓝牙；连接成功后会自动出现全屏触控区。")
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
-                    HStack {
-                        Spacer()
-                        Button("重新广播") {
-                            hid.stopAdvertising()
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                                hid.start()
-                            }
-                        }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
-                    }
                 }
                 .padding(14)
                 .background(Color(.secondarySystemBackground),
                             in: RoundedRectangle(cornerRadius: 14))
 
-                // 未连接时的缩小版触控区
-                TrackpadSurface()
-                    .frame(height: 240)
-                    .overlay(alignment: .topLeading) {
-                        Text("触控区")
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
-                            .padding(10)
+                // 指针与滚动：连接前在主页面直接调。
+                // 连接后本页会被全屏触控区替换，届时从设置子页面调整。
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("指针与滚动")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Text("指针速度")
+                            Spacer()
+                            Text(String(format: "%.1f×", hid.sensitivity))
+                                .foregroundStyle(.secondary)
+                                .monospacedDigit()
+                        }
+                        Slider(value: $hid.sensitivity, in: 0.4...3.5, step: 0.1)
                     }
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Text("滚动速度")
+                            Spacer()
+                            Text(String(format: "%.1f×", hid.scrollSensitivity))
+                                .foregroundStyle(.secondary)
+                                .monospacedDigit()
+                        }
+                        Slider(value: $hid.scrollSensitivity, in: 0.3...3.0, step: 0.1)
+                    }
+                }
+                .padding(14)
+                .background(Color(.secondarySystemBackground),
+                            in: RoundedRectangle(cornerRadius: 14))
 
                 // 连接日志
                 VStack(alignment: .leading, spacing: 6) {
@@ -210,13 +220,13 @@ struct SettingsView: View {
 
             Section {
                 LabeledRow(title: "广播名称", detail: "PT-Pad")
-                LabeledRow(title: "系统设备名", detail: hid.systemDeviceName)
+                LabeledRow(title: "iPad 显示名称", detail: "跟随 iPhone 整机名")
                 LabeledRow(title: "连接方式", detail: "蓝牙 HID over GATT")
                 LabeledRow(title: "前台要求", detail: "锁屏后 iOS 会停止广播")
             } header: {
                 Text("关于")
             } footer: {
-                Text("iPad 蓝牙列表显示的是「系统设备名」（GAP Device Name），不是广播名称，App 无法修改它。要让 iPad 显示 PT-Pad：在 iPad 的 设置 → 蓝牙 里，点已连接设备旁的更多信息按钮 → 名称，改成 PT-Pad；或把 iPhone 名称改成 PT-Pad，再在 iPad 上忽略此设备重新配对。")
+                Text("iPad 蓝牙列表优先显示 iPhone 整机名（GAP Device Name），不是广播名称，App 无权改写。要显示 PT-Pad：① 在 iPad 设置 → 蓝牙 → 已连接设备旁的更多信息按钮 → 名称，改成 PT-Pad（改完不要再忽略此设备）；或 ② 把 iPhone 设置 → 通用 → 关于本机 → 名称 改成 PT-Pad，再到 iPad 蓝牙里「忽略此设备」后重新配对。两条路径都不需要重装 App。")
                     .font(.caption)
             }
         }
