@@ -1,0 +1,277 @@
+name: Build SIGNED IPA and Release
+
+# 可选工作流：直接产出「下载即可安装」的已签名 .ipa。
+# 与 unsigned-ipa.yml 的区别：
+#   - unsigned-ipa.yml：免费，任何人可用，产物必须本机重签后才能装
+#   - 本工作流：用你自己的 Apple 付费开发者证书在 CI 里完成签名，
+#               产物可直接安装到 Ad Hoc profile 中已登记 UDID 的设备
+#
+# 前置条件（缺一不可，详见 README 第十一节）：
+#   1. 付费 Apple Developer Program 账号（$99/年）
+#   2. 在开发者后台登记目标 iPhone 的 UDID，并创建 Ad Hoc Provisioning Profile
+#   3. 导出签名证书 .p12，配置下列 3 个 repository secrets
+#
+# 触发方式（刻意不做 push 自动触发，避免无谓消耗签名材料与 CI 分钟）：
+#   - Actions 页面手动 Run workflow（可填 release_tag）
+#   - git tag signed-1.0.0 && git push origin signed-1.0.0
+
+on:
+  push:
+    tags: ['signed-*']
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: '自定义 Release tag（留空则自动生成）'
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: signed-ipa-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build and sign IPA
+    runs-on: macos-15
+    timeout-minutes: 40
+    permissions:
+      contents: read
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+      ipa: ${{ steps.meta.outputs.ipa }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Install XcodeGen
+        run: |
+          if ! command -v xcodegen >/dev/null 2>&1; then
+            brew install xcodegen
+          fi
+          xcodegen --version
+
+      - name: Verify signing secrets
+        env:
+          P12: ${{ secrets.IOS_P12_BASE64 }}
+          P12PW: ${{ secrets.IOS_P12_PASSWORD }}
+          PROFILE: ${{ secrets.IOS_ADHOC_PROFILE_BASE64 }}
+        run: |
+          MISSING=""
+          [ -n "$P12" ]     || MISSING="$MISSING IOS_P12_BASE64"
+          [ -n "$P12PW" ]   || MISSING="$MISSING IOS_P12_PASSWORD"
+          [ -n "$PROFILE" ] || MISSING="$MISSING IOS_ADHOC_PROFILE_BASE64"
+          if [ -n "$MISSING" ]; then
+            echo "::error::缺少签名所需的 repository secrets:$MISSING"
+            echo "请按 README 第十一节配置后再运行此工作流。"
+            exit 1
+          fi
+          echo "三个签名 secrets 均已配置"
+
+      - name: Resolve release metadata
+        id: meta
+        env:
+          INPUT_TAG: ${{ inputs.release_tag }}
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+          RUN_NUMBER: ${{ github.run_number }}
+          SHA: ${{ github.sha }}
+        run: |
+          if [ -n "$INPUT_TAG" ]; then
+            TAG="$INPUT_TAG"
+          elif [ "$REF_TYPE" = "tag" ]; then
+            TAG="$REF_NAME"
+          else
+            TAG="signed-0.0.${RUN_NUMBER}-$(printf '%s' "$SHA" | cut -c1-7)"
+          fi
+          if ! printf '%s' "$TAG" | grep -qE '^[A-Za-z0-9._-]+$'; then
+            echo "::error::非法 Release tag: $TAG（只允许字母、数字、点、下划线、连字符）"
+            exit 1
+          fi
+          IPA="PocketTrackpad-signed-${TAG}.ipa"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "ipa=$IPA" >> "$GITHUB_OUTPUT"
+          echo "Release tag: $TAG"
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Build unsigned IPA
+        run: bash scripts/make_unsigned_ipa.sh
+
+      - name: Import certificate, resign, and repackage
+        id: sign
+        env:
+          IOS_P12_BASE64: ${{ secrets.IOS_P12_BASE64 }}
+          IOS_P12_PASSWORD: ${{ secrets.IOS_P12_PASSWORD }}
+          IOS_ADHOC_PROFILE_BASE64: ${{ secrets.IOS_ADHOC_PROFILE_BASE64 }}
+          IPA_NAME: ${{ steps.meta.outputs.ipa }}
+        run: |
+          set -euo pipefail
+
+          KEYCHAIN="$RUNNER_TEMP/pt-sign.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -hex 16)"
+          CERT="$RUNNER_TEMP/pt-sign.p12"
+          cleanup() {
+            security delete-keychain "$KEYCHAIN" 2>/dev/null || true
+            rm -f "$CERT"
+          }
+          trap cleanup EXIT
+
+          # 1. 建立临时钥匙串并导入 .p12
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          printf '%s' "$IOS_P12_BASE64" | tr -d '\r\n ' | base64 --decode > "$CERT"
+          security import "$CERT" -k "$KEYCHAIN" -P "$IOS_P12_PASSWORD" -A -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" >/dev/null
+          security list-keychains -d user -s "$KEYCHAIN"
+
+          IDENTITY="$(security find-identity -v -p codesigning "$KEYCHAIN" \
+            | grep -m1 -E 'iPhone (Distribution|Developer|Apple Development)' \
+            | sed -E 's/.*"([^"]+)".*/\1/' || true)"
+          if [ -z "$IDENTITY" ]; then
+            echo "::error::钥匙串里找不到可用的 iOS 签名证书，请检查 IOS_P12_BASE64 与 IOS_P12_PASSWORD"
+            security find-identity -v -p codesigning "$KEYCHAIN"
+            exit 1
+          fi
+          echo "签名身份: $IDENTITY"
+
+          # 2. 解包未签名 IPA
+          STAGE="$GITHUB_WORKSPACE/build/resign"
+          rm -rf "$STAGE"
+          mkdir -p "$STAGE"
+          unzip -q "$GITHUB_WORKSPACE/build/PocketTrackpad-unsigned.ipa" -d "$STAGE"
+          APP="$(find "$STAGE/Payload" -maxdepth 1 -type d -name '*.app' | head -1)"
+          if [ -z "$APP" ]; then
+            echo "::error::IPA 里没有找到 .app"
+            exit 1
+          fi
+
+          # 3. 放入 Ad Hoc 描述文件，并从其中提取 entitlements
+          printf '%s' "$IOS_ADHOC_PROFILE_BASE64" | tr -d '\r\n ' | base64 --decode > "$APP/embedded.mobileprovision"
+          security cms -D -i "$APP/embedded.mobileprovision" > "$STAGE/profile.plist"
+          /usr/libexec/PlistBuddy -x -c 'Print :Entitlements' "$STAGE/profile.plist" > "$STAGE/entitlements.plist"
+
+          # 4. 让 Bundle ID 与描述文件保持一致（通配 App ID 时跳过）
+          PROFILE_APPID="$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:application-identifier' "$STAGE/profile.plist")"
+          EXPECTED_BUNDLE_ID="${PROFILE_APPID#*.}"
+          APP_BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist")"
+          if [ "$EXPECTED_BUNDLE_ID" != "*" ] && [ "$EXPECTED_BUNDLE_ID" != "$APP_BUNDLE_ID" ]; then
+            echo "Bundle ID 对齐: $APP_BUNDLE_ID -> $EXPECTED_BUNDLE_ID"
+            /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $EXPECTED_BUNDLE_ID" "$APP/Info.plist"
+          fi
+
+          # 5. 重签并验证
+          codesign --force --sign "$IDENTITY" \
+            --keychain "$KEYCHAIN" \
+            --entitlements "$STAGE/entitlements.plist" \
+            --timestamp=none "$APP"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          echo "--- 签名信息 ---"
+          codesign -dv --verbose=4 "$APP" 2>&1 | grep -E 'Identifier|TeamIdentifier|Authority|Signature' || true
+
+          # 6. 重新打包成 IPA
+          IPA_OUT="$GITHUB_WORKSPACE/build/$IPA_NAME"
+          rm -f "$IPA_OUT"
+          (cd "$STAGE" && zip -qry "$IPA_OUT" Payload)
+          ls -lh "$IPA_OUT"
+          unzip -l "$IPA_OUT" > "$STAGE/ipa-list.txt"
+          head -15 "$STAGE/ipa-list.txt"
+
+      - name: Compute checksum
+        env:
+          IPA: ${{ steps.meta.outputs.ipa }}
+        run: |
+          cd build
+          shasum -a 256 "$IPA" > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Upload signed IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PocketTrackpad-signed-ipa
+          path: |
+            build/${{ steps.meta.outputs.ipa }}
+            build/SHA256SUMS
+          retention-days: 30
+          if-no-files-found: error
+
+  release:
+    name: Publish signed IPA Release
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    outputs:
+      asset_url: ${{ steps.link.outputs.asset_url }}
+      page_url: ${{ steps.link.outputs.page_url }}
+
+    steps:
+      - name: Download signed IPA
+        uses: actions/download-artifact@v4
+        with:
+          name: PocketTrackpad-signed-ipa
+          path: dist
+
+      - name: Create Release with signed IPA
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.build.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: "PocketTrackpad SIGNED ${{ needs.build.outputs.tag }}"
+          prerelease: false
+          generate_release_notes: false
+          body: |
+            ## 已签名 IPA（可直接安装）
+
+            提交：`${{ github.sha }}`
+
+            本包由你自己的 Apple 开发者证书签名，**可直接安装到 Ad Hoc 描述文件中已登记 UDID 的 iPhone**。
+            未登记 UDID 的设备会安装失败，这是 iOS 的签名机制决定的，不是包坏了。
+
+            首次打开前仍需：设置 → 通用 → VPN 与设备管理 → 信任证书；iOS 16+ 需开启开发者模式。
+
+            附件：
+            - `${{ needs.build.outputs.ipa }}` — 已签名 IPA
+            - `SHA256SUMS` — 校验和
+
+            安全提示：Release 里包含带有你证书签名的包。私有仓库更安全，公开仓库请勿上传含敏感信息的构建。
+          files: |
+            dist/${{ needs.build.outputs.ipa }}
+            dist/SHA256SUMS
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Emit download links
+        id: link
+        env:
+          TAG: ${{ needs.build.outputs.tag }}
+          IPA: ${{ needs.build.outputs.ipa }}
+          SERVER: ${{ github.server_url }}
+          REPO: ${{ github.repository }}
+        run: |
+          ASSET_URL="${SERVER}/${REPO}/releases/download/${TAG}/${IPA}"
+          PAGE_URL="${SERVER}/${REPO}/releases/tag/${TAG}"
+          {
+            echo "## PocketTrackpad SIGNED ${TAG} 已发布"
+            echo ""
+            echo "- Release 页面：${PAGE_URL}"
+            echo "- 直接下载：[${IPA}](${ASSET_URL})"
+            echo ""
+            echo "> 已签名 IPA，可直接安装到描述文件中已登记 UDID 的设备。"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "asset_url=${ASSET_URL}" >> "$GITHUB_OUTPUT"
+          echo "page_url=${PAGE_URL}" >> "$GITHUB_OUTPUT"
+          echo "Release: ${PAGE_URL}"
+          echo "Download: ${ASSET_URL}"

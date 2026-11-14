@@ -1,0 +1,30 @@
+name: PocketTrackpad
+options:
+  bundleIdPrefix: com.example
+  deploymentTarget:
+    iOS: "16.0"
+  generateEmptyDirectories: true
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    TARGETED_DEVICE_FAMILY: "1,2"
+    CODE_SIGN_STYLE: Automatic
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+    GENERATE_INFOPLIST_FILE: NO
+    ENABLE_BITCODE: NO
+targets:
+  PocketTrackpad:
+    type: application
+    platform: iOS
+    sources:
+      - path: PocketTrackpad
+        excludes:
+          - "Info.plist"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.PocketTrackpad
+        INFOPLIST_FILE: PocketTrackpad/Info.plist
+        PRODUCT_NAME: PocketTrackpad
+        IPHONEOS_DEPLOYMENT_TARGET: "16.0"
+        SUPPORTS_MACCATALYST: NO
