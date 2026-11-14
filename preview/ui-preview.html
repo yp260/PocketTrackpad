@@ -224,16 +224,13 @@ input[type=range] { width:100%; accent-color:var(--accent); margin:10px 0 2px; c
   background:transparent; color:var(--ios-text); cursor:pointer;
 }
 .kb-seg button.on { background:var(--ios-card); box-shadow:0 1px 3px rgba(0,0,0,.12); font-weight:600; }
-.kb-sticky {
-  flex:0 0 24px; display:flex; align-items:center; gap:6px; padding:0 12px;
-  font-size:10px; color:var(--ios-2);
+/* 粘滞状态并入工具条右侧的极短徽标；默认不显示，键区上方不再留一整行空白 */
+.kb-badge {
+  flex:0 0 auto; font:inherit; font-size:10px; white-space:nowrap;
+  border:.5px solid var(--ios-sep); border-radius:5px;
+  background:var(--ios-card); color:var(--accent); padding:3px 6px; cursor:pointer;
 }
-.kb-sticky .txt { flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.kb-clear {
-  font:inherit; font-size:10px; border:.5px solid var(--ios-sep); border-radius:5px;
-  background:var(--ios-card); color:var(--accent); padding:2px 6px; cursor:pointer;
-}
-.kb-clear:disabled { opacity:.4; cursor:default; }
+.kb-badge:active { opacity:.6; }
 .kb-warn {
   flex:0 0 auto; margin:4px 10px 0; padding:8px; border-radius:8px;
   background:rgba(255,159,10,.12); color:var(--ios-orange); font-size:10px; line-height:1.5;
@@ -259,11 +256,11 @@ input[type=range] { width:100%; accent-color:var(--accent); margin:10px 0 2px; c
 /* 方向键在真机是单字符 16px；预览里保持接近，避免 10px 下被压成横线 */
 .kb-key.arrow { font-size:15px; }
 .kb-rows.compact .kb-key.arrow { font-size:14px; }
-/* 键区靠上，下方剩余空间全部给小触控区（对应 Swift 端 miniTrackpad） */
-.kb-rows.top { padding-bottom:0; }
+/* 键区再往上挪：顶部内边距 6px → 2px，工具条下方已无空状态条 */
+.kb-rows.top { padding:2px 6px 0; }
 .kb-minipad {
   flex:1 1 auto; min-height:0; box-sizing:border-box;
-  padding:6px 10px;
+  padding:4px 10px 6px;
 }
 .pad-mini {
   position:relative; height:100%; width:100%;
@@ -388,14 +385,15 @@ body.shot .phone { margin:0; }
             <tr><td>16</td><td>顶部「断开」按钮（仅已连接显示）：移除 GATT 服务并停止广播，可重新广播切换到 Windows / Mac</td><td>ContentView.swift:59</td></tr>
             <tr><td>17</td><td>设置：「实验功能 · 全键盘与回桌面」分组（键鼠复合开关、三指上滑、全键盘、输入报告字节数、风险与回退说明）</td><td>ContentView.swift:236-246</td></tr>
             <tr><td>18</td><td>已连接触控区顶部切换栏：「触控板模式」+ 蓝色主按钮「全键盘」；键盘未就绪时多一行橙色提示</td><td>ContentView.swift:286-325</td></tr>
-            <tr><td>19</td><td>全键盘顶部工具条：「‹ 触控板」返回按钮 + 主键位 / 符号 两页分段控件（功能页已并入主键位）</td><td>KeyboardView.swift:243-268</td></tr>
-            <tr><td>20</td><td>粘滞修饰键状态条：默认无文字，仅粘滞激活时显示简短状态与「清除」按钮；Ctrl / Opt / Cmd / Shift 为一次性粘滞</td><td>KeyboardView.swift:272-294</td></tr>
+            <tr><td>19</td><td>全键盘顶部工具条：「‹ 触控板」返回按钮 + 主键位 / 符号 两页分段控件（功能页已并入主键位）+ 粘滞生效时右侧的极短徽标</td><td>KeyboardView.swift:242-282</td></tr>
+            <tr><td>20</td><td>粘滞状态改为工具条内短徽标（⌃ ⇧ ⌥ ⌘ + 清除），不再单独占一行；默认完全不显示，Ctrl / Opt / Cmd / Shift 仍为一次性粘滞</td><td>KeyboardView.swift:262-276<br>KeyboardView.swift:287-303</td></tr>
             <tr><td>21</td><td>键帽区：主键位 7 行（F1~F12 + 数字 + QWERTY 三行 + 导航/方向键 + 控制行）、符号页 5 行，两页统一 42pt 键帽</td><td>KeyboardView.swift:127-190</td></tr>
             <tr><td>22</td><td>HID 键码解析与发送：US ANSI 布局，符号自带 Shift；一次按键 = 按下 0.06 秒 + 连发空帧松键</td><td>KeyboardView.swift:11-75<br>HIDPeripheral.swift:552-584</td></tr>
             <tr><td>23</td><td>键盘不可用橙色警告（键鼠复合关闭 / Boot Protocol / 未订阅 2A4D 时显示，属于条件错误提示，予以保留）</td><td>KeyboardView.swift:305-319</td></tr>
             <tr><td>24</td><td>主键位第 5 行：Esc 贴 Z 左侧（键区左边缘）、↑ 贴 M 右侧（键区右边缘）；第 6 行剩 Tab / Caps / Del / Home / End / ← / ↓ / →</td><td>KeyboardView.swift:164-190</td></tr>
-            <tr><td>25</td><td>键区整体上移；下方小触控区吃掉键区以下全部空间、紧贴键区，复用 TrackpadSurface（compact）且不显示提示文字</td><td>KeyboardView.swift:205-229<br>KeyboardView.swift:233-239<br>TrackpadSurface.swift:72-88</td></tr>
-            <tr><td>26</td><td>底部三键高度 116pt → 76pt；键盘页上下四处说明文字删除（粘滞长句、小触控区标题、触控区内提示、底部 footer）</td><td>ContentView.swift:357-371<br>KeyboardView.swift:205-229<br>TrackpadSurface.swift:72-88</td></tr>
+            <tr><td>25</td><td>键区整体上移；下方小触控区吃掉键区以下全部空间、紧贴键区，复用 TrackpadSurface（compact）且不显示提示文字</td><td>KeyboardView.swift:205-228<br>KeyboardView.swift:232-238<br>TrackpadSurface.swift:72-88</td></tr>
+            <tr><td>26</td><td>底部三键高度 116pt → 76pt；键盘页上下四处说明文字删除（粘滞长句、小触控区标题、触控区内提示、底部 footer）</td><td>ContentView.swift:357-371<br>KeyboardView.swift:205-228<br>TrackpadSurface.swift:72-88</td></tr>
+            <tr><td>27</td><td>键区再往上挪一点点：删掉工具条下方 24pt 空状态条，键区顶部间距 8pt → 2pt，小触控区顶部 6pt → 4pt；省下约 30pt 全部给小触控区，键盘页切页／粘滞时不再有垂直跳动</td><td>KeyboardView.swift:205-228<br>KeyboardView.swift:242-282<br>KeyboardView.swift:232-238</td></tr>
           </tbody>
         </table>
       </div>
@@ -421,12 +419,15 @@ body.shot .phone { margin:0; }
         原来的独立「功能」页已并入主键位，功能键一个不丢。
         <br><b>Esc / ↑ 位置</b>：主键位第 5 行左右原来的空白 spacer 已换成按键，
         Esc 贴 Z 左侧、↑ 贴 M 右侧，分别顶到键区左右边缘；第 6 行不再重复放这两个键。
-        <br><b>小触控区</b>：键区整体上移到状态条下方，其下剩余空间全部是触控区（紧贴键区、无标题与提示文字），
+        <br><b>小触控区</b>：键区紧贴顶部工具条，其下剩余空间全部是触控区（紧贴键区、无标题与提示文字），
         复用全屏触控板的全部手势（单指移动 / 点击 / 双指滚动 / 三指上滑），打字时也能移指针。
         底部常驻 Ctrl / Opt / Cmd / Shift 一次性粘滞修饰键，组合键先点修饰键再点字符键。底部左键 / 滚轮 / 右键在键盘模式下依旧可用。
         <br><b>本轮精简</b>：底部三键高度从 116pt 降到 76pt，把空间让给触控区；键盘页上方的粘滞长句说明、
         小触控区标题、触控区内三行提示、底部「Esc / ↑」说明文字全部删除。按键标签、分段控件、返回按钮和
         条件性的橙色「键盘暂不可用」警告保留（后者是错误提示，不是说明文案）。
+        <br><b>再往上挪一点点</b>：工具条下方那条 24pt 的空状态条整行删掉，粘滞状态改为工具条右侧
+        「⌃ ⇧ ⌥ ⌘ 清除」短徽标（只在生效时出现，点一下清除）；键区顶部间距 8pt → 2pt、
+        小触控区顶部间距 6pt → 4pt。省下约 30pt 全部给小触控区，键区上移且不产生垂直跳动。
         <br><b>键盘限制</b>：按键走 USB HID 键码（0x00~0x65），中文、emoji 和输入法切换由主机决定，不能直接写入字符；
         多媒体键（音量、亮度）属于 Consumer Page，本描述符未声明，无法发送。全键盘与三指上滑共用 12 字节键鼠复合报告，
         必须保持「键鼠复合模式」开启并在 iPad 忽略设备后重新配对。
@@ -534,7 +535,7 @@ body.shot .phone { margin:0; }
   }
   /* 全键盘页下方的小触控区：紧贴键区、吃掉剩余空间，不显示任何提示文字。 */
   function miniPadHTML() {
-    return "<div class=\"kb-minipad\" data-code=\"KeyboardView.swift:233-239\">" +
+    return "<div class=\"kb-minipad\" data-code=\"KeyboardView.swift:232-238\">" +
       padInner("pad-mini", true) +
       "</div>";
   }
@@ -683,15 +684,28 @@ body.shot .phone { margin:0; }
     return p.length ? p.join(" + ") : "无";
   }
 
+  // 工具条里的极短徽标（对应 Swift 端 stickyBadge）：⌃ ⇧ ⌥ ⌘ + 清除
+  function stickyBadge() {
+    var m = "";
+    if (s.sticky & 0x01) m += "⌃";
+    if (s.sticky & 0x02) m += "⇧";
+    if (s.sticky & 0x04) m += "⌥";
+    if (s.sticky & 0x08) m += "⌘";
+    return m + " 清除";
+  }
+
   function keyboardHTML() {
     var pages = [["letters", "主键位"], ["symbols", "符号"]];
     var seg = pages.map(function (p) {
       return "<button type=\"button\" class=\"" + (s.keyboardPage === p[0] ? "on" : "") +
         "\" data-act=\"kb-page\" data-page=\"" + p[0] +
-        "\" data-code=\"KeyboardView.swift:243-268\">" + p[1] + "</button>";
+        "\" data-code=\"KeyboardView.swift:242-282\">" + p[1] + "</button>";
     }).join("");
-    // 默认无任何说明文字；只有粘滞键激活时才显示简短状态。
-    var stickyText = s.sticky === 0 ? "" : stickyNames();
+    // 默认工具条里没有任何额外元素；只有粘滞生效时右侧出现一个短徽标按钮。
+    var badge = s.sticky === 0 ? "" :
+      "<button type=\"button\" class=\"kb-badge\" data-act=\"kb-clear\" " +
+      "title=\"清除粘滞修饰键：" + esc(stickyNames()) + "\" " +
+      "data-code=\"KeyboardView.swift:262-276\">" + esc(stickyBadge()) + "</button>";
     var warn = kbReady() ? "" :
       "<div class=\"kb-warn\" data-code=\"KeyboardView.swift:305-319\">键盘暂不可用：需在设置里开启「键鼠复合模式」，并在 iPad 蓝牙里忽略此设备后重新配对；主机还须处于 Report Protocol 并订阅 2A4D。</div>";
     var ref = "KeyboardView.swift:164-190";
@@ -699,13 +713,9 @@ body.shot .phone { margin:0; }
     var compact = rowDefs.length > 5;
     var rows = rowDefs.map(function (r) { return kbRowHTML(r, ref); }).join("");
     return "<div class=\"kb-wrap\">" +
-      "<div class=\"kb-toolbar\" data-code=\"KeyboardView.swift:243-268\">" +
-        "<button type=\"button\" class=\"kb-back\" data-act=\"close-keyboard\" data-code=\"KeyboardView.swift:243-268\">‹ 触控板</button>" +
-        "<div class=\"kb-seg\">" + seg + "</div>" +
-      "</div>" +
-      "<div class=\"kb-sticky\" data-code=\"KeyboardView.swift:272-294\">" +
-        "<span class=\"txt\">" + esc(stickyText) + "</span>" +
-        (s.sticky === 0 ? "" : "<button type=\"button\" class=\"kb-clear\" data-act=\"kb-clear\">清除</button>") +
+      "<div class=\"kb-toolbar\" data-code=\"KeyboardView.swift:242-282\">" +
+        "<button type=\"button\" class=\"kb-back\" data-act=\"close-keyboard\" data-code=\"KeyboardView.swift:242-282\">‹ 触控板</button>" +
+        "<div class=\"kb-seg\">" + seg + "</div>" + badge +
       "</div>" + warn +
       "<div class=\"kb-rows top" + (compact ? " compact" : "") + "\">" + rows + "</div>" +
       miniPadHTML() +

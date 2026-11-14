@@ -209,10 +209,9 @@ struct KeyboardPanel: View {
         let rowHeight: CGFloat = 42
         return VStack(spacing: 0) {
             toolbar
-            stickyBar
             if !hid.keyboardReady { warning }
-            // 键区紧贴上方的状态条，下方剩余空间全部交给小触控区，
-            // 中间不再插入任何 Spacer 或说明文字，触控区直接贴住键区。
+            // 工具条下方不再单独留一行空状态条：粘滞状态并入工具条右侧的短徽标，
+            // 键区直接顶到工具条下沿，省下的高度全部交给下方小触控区。
             VStack(spacing: 6) {
                 // 用整数索引而不是 enumerated() 元组：后者配 id: \.offset
                 // 在部分 Swift 版本会报「key path 不能指向元组元素」。
@@ -221,7 +220,7 @@ struct KeyboardPanel: View {
                 }
             }
             .padding(.horizontal, 6)
-            .padding(.top, 8)
+            .padding(.top, 2)
             miniTrackpad
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -234,7 +233,7 @@ struct KeyboardPanel: View {
         TrackpadSurface(compact: true)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(.horizontal, 10)
-            .padding(.top, 6)
+            .padding(.top, 4)
             .padding(.bottom, 6)
     }
 
@@ -260,6 +259,21 @@ struct KeyboardPanel: View {
             }
             .pickerStyle(.segmented)
             .labelsHidden()
+            // 粘滞状态不再单独占一行：只在生效时于工具条右侧出现一个极短徽标，
+            // 点一下即清除。默认状态键区紧贴工具条，没有任何空白与说明文字。
+            if sticky != 0 {
+                Button {
+                    sticky = 0
+                } label: {
+                    Text(stickyBadge)
+                        .font(.caption2)
+                        .lineLimit(1)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.mini)
+                .fixedSize()
+                .accessibilityLabel("清除粘滞修饰键：" + stickyNames)
+            }
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
@@ -269,28 +283,14 @@ struct KeyboardPanel: View {
 
     // MARK: 粘滞修饰键状态
 
-    private var stickyBar: some View {
-        HStack(spacing: 6) {
-            // 默认不放任何说明文字：激活的键帽本身已变蓝。
-            // 只有粘滞键生效时才显示一行简短状态，不再重复解释用法。
-            if sticky != 0 {
-                Text(stickyNames)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-            }
-            Spacer(minLength: 0)
-            if sticky != 0 {
-                Button("清除") { sticky = 0 }
-                    .font(.caption2)
-                    .buttonStyle(.bordered)
-                    .controlSize(.mini)
-                    .fixedSize()
-            }
-        }
-        .padding(.horizontal, 12)
-        .frame(height: 24)
+    /// 工具条里的极短徽标：⌃ ⇧ ⌥ ⌘ 只占一个字符，不会挤压分页控件。
+    private var stickyBadge: String {
+        var marks = ""
+        if sticky & HIDSpec.modLeftControl != 0 { marks += "⌃" }
+        if sticky & HIDSpec.modLeftShift != 0   { marks += "⇧" }
+        if sticky & HIDSpec.modLeftAlt != 0     { marks += "⌥" }
+        if sticky & HIDSpec.modLeftGUI != 0     { marks += "⌘" }
+        return marks + " 清除"
     }
 
     private var stickyNames: String {
