@@ -883,8 +883,8 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         // 按特征自身是否已订阅来决定能否发送：Windows 模式下鼠标 / 键盘是两条独立
         // 特征，键盘报告仅在键盘特征被订阅后才能发。
         let subscribed: Bool
-        if characteristic === inputReport2 { subscribed = keyboardSubscribed }
-        else if characteristic === bootReport { subscribed = bootSubscribed }
+        if let i2 = inputReport2, characteristic === i2 { subscribed = keyboardSubscribed }
+        else if let br = bootReport, characteristic === br { subscribed = bootSubscribed }
         else { subscribed = inputSubscribed || bootSubscribed }
         guard subscribed else { return }
         guard readyToUpdate else {
