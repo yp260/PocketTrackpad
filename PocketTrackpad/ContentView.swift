@@ -96,7 +96,7 @@ struct ContentView: View {
             .alert("已断开", isPresented: $showSwitchHelp) {
                 Button("知道了", role: .cancel) {}
             } message: {
-                Text("要连接到其他设备（Windows / Android）：\n\n1. 在刚断开的设备（如 iPad）蓝牙设置里「忽略此设备」，否则它会因已配对而自动抢连。\n2. Windows：先在电脑上打开 设置 → 蓝牙和其他设备 → 添加设备 → 蓝牙（保持窗口开着），再回本 App 点「开始广播」——Windows 对 BLE HID 外设发现窗口很短，两边要几乎同时操作。Android 同样先忽略旧配对再搜 PT-Pad。\n3. 搜到后配对；iPad 端若仍自动抢连，先去 iPad 忽略本设备。\n\n【Windows 搜不到 / 卡在配对？用零硬件方案】设置里打开「桥接（WiFi 转发）」，电脑上运行 windows\\pt_receiver.py，地址填电脑局域网 IP，即可直接控制 Windows，无需任何硬件。\n\n提示：三指上滑（Command + H）只对 iPadOS 有效；Windows 回桌面用 Win + D，macOS 用 F11。")
+                Text("要连接到其他设备（Windows / Android）：\n\n1. 在刚断开的设备（如 iPad）蓝牙设置里「忽略此设备」，否则它会因已配对而自动抢连。\n2. Windows（推荐 · 零安装）：本 App 设置里打开「Windows 直连（电脑零安装）」，保持 Windows 的 设置 → 蓝牙和其他设备 → 添加设备 → 其他设备 窗口开着，再回本 App 点「开始广播」，列表里出现你的 iPhone 后点它配对，电脑端不装任何软件。若列表不显示，先在 Windows 蓝牙高级设置把「蓝牙设备发现」改为「高级」或点「显示所有设备」。\n3. Android 同样先忽略旧配对再搜 PT-Pad；iPad 端若仍自动抢连，先去 iPad 忽略本设备。\n\n【你的 Windows 搜不到 / 卡在配对？】部分 Windows 版本与 iOS HID 外设不兼容，这时改用设置里的「桥接（WiFi 转发）」，电脑上用系统自带 PowerShell 运行 windows\\pt_receiver.ps1（零安装），地址填电脑局域网 IP 即可直接控制 Windows。\n\n提示：三指上滑（Command + H）只对 iPadOS 有效；Windows 回桌面用 Win + D，macOS 用 F11。")
             }
         }
     }
@@ -141,9 +141,16 @@ struct ContentView: View {
                         Text("桥接模式：iPhone 只采集输入，经 WiFi 发给桥接端。")
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                        Text("连 Windows：电脑上先运行 windows\\pt_receiver.py（无需硬件），"
-                             + "再到设置里把地址填成电脑的局域网 IP；"
-                             + "连 Android / 无线方案：手机连 ESP32 的 PT-Bridge 热点，地址用 192.168.4.1。")
+                        Text("连 Windows：电脑上用系统自带 PowerShell 运行 windows\\pt_receiver.ps1（零安装），"
+                         + "再到设置里把地址填成电脑的局域网 IP；"
+                         + "连 Android / 无线方案：手机连 ESP32 的 PT-Bridge 热点，地址用 192.168.4.1。")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    } else if hid.windowsMode {
+                        Text("Windows 打开 设置 → 蓝牙和其他设备 → 添加设备 → 其他设备，保持窗口开着。")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Text("本 App 点「开始广播」后，Windows 列表会出现你的 iPhone，点它直接配对，电脑端零安装。")
                             .font(.caption2)
                             .foregroundStyle(.tertiary)
                     } else {
@@ -318,6 +325,18 @@ struct SettingsView: View {
             }
 
             Section {
+                Toggle("Windows 直连（电脑零安装）", isOn: $hid.windowsMode)
+                LabeledRow(title: "电脑端要求", detail: "不装任何软件")
+                LabeledRow(title: "设备显示", detail: "iPhone 整机名")
+                LabeledRow(title: "当前状态", detail: hid.windowsMode ? "广播中（等 Windows 添加）" : "未启用")
+            } header: {
+                Text("连接 Windows（推荐 · 零安装）")
+            } footer: {
+                Text("开启后 iPhone 以标准 BLE 键鼠组合设备身份广播，Windows 在 设置 → 蓝牙和其他设备 → 添加设备 → 其他设备 里直接配对，电脑端不装任何驱动或程序。\n\n步骤：① 本 App 先断开 iPad（iOS 外设被连接后会停止广播，Windows 搜不到）；② 在 Windows 打开添加设备窗口并保持；③ 本 App 点「开始广播」，过几秒 Windows 列表出现你的 iPhone，点它配对。\n\n注意：Windows 11 24H2 的发现列表会按设备类别（Appearance）过滤，iOS 无法在广播里设置该字段。若列表不显示，先在 Windows 蓝牙高级设置里打开「蓝牙设备发现：高级」，或在添加设备页点击「显示所有设备」。配对成功后在 Windows 里即可用 iPhone 当触控板 + 键盘。若仍连不上，关掉本开关改用下方「桥接」方案。")
+                    .font(.caption)
+            }
+
+            Section {
                 Toggle("启用桥接（WiFi 转发）", isOn: $hid.bridgeMode)
 
                 VStack(alignment: .leading, spacing: 6) {
@@ -355,12 +374,12 @@ struct SettingsView: View {
                 }
 
                 LabeledRow(title: "当前状态", detail: hid.bridge.statusText)
-                LabeledRow(title: "电脑端程序", detail: "windows/pt_receiver.py")
+                LabeledRow(title: "电脑端程序", detail: "windows/pt_receiver.ps1")
                 LabeledRow(title: "ESP32 热点", detail: "PT-Bridge（无密码）")
             } header: {
                 Text("桥接（连 Windows / Android）")
             } footer: {
-                Text("iOS 的蓝牙外设无法设置 GAP Appearance，Windows 因此搜不到本机虚拟键鼠。开启桥接后本机不再广播，改为把输入通过 WiFi 发给「桥接端」。\n\n【连 Windows，不需要任何硬件】在电脑上装 Python 3.8+，运行 windows\\pt_receiver.py，然后把上面地址填成电脑的局域网 IP（Windows 用 ipconfig 查看，格式如 192.168.1.100），点「保存地址」再点右上角「连接桥接」。\n\n【连 Android / 也想无线】用 ESP32：手机先连 PT-Bridge 热点，地址填默认的 192.168.4.1。\n\n手机与电脑必须连同一个 WiFi。Windows 防火墙首次会询问是否允许 Python 访问网络，选「允许」。")
+                Text("iOS 的蓝牙外设无法设置 GAP Appearance，Windows 因此搜不到本机虚拟键鼠。开启桥接后本机不再广播，改为把输入通过 WiFi 发给「桥接端」。\n\n【连 Windows，零安装】用系统自带 PowerShell 运行 windows\\pt_receiver.ps1（双击 start_receiver.bat 即可），把上面地址填成电脑的局域网 IP（Windows 用 ipconfig 查看，格式如 192.168.1.100），点「保存地址」再点右上角「连接桥接」。\n\n【连 Android / 也想无线】用 ESP32：手机先连 PT-Bridge 热点，地址填默认的 192.168.4.1。\n\n手机与电脑必须连同一个 WiFi。Windows 防火墙首次会询问是否允许访问网络，选「允许」。\n\n提示：若你的 Windows 版本能直接搜到 iPhone，请优先用「Windows 直连（电脑零安装）」开关，连软件都不用开。")
                     .font(.caption)
             }
 
@@ -372,7 +391,7 @@ struct SettingsView: View {
             } header: {
                 Text("切换设备")
             } footer: {
-                Text("蓝牙 HID 的配对信息存在主机侧：本 App 作为外设无法远程解除 iPad 的配对。切到 Windows / Android 前，请先在 iPad 蓝牙里「忽略此设备」，否则它会因已配对自动抢连。\n\nWindows 时序要点：先在电脑上打开 设置 → 蓝牙和其他设备 → 添加设备 → 蓝牙（保持此窗口开着），再回 iPhone 点「开始广播」。Windows 对 BLE HID 外设的发现窗口很短，两边要几乎同时操作；且 Windows 的 BLE HID 配对流程与 iOS 外设不完全兼容，部分电脑即使搜到也会卡在配对。Android 对 BLE HID 的支持因机型而异。Windows 回桌面用 Win + D，本 App 三指上滑（Command + H）只对 iPadOS 有效。")
+                Text("蓝牙 HID 的配对信息存在主机侧：本 App 作为外设无法远程解除 iPad 的配对。切到 Windows / Android 前，请先在 iPad 蓝牙里「忽略此设备」，否则它会因已配对自动抢连。\n\nWindows（推荐 · 零安装）：本 App 设置里打开「Windows 直连（电脑零安装）」，保持 Windows 的 设置 → 蓝牙和其他设备 → 添加设备 → 其他设备 窗口开着，再点「开始广播」，列表出现你的 iPhone 后配对。Windows 11（尤其 24H2）的发现列表按设备类别过滤、而 iOS 无法设置该字段，若列表不显示，先在 Windows 蓝牙高级设置把「蓝牙设备发现」改为「高级」或点「显示所有设备」。部分 Windows 版本即使搜到也会卡在配对，此时改用「桥接（WiFi 转发）」+ 电脑端 windows\\pt_receiver.ps1（系统自带 PowerShell，零安装）兜底。Windows 回桌面用 Win + D，本 App 三指上滑（Command + H）只对 iPadOS 有效。")
                     .font(.caption)
             }
 

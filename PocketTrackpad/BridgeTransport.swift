@@ -6,14 +6,14 @@ import Network
 ///
 ///   1. ESP32（esp32/ 固件）：收到后以标准 BLE HID（带正确 GAP Appearance =
 ///      0x03C1 HID Keyboard）转发给 Windows / Android。
-///   2. Windows 电脑上的软件接收器（windows/pt_receiver.py）：收到后直接用
-///      Win32 SendInput 注入鼠标键盘，不需要任何额外硬件。
+///   2. Windows 电脑上的接收器（windows/pt_receiver.ps1，系统自带 PowerShell 零安装）：
+///      收到后直接用 Win32 SendInput 注入鼠标键盘，不需要任何额外硬件。
 ///
 /// 为什么需要这一层：iOS 的 CoreBluetooth 外设无法设置 GAP Appearance，
 /// 导致 Windows 等主机搜不到 / 配对失败（详见 README「Windows 直连」一节）。
 /// 把「被主机发现」这一步交给桥接端，iPhone 只负责采集输入。
 ///
-/// 协议（见 ESP32 端 `main.cpp` 与 PC 端 `pt_receiver.py`）：
+/// 协议（见 ESP32 端 `main.cpp` 与 PC 端 `pt_receiver.ps1`）：
 ///   - iPhone 周期发送 2 字节 hello 包 [0x50,0x54]("PT")，桥接端回 [0x54,0x50]("TP")。
 ///   - iPhone 把 12 字节复合 HID 报告原样发给桥接端，由它转发 / 注入给主机。
 ///     12 字节布局与 App 内 `HIDSpec.compositeReportMap` 逐字节对应。

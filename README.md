@@ -1310,26 +1310,29 @@ CoreBluetooth 既没有「断开指定中央」的公开接口，也不提供删
 结论：**要切到别的设备，必须先在 iPad 蓝牙里「忽略此设备」**，这是 iOS 限制，不是 App bug。
 本 App 侧能做的只是「断开后保持停止广播、让用户决定何时重新广播」，避免 iPad 立刻自动回连。
 
-### Windows 实测结论（硬平台限制）
+### Windows：优先走系统原生添加（电脑零安装）
 
-用户按上述流程（iPad 忽略本设备 → 回 App 点「开始广播」）后，**Windows 蓝牙「添加设备 → 蓝牙」
-窗口仍搜不到 PT-Pad**。根因不是操作问题，而是 **iOS HID 外设与 Windows BLE HID 配对流程不兼容**：
+用户按上述流程（iPad 忽略本设备 → 回 App 点「开始广播」）后，现在**可以直接在 Windows 设置里添加**，
+电脑端不装任何软件。具体做法见 `windows/README.md` 的「方式 A」：
 
-- `CBPeripheralManager` 把 iPhone 注册成 BLE HID 外设，iPadOS / macOS / 多数 Android 能接管，
-  但 **Windows 的 BLE HID 配对（SMP 配对 / 服务发现）与 iOS 外设实现不匹配**，Nordic 官方论坛与
-  GitHub 实测均显示 Windows 连 iOS HID 外设时要么搜不到、要么连上后不做服务发现 / 卡在配对。
-- 这是系统级限制，**纯 iOS App 代码无法绕过**：广播包已是标准 16 位 `0x1812` HID UUID + 名称，
-  没有更多可调整的广播字段（`CBPeripheralManager` 只允许 LocalName 与 ServiceUUIDs 两项）。
+1. 先在 iPad 蓝牙「忽略此设备」并断开（iOS 外设被连接后会停止广播，Windows 搜不到）；
+2. App 设置里打开 **「Windows 直连（电脑零安装）」** —— 这会让 iPhone 以标准 BLE HID 组合设备
+   （鼠标 Report ID 1 + 键盘 Report ID 2）身份广播；
+3. Windows 打开 `设置 → 蓝牙和其他设备 → 添加设备 → 其他设备`，保持窗口开着，再回 iPhone 点「开始广播」；
+4. Windows 列表出现 iPhone 整机名后点它配对。
 
-### 出路：ESP32 硬件桥（针对 Windows / 安卓）
+**关键坑：Windows 11（尤其 24H2）的发现列表按设备类别（Appearance）过滤，而 iOS 不允许 App 在广播里
+设置该字段。** 若列表不显示，先在 Windows 蓝牙高级设置里把「蓝牙设备发现」改为「高级」，或在「添加设备」
+页点「显示所有设备」。打开高级发现后通常需取消再重开「添加设备」窗口让 Windows 重新扫描一轮。
 
-要让 Windows / 安卓稳定使用，可靠路径是 **ESP32 硬件桥**：
+> 完整步骤、参数与故障排查见仓库 `windows/README.md`。实测结果以你本机 Windows 版本为准：iOS 的
+> HID over GATT 外设与 Windows 的兼容性是版本相关的，少数机器即使搜到也会卡在配对。
 
-1. iPhone 跑本 App 收集触摸/按键，通过 WiFi（或 BLE 串口）把指针位移、点击、键码发给 ESP32；
-2. ESP32 以**标准 BLE HID 外设**身份连接 Windows / 安卓（ESP32 的 HID 实现与 Windows 完全兼容）；
-3. 这样 iPhone 仍当「输入采集端」，ESP32 当「标准 HID 发射端」，Windows / 安卓把它当普通蓝牙键鼠。
+### 兜底：电脑端接收器（零硬件）
 
-ESP32 固件与 iPhone 端透传是另一个独立子项目，代码里已在多处注释埋下该方向；需要的话可单开分支实现。
+若你的 Windows 版本确实配不上原生 BLE HID，走 **方式 B**：iPhone 不再广播，改为经 WiFi 把输入发给
+电脑上的接收器脚本，由脚本用 `SendInput` 注入真实鼠标键盘。仓库提供 `windows/pt_receiver.ps1`
+（系统自带 PowerShell，零安装；旧版 Python 版已移除）。详见 `windows/README.md` 的「方式 B」。
 
 ### 改动
 

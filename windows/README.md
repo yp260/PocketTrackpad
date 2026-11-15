@@ -1,131 +1,86 @@
-# PocketTrackpad Windows 接收器（零硬件方案）
+# PocketTrackpad 连 Windows —— 两种方式
 
-让 iPhone 变成 Windows 的鼠标 + 键盘，**不需要 ESP32、不需要蓝牙配对、只需要一台 Windows 电脑**。
+目标：把 iPhone 变成 Windows 的鼠标 + 键盘。
 
-## 为什么需要它
+- **方式 A（推荐 · 电脑零安装）**：iPhone 直接以 BLE 键鼠设备身份广播，Windows 在
+  `设置 → 蓝牙和其他设备 → 添加设备` 里原生配对，**电脑端不装任何软件、不装驱动**。
+- **方式 B（兜底 · 零硬件）**：电脑上跑一个脚本接收 WiFi 数据包并注入输入。需要装
+  PowerShell（Windows 10/11 自带，不算安装）或 Python；仅当方式 A 在你的 Windows 版本
+  上配不上时再用。
 
-iPhone 通过 CoreBluetooth 把自己伪装成蓝牙键鼠外设时，iOS 不允许 App 设置广播包里的
-**GAP Appearance**（设备类别标识）。Windows 11 的蓝牙发现会过滤掉没有标准类别标识的
-外设，所以「蓝牙设备」列表里根本看不到本机——这是**平台限制，不是 App 的 Bug**，iOS 侧
-无论怎么改描述符都绕不过去。
+---
 
-这个接收器把「蓝牙」这一环整个去掉：
+## 方式 A：系统原生添加（零安装，首选）
 
-```
-iPhone 采集输入
-   │  WiFi / UDP（局域网）
-   ▼
-Windows 上的 pt_receiver.py
-   │  Win32 SendInput 注入
-   ▼
-Windows 看到的就是一个真实的鼠标 + 键盘
-```
+### 原理
+App 开启「Windows 直连」后，iPhone 以标准 **HID over GATT** 组合设备（鼠标 + 键盘）身份广播。
+Windows 的蓝牙栈会把它当成一台普通蓝牙键鼠，走系统自带的 HID 驱动，无需任何第三方程序。
 
-协议与仓库里的 ESP32 固件**完全一致**（12 字节复合 HID 报告 + `PT`/`TP` 握手），
-两种桥接端可以随时互换。
+### 步骤
+1. **先断开 iPad。** iOS 作为 BLE 外设时，一旦被某台主机连接就会停止广播，Windows 因此搜不到。
+   在 iPad 蓝牙里「忽略此设备」，并确认 iPhone 上 PocketTrackpad 当前没有连着 iPad。
+2. 打开 PocketTrackpad → **设置** → 打开 **「Windows 直连（电脑零安装）**。
+   开关会先断开现有连接、重建 GATT 服务（这一步是系统要求，无法热切换）。
+3. **在 Windows 上**：`设置 → 蓝牙和其他设备 → 添加设备 → 其他设备（蓝牙）`，**保持这个窗口开着**。
+4. 回到 iPhone，点右上角 **「开始广播」**。几秒后 Windows 列表里会出现你的 iPhone（设备名就是
+   iPhone 的整机名，如 `iPhone` 或你改过的名字），点它完成配对。
+5. 配对成功后即可用 iPhone 当触控板 + 键盘。
 
-## 前提
+### 如果 Windows 列表里看不到 iPhone
+Windows 11（尤其 24H2）的发现列表会按「设备类别（Appearance）」过滤，而 iOS **不允许 App 在
+广播包里设置该字段**。两个解决办法：
 
-- Windows 10 / 11
-- Python 3.8 或更新版本（[python.org](https://www.python.org/downloads/) 安装时勾选
-  **Add python.exe to PATH**）
-- iPhone 与电脑连**同一个 WiFi**
+- 在 Windows `设置 → 蓝牙和其他设备 → 设备` 的高级设置里，把 **「蓝牙设备发现」改为「高级」**；
+- 或在「添加设备」页面点击 **「显示所有设备」**。
 
-不需要管理员权限，不需要安装任何第三方包（只用 Python 标准库 + ctypes）。
+两种方式都能让没有标准 Appearance 的 iPhone 显示出来。打开高级发现后通常需要先取消再重新打开
+「添加设备」窗口，让 Windows 重新扫描一轮。
 
-## 三步连上
+### 注意
+- 配对期间 App 必须**保持前台、屏幕常亮**。锁屏或切后台后 iOS 会停止 BLE 广播。
+- 若要切回 iPad：先在 Windows 蓝牙里「移除」/「忽略」此设备，再回 iPhone 重新广播给 iPad。
+- 部分 Windows 版本（尤其旧版或企业策略收紧的机器）对 iOS 外设的 HID over GATT 配对不完全兼容，
+  可能搜到却卡在配对。此时请直接改用下方的**方式 B**。
 
-### 1. 电脑上启动接收器
+---
 
-在 PowerShell 或 CMD 里：
+## 方式 B：电脑端接收器（兜底，零硬件）
+
+当方式 A 在你的 Windows 上配不上时，用这个。iPhone 不再广播 BLE，改为通过 WiFi 把输入发给
+电脑上的接收器，由接收器用 `SendInput` 注入真实鼠标键盘事件。
+
+### 零安装版（PowerShell，Windows 自带）
+`pt_receiver.ps1` 用系统自带 PowerShell + 内置的 C# 编译能力，无需安装 Python 或任何运行时。
 
 ```powershell
 cd <本仓库>\windows
-py -3 pt_receiver.py
+# 双击 start_receiver.bat 也行
+powershell -NoProfile -ExecutionPolicy Bypass -File .\pt_receiver.ps1
 ```
 
-看到这样的输出就说明启动好了：
+看到 `listening on UDP port 5000 ... Waiting for the iPhone` 即启动成功。
+首次运行 Windows 防火墙若询问「是否允许访问网络」，选 **允许**。
 
-```
-PocketTrackpad receiver listening on UDP port 5000
-  mouse mode : absolute (1:1)
-  output     : real input via SendInput
-Waiting for the iPhone...
-```
+### 手机端设置
+1. PocketTrackpad → **设置** → 打开 **「桥接（WiFi 转发）」**。
+2. **桥接端地址** 填电脑的局域网 IP（PowerShell 里 `ipconfig` 查 IPv4，形如 `192.168.1.100`），
+   端口 `5000`，点 **「保存地址」**。
+3. 回主页面点 **「连接桥接」**。电脑端出现 `handshake done` 即成功。
 
-> 首次运行时 Windows 防火墙会弹窗询问「是否允许 Python 访问网络」，
-> **必须选「允许」**，否则手机发过来的包会被防火墙拦掉。
-
-### 2. 查电脑的局域网 IP
-
-```powershell
-ipconfig
-```
-
-找「无线局域网适配器 WLAN」或「以太网适配器」下面的 **IPv4 地址**，
-形如 `192.168.1.100`。
-
-### 3. 手机上设置地址
-
-1. 打开 PocketTrackpad → **设置**
-2. 打开 **「桥接（WiFi 转发）」** 里的 **「启用桥接（WiFi 转发）」** 开关
-3. **桥接端地址** 填电脑的 IP（如 `192.168.1.100`），端口保持 `5000`
-4. 点 **「保存地址」**
-5. 回到主页面，点右上角 **「连接桥接」**
-
-电脑端窗口里出现 `[hello] 192.168.1.x:xxxxx -- handshake done` 即握手成功，
-手机顶部显示「已连接」。之后手指在手机上滑动，Windows 的鼠标指针就会跟着动。
-
-> 如果手机先连、电脑后启动接收器：在设置页点一下 **「重新握手」** 即可立刻建立链路。
-
-## 常用参数
-
+### 常用参数（PowerShell 版）
 | 参数 | 作用 |
 | --- | --- |
-| `--port 5001` | 换端口（手机端地址里的端口要同步改） |
-| `--rel` | 鼠标改用**相对**移动（默认是绝对定位，手指与指针 1:1，不受 Windows 指针加速影响） |
-| `--dry-run` | 只解析并打印收到什么，不真的动鼠标（排查用） |
-| `--selftest` | 自检：验证本机 `SendInput` 是否可用 |
-| `--verbose` | 打印每一条收到的报告 |
+| `--port 5001` | 换端口（手机端端口同步改） |
+| `--rel` | 鼠标改相对移动（默认绝对定位，手指与指针 1:1） |
+| `--dry-run` | 只解析打印，不真的动鼠标 |
+| `--selftest` | 自检本机 SendInput 是否可用 |
+| `--verbose` | 打印每条收到的报告 |
 
-## 键盘
+> Python 版 `pt_receiver.py` 已移除；PowerShell 版功能与协议完全一致，且零安装。
 
-App 的全键盘页发送的是标准 USB HID 键码，接收器会转换成 Windows 虚拟键码，
-因此：
+---
 
-- 字母、数字、符号（含 Shift 组合）都能正常输入
-- 方向键、Home / End / PageUp / PageDown、F1–F12、Tab、Esc、Backspace、Enter 都有
-- **Win + D** 可以显示桌面（App 的三指上滑是 Command + H，只对 iPadOS 有效）
-
-App 侧的中文输入法选词问题在 Windows 上不存在——Windows 上的候选词本来就可以直接用
-方向键 + 空格选中。
-
-## 常见问题
-
-**Q：手机显示「已连接」，但电脑鼠标不动？**
-A：检查 Windows 防火墙是否允许 Python 访问「专用网络」。可以临时关掉防火墙验证：
-```powershell
-# 需要管理员权限的 PowerShell
-Set-NetFirewallProfile -Profile Private -Enabled False
-```
-验证完记得改回来。
-
-**Q：接收器显示 `[skip] N bytes`？**
-A：说明收到的不是 12 字节报告，通常是 iPhone 还没连上桥接端，或地址填错了。
-
-**Q：鼠标移动太快 / 太慢？**
-A：鼠标速度在 App 的「设置 → 指针 → 指针速度」里调（默认 1.4×）。
-绝对定位模式下这个倍率直接对应像素比例。
-
-**Q：能让 Android 平板也用吗？**
-A：Android 平板需要真的 BLE HID 外设，走 ESP32 那条路（手机连 `PT-Bridge` 热点，
-地址填 `192.168.4.1`）。这个 Python 接收器只对 Windows 有效。
-
-**Q：电脑休眠后还能用吗？**
-A：不能。休眠会中断 WiFi，接收器进程也会被挂起。唤醒后重新运行接收器，
-手机端点一下「重新握手」。
-
-## 安全性
-
-接收器只监听 UDP 5000 端口，只处理本仓库定义的两种报文（2 字节握手、12 字节报告），
-不做任何网络请求、不落盘、不上传数据。数据全程在你自己的局域网内。
+## 键盘与选词
+两种方式下，App 全键盘页发的是标准 USB HID 键码。Windows 上候选词本来就能用 **方向键 + 空格**
+或 **数字** 直接选，不存在 iPad 那种需要实体键盘才出数字选词的问题。
+`Win + D` 显示桌面（App 的三指上滑 `Command + H` 只对 iPadOS 有效）。

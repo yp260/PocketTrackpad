@@ -103,9 +103,10 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
                 UserDefaults.standard.set(bridgeMode, forKey: HIDPeripheral.bridgeKey)
                 if bridgeMode {
                     // 启用桥模式时先关掉本地 BLE 广播，避免两个发射源冲突、互相抢连接。
+                    windowsMode = false
                     disconnect()
                     note("已启用桥接模式：iPhone 只采集输入，经 WiFi 发给桥接端")
-                    note("Windows 电脑：在电脑上运行 windows/pt_receiver.py，无需任何硬件")
+                    note("Windows 电脑：用系统自带 PowerShell 运行 windows/pt_receiver.ps1（零安装），无需任何硬件")
                     note("ESP32：手机先连 PT-Bridge 热点，再用默认地址 192.168.4.1")
                 } else {
                     note("已关闭桥接模式：恢复本机直接广播（iPad 直连）")
@@ -115,10 +116,46 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         }
 
     /// 键盘是否可用由三处状态共同决定，任何一处变化都刷新一次，供界面显示。
+    // MARK: - Windows 原生直连模式（电脑端零安装）
+    //
+    // 开启后，iPhone 以标准 BLE HID 组合设备（鼠标 + 键盘）身份广播，Windows 在
+    // 设置 → 蓝牙 → 添加设备 → 其他设备 里直接配对，电脑端不装任何软件。
+    //
+    // 与 iPad 复合模式 / 桥接模式的区别：
+    //   - iPad 复合：单条 0x2A4D 报告承载键盘 + 鼠标（无 Report ID）。
+    //   - 桥接：iPhone 不发 BLE，改为 WiFi UDP 把报告发给电脑/ESP32 接收器。
+    //   - Windows 直连：两条 0x2A4D 报告，分别带 Report ID 1（鼠标）/ 2（键盘）。
+    //     Windows 的 HID over GATT 客户端对「无 Report ID 的复合设备」只会解析
+    //     第一个顶层 Collection，鼠标或键盘必有一个失效；用 Report ID 拆开后两者都可用。
+    // 与桥接模式互斥：二者同时只会有一个为 true。
+    private static let windowsKey = "PocketTrackpad.windowsMode.v1"
+
+    @Published var windowsMode: Bool =
+        (UserDefaults.standard.object(forKey: HIDPeripheral.windowsKey) as? Bool) ?? false {
+        didSet {
+            UserDefaults.standard.set(windowsMode, forKey: HIDPeripheral.windowsKey)
+            if windowsMode {
+                bridgeMode = false
+                // 切换 GATT 拓扑必须彻底重建：移除服务、释放 manager、重新广播。
+                disconnect()
+                note("已启用 Windows 直连模式：iPhone 以 BLE HID 键鼠组合设备身份广播")
+                note("Windows 端零安装：设置 → 蓝牙 → 添加设备 → 其他设备 → 选择 iPhone")
+                note("若 Windows 列表不显示：先在高级设置打开「蓝牙设备发现：高级」或点「显示所有设备」")
+                note("iPhone 当前若连着 iPad，会先断开广播，Windows 才能发现（iOS 外设被连接后停止广播）")
+            } else {
+                note("已关闭 Windows 直连模式：恢复 iPad 直连 / 桥接路径")
+            }
+            refreshKeyboardReady()
+        }
+    }
+
     private func refreshKeyboardReady() {
         if bridgeMode {
             // 桥模式下没有 protocolMode / inputSubscribed 概念，桥连上即代表键盘可用。
             keyboardReady = bridgeActive
+        } else if windowsMode {
+            // 鼠标报告订阅即代表链接已建立；键盘可用要求键盘报告也被订阅。
+            keyboardReady = inputSubscribed && inputReport2 != nil
         } else {
             keyboardReady = compositeDevice && protocolMode != 0 && inputSubscribed
         }
@@ -146,7 +183,8 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
 
     // MARK: - CoreBluetooth
     private var manager: CBPeripheralManager?
-    private var inputReport: CBMutableCharacteristic?
+    private var inputReport: CBMutableCharacteristic?      // iPad/复合：复合报告 / Windows 模式：鼠标报告(ID 1)
+    private var inputReport2: CBMutableCharacteristic?     // Windows 模式：键盘报告(ID 2)
     private var bootReport: CBMutableCharacteristic?
     private var servicesToAdd: [CBMutableService] = []
     private var databaseBuilt = false
@@ -158,6 +196,7 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
     private var buttonBits: UInt8 = 0
     private var protocolMode: UInt8 = 1     // 1 = Report Protocol, 0 = Boot Protocol
     private var inputSubscribed = false
+    private var keyboardSubscribed = false   // Windows 模式：键盘报告(ID 2)是否已订阅
     private var bootSubscribed = false
     private var pendingX = 0
     private var pendingY = 0
@@ -215,7 +254,7 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         statusText = "正在连接桥接端"
         note("桥接模式：iPhone 采集输入 → WiFi UDP → 桥接端 → Windows 鼠标键盘")
         note("当前桥接端地址：\(bridge.currentHost):\(bridge.currentPort)")
-        note("Windows 电脑请先运行 windows/pt_receiver.py，并把地址设成电脑的局域网 IP")
+        note("Windows 电脑请先运行 windows/pt_receiver.ps1（零安装），并把地址设成电脑的局域网 IP")
         bridge.connect()
     }
 
@@ -266,8 +305,10 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         isAdvertising = false
         subscribers = 0
         inputSubscribed = false
+        keyboardSubscribed = false
         bootSubscribed = false
         inputReport = nil
+        inputReport2 = nil
         bootReport = nil
         servicesToAdd.removeAll()
         databaseBuilt = false
@@ -329,14 +370,6 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         let mode = makeChar(HIDSpec.protocolMode, properties: [.read, .write],
                             permissions: encRW)
 
-        // Descriptor 是静态元数据，允许带值；Characteristic 不允许。
-        let reportRef = CBMutableDescriptor(type: HIDSpec.reportReference,
-                                            value: HIDSpec.reportReferenceValue)
-        let report = makeChar(HIDSpec.report, properties: [.read, .notify],
-                              permissions: encRead,
-                              descriptors: [reportRef])
-        inputReport = report
-
         // Boot Mouse Input Report：iOS 在 Boot Protocol 下会走这个特征，必须提供。
         let boot = makeChar(HIDSpec.bootMouseInputReport, properties: [.read, .notify],
                             permissions: encRead)
@@ -353,8 +386,37 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
                                   properties: [.read, .write],
                                   permissions: encRW)
 
+        // Windows 直连模式：把鼠标 / 键盘拆成两条带 Report ID 的独立输入报告，
+        // 否则 Windows 的 HID over GATT 客户端只会解析 Report Map 里的第一个顶层
+        // Collection，指针或键盘其中一项失效。两条报告各占一个 0x2A4D 特征，
+        // 分别挂 Report Reference 描述符标注 Report ID 1（鼠标）/ 2（键盘）。
         let hid = CBMutableService(type: HIDSpec.hidService, primary: true)
-        hid.characteristics = [info, control, map, mode, report, boot, bootKbdIn, bootKbdOut]
+        if windowsMode {
+            let mouseRef = CBMutableDescriptor(type: HIDSpec.reportReference,
+                                               value: HIDSpec.winMouseReportRef)
+            let mouseReport = makeChar(HIDSpec.report, properties: [.read, .notify],
+                                       permissions: encRead, descriptors: [mouseRef])
+            inputReport = mouseReport
+
+            let kbdRef = CBMutableDescriptor(type: HIDSpec.reportReference,
+                                             value: HIDSpec.winKeyboardReportRef)
+            let kbdReport = makeChar(HIDSpec.report, properties: [.read, .notify],
+                                     permissions: encRead, descriptors: [kbdRef])
+            inputReport2 = kbdReport
+
+            hid.characteristics = [info, control, map, mode,
+                                   mouseReport, kbdReport, boot, bootKbdIn, bootKbdOut]
+        } else {
+            // Descriptor 是静态元数据，允许带值；Characteristic 不允许。
+            let reportRef = CBMutableDescriptor(type: HIDSpec.reportReference,
+                                                value: HIDSpec.reportReferenceValue)
+            let report = makeChar(HIDSpec.report, properties: [.read, .notify],
+                                  permissions: encRead, descriptors: [reportRef])
+            inputReport = report
+            inputReport2 = nil
+
+            hid.characteristics = [info, control, map, mode, report, boot, bootKbdIn, bootKbdOut]
+        }
 
         // ---- Device Information 0x180A ----
         let dis = CBMutableService(type: HIDSpec.deviceInformation, primary: true)
@@ -394,9 +456,13 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         servicesToAdd = makeServices()
         mark("4 已构造 4 个 CBMutableService（HID / Device Info / Battery / Generic Access）")
         note("开始注册 GATT 服务（HID / Device Info / Battery / Generic Access）")
-        note(compositeDevice
-             ? "当前模式：键鼠复合（输入报告 12 字节，三指上滑 = Command+H）"
-             : "当前模式：纯鼠标（输入报告 4 字节，与 v0.0.7 相同）")
+        if windowsMode {
+            note("当前模式：Windows 直连（鼠标 Report ID 1 + 键盘 Report ID 2，两条独立报告）")
+        } else {
+            note(compositeDevice
+                 ? "当前模式：键鼠复合（输入报告 12 字节，三指上滑 = Command+H）"
+                 : "当前模式：纯鼠标（输入报告 4 字节，与 v0.0.7 相同）")
+        }
         addNextService()
     }
 
@@ -510,7 +576,17 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
     /// 主机会分多次带 offset 读取。若忽略 offset，iPad 会拿到错乱的描述符并拒绝接管。
     func peripheralManager(_ peripheral: CBPeripheralManager,
                            didReceiveRead request: CBATTRequest) {
-        guard let full = readValue(for: request.characteristic.uuid) else {
+        // Windows 直连模式下两条输入报告共用 0x2A4D UUID，必须用特征对象本身
+        // （而非 UUID）来区分鼠标 / 键盘，返回各自带 Report ID 的空报告。
+        let full: Data?
+        if windowsMode, request.characteristic === inputReport2 {
+            full = HIDSpec.winKeyboardReport(modifier: 0, keycodes: [])
+        } else if windowsMode, request.characteristic === inputReport {
+            full = HIDSpec.winMouseReport(buttons: 0, x: 0, y: 0, wheel: 0)
+        } else {
+            full = readValue(for: request.characteristic.uuid)
+        }
+        guard let full = full else {
             peripheral.respond(to: request, withResult: .attributeNotFound)
             return
         }
@@ -554,13 +630,21 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
                            central: CBCentral,
                            didSubscribeTo characteristic: CBCharacteristic) {
         let id = HIDSpec.short(characteristic.uuid)
-        if id == "2A4D" { inputSubscribed = true }
-        if id == "2A33" { bootSubscribed = true }
+        // 两条输入报告共用 0x2A4D UUID，必须用特征对象（而非 UUID）区分订阅来源。
+        if characteristic === inputReport { inputSubscribed = true }
+        if characteristic === inputReport2 { keyboardSubscribed = true }
+        if characteristic === bootReport { bootSubscribed = true }
         subscribers += 1
         refreshKeyboardReady()
         statusText = "已连接 · 可以移动指针"
-        note("主机订阅 \(id)（配对完成）")
-        if keyboardReady {
+        let which = characteristic === inputReport2 ? "键盘报告(ID 2)"
+                    : (characteristic === inputReport ? "鼠标报告(ID 1)" : id)
+        note("主机订阅 \(which)（配对完成）")
+        if windowsMode {
+            note(keyboardReady
+                 ? "Windows 键鼠均就绪：可移动指针并输入"
+                 : "鼠标已连接，等待 Windows 订阅键盘报告")
+        } else if keyboardReady {
             note("全键盘可用：点触控区顶部「⌨ 全键盘」切换")
         } else {
             note("全键盘暂不可用：需键鼠复合模式 + Report Protocol + 2A4D 订阅")
@@ -571,12 +655,15 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
                            central: CBCentral,
                            didUnsubscribeFrom characteristic: CBCharacteristic) {
         let id = HIDSpec.short(characteristic.uuid)
-        if id == "2A4D" { inputSubscribed = false }
-        if id == "2A33" { bootSubscribed = false }
+        if characteristic === inputReport { inputSubscribed = false }
+        if characteristic === inputReport2 { keyboardSubscribed = false }
+        if characteristic === bootReport { bootSubscribed = false }
         subscribers = max(0, subscribers - 1)
         refreshKeyboardReady()
         statusText = isAdvertising ? "等待 iPad 配对" : "广播已停止"
-        note("主机取消订阅 \(id)")
+        let which = characteristic === inputReport2 ? "键盘报告(ID 2)"
+                    : (characteristic === inputReport ? "鼠标报告(ID 1)" : id)
+        note("主机取消订阅 \(which)")
     }
 
     func peripheralManagerIsReady(toUpdateSubscribers peripheral: CBPeripheralManager) {
@@ -592,7 +679,9 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
     private func readValue(for uuid: CBUUID) -> Data? {
         switch HIDSpec.short(uuid) {
         case "2A4A": return HIDSpec.hidInformationValue
-        case "2A4B": return HIDSpec.reportMap(composite: compositeDevice)
+        case "2A4B": return windowsMode
+            ? HIDSpec.winReportMap
+            : HIDSpec.reportMap(composite: compositeDevice)
         case "2A4E": return Data([protocolMode])
         case "2A4D": return HIDSpec.emptyReport(composite: compositeDevice)
         case "2A33": return Data([0x00, 0x00, 0x00])
@@ -601,7 +690,7 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         case "2A26": return Data("1.0.0".utf8)
         case "2A50": return HIDSpec.pnpIDValue
         case "2A19": return Data([100])
-        case "2A01": return HIDSpec.appearanceValue      // Keyboard 0x03C1
+        case "2A01": return windowsMode ? HIDSpec.appearanceCombo : HIDSpec.appearanceValue
         case "2A22": return Data(repeating: 0, count: 8)  // Boot Keyboard Input
         case "2A23": return Data([0])                     // Boot Keyboard Output (LED)
         default:     return nil
@@ -667,15 +756,15 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
     /// key-up，会把第二次按下当成一直按住，表现为漏字。
     func sendKey(_ keycode: UInt8, modifiers: UInt8 = 0,
                  label: String = "按键", reason: String = "按键未发送") {
-        guard compositeDevice || bridgeMode else {
-            note("\(reason)：当前是纯鼠标模式，请到设置里开启「键鼠复合模式」或桥接模式")
+        guard compositeDevice || bridgeMode || windowsMode else {
+            note("\(reason)：当前是纯鼠标模式，请到设置里开启「键鼠复合模式」/「Windows 直连」或桥接模式")
             return
         }
-        guard bridgeMode || protocolMode != 0 else {
+        guard bridgeMode || windowsMode || protocolMode != 0 else {
             note("\(reason)：主机处于 Boot Protocol，键盘报告不可用")
             return
         }
-        guard bridgeMode || inputSubscribed else {
+        guard bridgeMode || windowsMode || inputSubscribed else {
             note("\(reason)：主机尚未订阅 2A4D 输入报告")
             return
         }
@@ -764,6 +853,17 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
             return
         }
 
+        // Windows 直连：鼠标 / 键盘是两条独立报告，分别发到各自特征（各带 Report ID）。
+        if windowsMode {
+            let mouseReport = HIDSpec.winMouseReport(buttons: buttonBits, x: x, y: y, wheel: w)
+            send(mouseReport, on: inputReport)
+            if mod != 0 || !keys.isEmpty || keyReleased {
+                let kbdReport = HIDSpec.winKeyboardReport(modifier: mod, keycodes: keys)
+                send(kbdReport, on: inputReport2)
+            }
+            return
+        }
+
         guard let characteristic = activeReport else { return }
 
         let packet: Data
@@ -780,7 +880,13 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
 
     private func send(_ data: Data, on characteristic: CBMutableCharacteristic) {
         guard let manager = manager, manager.state == .poweredOn else { return }
-        guard inputSubscribed || bootSubscribed else { return }
+        // 按特征自身是否已订阅来决定能否发送：Windows 模式下鼠标 / 键盘是两条独立
+        // 特征，键盘报告仅在键盘特征被订阅后才能发。
+        let subscribed: Bool
+        if characteristic === inputReport2 { subscribed = keyboardSubscribed }
+        else if characteristic === bootReport { subscribed = bootSubscribed }
+        else { subscribed = inputSubscribed || bootSubscribed }
+        guard subscribed else { return }
         guard readyToUpdate else {
             queuedPacket = (data, characteristic)
             return
