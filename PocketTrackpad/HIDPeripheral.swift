@@ -878,7 +878,8 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         send(packet, on: characteristic)
     }
 
-    private func send(_ data: Data, on characteristic: CBMutableCharacteristic) {
+    private func send(_ data: Data, on characteristic: CBMutableCharacteristic?) {
+        guard let characteristic = characteristic else { return }
         guard let manager = manager, manager.state == .poweredOn else { return }
         // 按特征自身是否已订阅来决定能否发送：Windows 模式下鼠标 / 键盘是两条独立
         // 特征，键盘报告仅在键盘特征被订阅后才能发。
