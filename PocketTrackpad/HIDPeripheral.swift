@@ -271,6 +271,35 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
     /// 归位中标志，给 UI 显示状态用。
     @Published private(set) var isHoming = false
 
+    // 「选择新设备」模式：iOS 外设无法清除主机侧配对、也无 API 拒绝某个 central，
+    // 已配对主机（如 iPad）会自动抢连。开启本模式后，App 记住「上次连接的设备」，
+    // 一旦它在广播后又自动连上，立刻拆链重播，给新设备留出连接窗口。
+    // 注意：这是尽力而为，无法 100% 阻止系统栈的自动回连；根治须在旧设备忽略本设备。
+    private static let lastCentralKey = "PocketTrackpad.lastCentral.v1"
+    private static let selectNewModeKey = "PocketTrackpad.selectNewDeviceMode.v1"
+
+    /// 是否开启「选择新设备」模式（设置页开关，持久化）。
+    @Published var selectNewDeviceMode: Bool =
+        (UserDefaults.standard.object(forKey: HIDPeripheral.selectNewModeKey) as? Bool) ?? false {
+        didSet { UserDefaults.standard.set(selectNewDeviceMode, forKey: Self.selectNewModeKey) }
+    }
+
+    /// 上一条连上来的 central identifier（UUID 字符串），持久化。
+    /// 注意：iOS 只给外设这张「身份 UUID」，不是设备名。
+    private var lastCentralID: String? = UserDefaults.standard.string(forKey: HIDPeripheral.lastCentralKey) {
+        didSet {
+            if let v = lastCentralID {
+                UserDefaults.standard.set(v, forKey: Self.lastCentralKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: Self.lastCentralKey)
+            }
+        }
+    }
+    /// 本轮广播要避开的设备 ID（开启选择模式时取 lastCentralID）。空 = 不避开。
+    private var avoidCentralID: String?
+    /// 因避开旧设备而主动拆链的次数，防止死循环。
+    private var avoidRejectCount = 0
+
     // MARK: - 生命周期
 
     func start() {
@@ -407,6 +436,83 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         note("已断开；点「开始广播」重建服务后，Windows / Mac 等主机即可发现")
         note("若 iPad 仍在附近且保留配对，可能自动重连；必要时先在 iPad 蓝牙里忽略此设备")
         mark("7 运行中（已主动断开）")
+    }
+
+    /// 「选择新设备」：断开后开始广播，但本轮避开上次连接的设备。
+    /// 若它自动回连，App 会立刻拆链重播，给其他设备留出连接窗口。
+    /// 这是尽力而为——iOS 无 API 阻止已配对主机发起连接，根治须在旧设备忽略本设备。
+    func selectNewDevice() {
+        bridge.disconnect()
+        note("选择新设备：本轮将避开上次设备" + (lastCentralID.map { "（\($0.prefix(8))）" } ?? ""))
+        manager?.stopAdvertising()
+        manager?.removeAllServices()
+        manager?.delegate = nil
+        manager = nil
+
+        isAdvertising = false
+        subscribers = 0
+        inputSubscribed = false
+        keyboardSubscribed = false
+        bootSubscribed = false
+        inputReport = nil
+        inputReport2 = nil
+        bootReport = nil
+        servicesToAdd.removeAll()
+        databaseBuilt = false
+        databaseWindowsMode = nil
+        advertisingResumeScheduled = false
+        serviceFailed = false
+        advertisingFallbackUsed = false
+        buttonBits = 0
+        pendingX = 0
+        pendingY = 0
+        pendingWheel = 0
+        pendingModifier = 0
+        pendingKeycode = 0
+        keyReleaseAt = nil
+        emptyKeyFramesLeft = 0
+        queuedPacket = nil
+        readyToUpdate = true
+        cancelHoming()
+        refreshKeyboardReady()
+
+        // 锁定要避开的目标，最多让位 3 次，然后重新开始广播。
+        avoidCentralID = lastCentralID
+        avoidRejectCount = 0
+        statusText = "等待新设备连接（已跳过上次设备）"
+        note("已开始广播：请在新设备上搜索 PT-Pad；上次设备若抢连会自动让位")
+        start()
+    }
+
+    /// 旧设备自动回连时的让位处理：彻底拆链后重新广播，给新设备连接窗口。
+    private func rejectAndRebroadcastOldCentral() {
+        guard avoidCentralID != nil else { return }
+        note("让位：拆除旧设备链路并重新广播")
+        manager?.stopAdvertising()
+        manager?.removeAllServices()
+        manager?.delegate = nil
+        manager = nil
+        isAdvertising = false
+        subscribers = 0
+        inputSubscribed = false
+        keyboardSubscribed = false
+        bootSubscribed = false
+        inputReport = nil
+        inputReport2 = nil
+        bootReport = nil
+        servicesToAdd.removeAll()
+        databaseBuilt = false
+        databaseWindowsMode = nil
+        advertisingResumeScheduled = false
+        buttonBits = 0
+        refreshKeyboardReady()
+        statusText = "等待新设备连接（已跳过上次设备）"
+        // 稍等再重播，确保系统释放旧链路，否则 startAdvertising 可能被拒。
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) { [weak self] in
+            guard let self = self, self.avoidCentralID != nil else { return }
+            self.start()
+            self.note("已重新广播，等待新设备（让位 \(self.avoidRejectCount)/3）")
+        }
     }
 
     // MARK: - GATT 数据库
@@ -600,7 +706,10 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
     /// 因此在确认订阅清零后强制 stop→start 重新发起广播。
     private func ensureAdvertisingAfterDisconnect() {
         // 桥接模式下本来就不广播；manager 已被 disconnect 释放时也不处理。
+        // 「选择新设备」避让进行中也不自动恢复——由 rejectAndRebroadcastOldCentral 统一重播，
+        // 否则两套逻辑会同时 startAdvertising 互相打断。
         guard !bridgeMode,
+              avoidCentralID == nil,
               !advertisingResumeScheduled,
               let manager = manager,
               manager.state == .poweredOn,
@@ -747,6 +856,38 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         if characteristic === bootReport { bootSubscribed = true }
         subscribers += 1
         refreshKeyboardReady()
+
+        // 记住这次连上来的主机身份，供「选择新设备」模式识别旧设备。
+        let thisID = central.identifier.uuidString
+        lastCentralID = thisID
+
+        // 「选择新设备」模式：若连上来的正是本轮要避开的旧设备，立刻拆链重播，
+        // 给它之后的窗口让新设备接入。iOS 无法拒绝指定 central，只能连上即拆。
+        if let avoid = avoidCentralID, thisID == avoid {
+            if avoidRejectCount < 3 {
+                avoidRejectCount += 1
+                note("检测到上次设备自动回连（第 \(avoidRejectCount) 次），正在断开让位给新设备")
+                statusText = "旧设备自动回连，正在让位…"
+                // 延迟一帧再拆链，避免在 CoreBluetooth 回调里同步释放 manager。
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+                    guard let self = self else { return }
+                    self.rejectAndRebroadcastOldCentral()
+                }
+                return
+            } else {
+                // 连续让位 3 次仍被抢连：系统栈层面无法继续阻止，如实告知用户。
+                note("旧设备持续自动回连，iOS 无法继续阻止；请到旧设备蓝牙设置里「忽略此设备」")
+                statusText = "已连回旧设备 · 请在其蓝牙里忽略本设备"
+            }
+        }
+
+        // 连上来的不是要避开的设备（即新设备）→ 正常连接，结束本轮避开状态。
+        if avoidCentralID != nil, thisID != avoidCentralID {
+            avoidCentralID = nil
+            avoidRejectCount = 0
+            note("新设备已连接，退出「跳过上次设备」")
+        }
+
         statusText = "已连接 · 可以移动指针"
         let which = characteristic === inputReport2 ? "键盘报告(ID 2)"
                     : (characteristic === inputReport ? "鼠标报告(ID 1)" : id)

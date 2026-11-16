@@ -197,6 +197,7 @@ struct KeyboardPanel: View {
 
     @EnvironmentObject private var hid: HIDPeripheral
     @EnvironmentObject private var clicks: KeyClickPlayer
+    @EnvironmentObject private var haptics: HapticPlayer
     @Binding var showKeyboard: Bool
 
     @State private var page: KeyboardPage = .letters
@@ -355,7 +356,7 @@ struct KeyboardPanel: View {
             return
         case .sticky(let mask):
             sticky ^= mask
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            haptics.play()
         case .clear:
             sticky = 0
         case .key(let keycode, let modifier):
@@ -364,7 +365,7 @@ struct KeyboardPanel: View {
             // 按键音：与真实键盘一致，敲一下响一下；音量在设置页滑块调节，
             // 键盘页工具条的喇叭按钮可在 静音 / 25% / 50% / 100% 之间循环。
             clicks.play()
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            haptics.play()
         }
     }
 }

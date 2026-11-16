@@ -7,6 +7,8 @@ struct PocketTrackpadApp: App {
     @StateObject private var hid = HIDPeripheral()
     /// 按键音播放器（单例注入）：键盘页与设置页共用同一份音量设置。
     @StateObject private var clicks = KeyClickPlayer.shared
+    /// 按键振动播放器（单例注入）：键盘页、鼠标键、设置页共用同一份开关与强弱。
+    @StateObject private var haptics = HapticPlayer.shared
     /// 键鼠宏存储（注入）：录制列表、编辑、回放共用同一份持久化数据。
     @StateObject private var macros = MacroStore()
 
@@ -15,6 +17,7 @@ struct PocketTrackpadApp: App {
             ContentView()
                 .environmentObject(hid)
                 .environmentObject(clicks)
+                .environmentObject(haptics)
                 .environmentObject(macros)
                 .onAppear {
                     // 锁屏后 iOS 会停止 BLE 广播，因此使用期间保持屏幕常亮。

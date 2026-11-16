@@ -96,7 +96,13 @@ struct ContentView: View {
                         if hid.bridgeMode {
                             if hid.bridgeActive { hid.disconnectBridge() } else { hid.startBridge() }
                         } else {
-                            if hid.isAdvertising { hid.stopAdvertising() } else { hid.start() }
+                            if hid.isAdvertising {
+                                hid.stopAdvertising()
+                            } else if hid.selectNewDeviceMode {
+                                hid.selectNewDevice()
+                            } else {
+                                hid.start()
+                            }
                         }
                     } label: {
                         if hid.bridgeMode {
@@ -119,10 +125,16 @@ struct ContentView: View {
                     MacroListView()
                 }
             }
-            .alert("已断开", isPresented: $showSwitchHelp) {
-                Button("知道了", role: .cancel) {}
+            .alert("已断开 · 连接哪台设备？", isPresented: $showSwitchHelp) {
+                Button("选择新设备（跳过上次）") {
+                    hid.selectNewDevice()
+                }
+                Button("普通开始广播") {
+                    hid.start()
+                }
+                Button("取消", role: .cancel) {}
             } message: {
-                Text("要连接到其他设备（Windows / Android）：\n\n1. 在刚断开的设备（如 iPad）蓝牙设置里「忽略此设备」，否则它会因已配对而自动抢连。\n2. Windows（推荐 · 零安装）：本 App 设置里打开「Windows 直连（电脑零安装）」，保持 Windows 的 设置 → 蓝牙和其他设备 → 添加设备 → 其他设备 窗口开着，再回本 App 点「开始广播」，列表里出现你的 iPhone 后点它配对，电脑端不装任何软件。若列表不显示，先在 Windows 蓝牙高级设置把「蓝牙设备发现」改为「高级」或点「显示所有设备」。\n3. Android 同样先忽略旧配对再搜 PT-Pad；iPad 端若仍自动抢连，先去 iPad 忽略本设备。\n\n【你的 Windows 搜不到 / 卡在配对？】部分 Windows 版本与 iOS HID 外设不兼容，这时改用设置里的「桥接（WiFi 转发）」，电脑上用系统自带 PowerShell 运行 windows\\pt_receiver.ps1（零安装），地址填电脑局域网 IP 即可直接控制 Windows。\n\n提示：三指上滑（Command + H）只对 iPadOS 有效；Windows 回桌面用 Win + D，macOS 用 F11。")
+                Text("「选择新设备」会跳过上次连接的设备：若它自动回连，App 会立刻断开让位，给你用新设备（Windows / Android / 另一台 iPad）连接的机会。\n\n但 iOS 系统限制：App 无法清除主机侧的配对，已配对设备由系统自动回连，App 只能「连上就拆」最多 3 次。要彻底不再被它抢连，必须在旧设备蓝牙设置里「忽略此设备」。\n\nWindows（推荐 · 零安装）：设置里开「Windows 直连」，打开 Windows 的 设置 → 蓝牙 → 添加设备 → 其他设备 窗口，再点「选择新设备」，列表出现 iPhone 后配对。搜不到就在 Windows 蓝牙高级设置把发现改为「高级」或点「显示所有设备」。若仍不兼容，改用「桥接（WiFi 转发）」+ 电脑端 windows\\pt_receiver.ps1（零安装）。")
             }
         }
     }
@@ -267,6 +279,7 @@ struct SettingsView: View {
 
     @EnvironmentObject private var hid: HIDPeripheral
     @EnvironmentObject private var clicks: KeyClickPlayer
+    @EnvironmentObject private var haptics: HapticPlayer
 
     /// 桥接端地址：初次进入时从 BridgeTransport 读回已保存的值。
     @State private var bridgeHost: String = ""
@@ -325,6 +338,25 @@ struct SettingsView: View {
                     Label("试听", systemImage: "speaker.wave.2.fill")
                 }
                 Text("虚拟键盘每次按键都会响一声机械键盘音；底部左键 / 右键 / 滚轮键同样有反馈音。音量 0 即静音。键盘页工具条的喇叭按钮可在 静音 / 25% / 50% / 100% 之间快速切换。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("按键振动") {
+                Toggle("启用振动反馈", isOn: $haptics.isEnabled)
+                Picker("振动强弱", selection: $haptics.strength) {
+                    ForEach(HapticPlayer.Strength.allCases, id: \.self) { s in
+                        Text(s.label).tag(s)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .disabled(!haptics.isEnabled)
+                Button {
+                    haptics.preview()
+                } label: {
+                    Label("试振", systemImage: "waveform")
+                }
+                Text("按键、底部鼠标键、触控区轻点 / 双击都会在 iPhone 本机产生振动反馈，强弱分弱 / 中 / 强三档。振动只在 iPhone 上反馈，不会传给被控制的 iPad / 电脑；iOS 需系统振动功能开启（静音键不影响振动）。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -410,14 +442,16 @@ struct SettingsView: View {
             }
 
             Section {
-                LabeledRow(title: "iPad 自动重连", detail: "已配对会主动回连")
-                LabeledRow(title: "切到 Windows", detail: "先开电脑添加窗口，再点本 App 开始广播")
-                LabeledRow(title: "切到 Android", detail: "同样先忽略本设备再配对")
-                LabeledRow(title: "本 App", detail: "断开后点「开始广播」")
+                Button {
+                    hid.selectNewDevice()
+                } label: {
+                    Label("选择新设备（跳过上次设备）", systemImage: "arrow.triangle.2.circlepath")
+                }
+                Toggle("开始广播时避开上次设备", isOn: $hid.selectNewDeviceMode)
             } header: {
                 Text("切换设备")
             } footer: {
-                Text("蓝牙 HID 的配对信息存在主机侧：本 App 作为外设无法远程解除 iPad 的配对。切到 Windows / Android 前，请先在 iPad 蓝牙里「忽略此设备」，否则它会因已配对自动抢连。\n\nWindows（推荐 · 零安装）：本 App 设置里打开「Windows 直连（电脑零安装）」，保持 Windows 的 设置 → 蓝牙和其他设备 → 添加设备 → 其他设备 窗口开着，再点「开始广播」，列表出现你的 iPhone 后配对。Windows 11（尤其 24H2）的发现列表按设备类别过滤、而 iOS 无法设置该字段，若列表不显示，先在 Windows 蓝牙高级设置把「蓝牙设备发现」改为「高级」或点「显示所有设备」。部分 Windows 版本即使搜到也会卡在配对，此时改用「桥接（WiFi 转发）」+ 电脑端 windows\\pt_receiver.ps1（系统自带 PowerShell，零安装）兜底。Windows 回桌面用 Win + D，本 App 三指上滑（Command + H）只对 iPadOS 有效。")
+                Text("「选择新设备」会断开当前连接并重新广播，本轮跳过上次连过的设备：若它自动回连，App 会立刻拆链让位（最多 3 次），给你连接新设备的机会。开关打开后，每次点「开始广播」都自动跳过上次设备。\n\n【系统限制】蓝牙 HID 的配对信息存在主机侧，iOS 外设无法远程解除、也无法拒绝指定设备连接——已配对设备由系统自动回连，App 只能「连上就拆」。要彻底不被旧设备抢连，必须在旧设备蓝牙设置里「忽略此设备」。\n\nWindows（推荐 · 零安装）：打开「Windows 直连」，保持 Windows 的 设置 → 蓝牙 → 添加设备 → 其他设备 窗口，再点「选择新设备」，列表出现 iPhone 后配对。Windows 11（24H2）发现列表按类别过滤、iOS 无法设置该字段，若列表不显示，开「蓝牙设备发现：高级」或点「显示所有设备」。仍不兼容就改用「桥接（WiFi 转发）」+ 电脑端 windows\\pt_receiver.ps1（零安装）。")
                     .font(.caption)
             }
 
@@ -565,6 +599,7 @@ private struct HoldButton: View {
 
     @EnvironmentObject private var hid: HIDPeripheral
     @EnvironmentObject private var clicks: KeyClickPlayer
+    @EnvironmentObject private var haptics: HapticPlayer
     let title: String
     let mask: UInt8
     @State private var isDown = false
@@ -584,7 +619,7 @@ private struct HoldButton: View {
                         isDown = true
                         hid.setButton(mask, pressed: true)
                         clicks.play()
-                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        haptics.play()
                     }
                     .onEnded { _ in
                         isDown = false
@@ -600,6 +635,7 @@ private struct WheelButton: View {
 
     @EnvironmentObject private var hid: HIDPeripheral
     @EnvironmentObject private var clicks: KeyClickPlayer
+    @EnvironmentObject private var haptics: HapticPlayer
 
     @State private var isDragging = false
     @State private var lastY: CGFloat = 0
@@ -666,7 +702,7 @@ private struct WheelButton: View {
             lastTap = .distantPast
             hid.click(0x04)
             clicks.play()
-            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            haptics.play()
         } else {
             lastTap = now
         }

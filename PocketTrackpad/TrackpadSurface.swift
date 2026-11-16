@@ -193,14 +193,14 @@ struct TrackpadSurface: UIViewRepresentable {
             hideHint()
             hid.click(0x01)
             KeyClickPlayer.shared.play()
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            HapticPlayer.shared.play()
         }
 
         @objc func handleDoubleTap(_ g: UITapGestureRecognizer) {
             hideHint()
             hid.click(0x01, count: 2)
             KeyClickPlayer.shared.play()
-            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            HapticPlayer.shared.play()
         }
 
         @objc func handleLongPress(_ g: UILongPressGestureRecognizer) {
@@ -208,7 +208,7 @@ struct TrackpadSurface: UIViewRepresentable {
             hideHint()
             hid.click(0x02)
             KeyClickPlayer.shared.play()
-            UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
+            HapticPlayer.shared.play()
         }
 
         /// 三指上滑 80pt：发送 Command+H（回主屏幕）。
@@ -225,7 +225,7 @@ struct TrackpadSurface: UIViewRepresentable {
                     homeFired = true
                     hideHint()
                     hid.goHome()
-                    UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
+                    HapticPlayer.shared.play()
                 }
             default:
                 homeFired = false
