@@ -46,12 +46,12 @@ struct MacroListView: View {
                     HStack(spacing: 8) {
                         ProgressView()
                             .controlSize(.small)
-                        Text("正在归位光标到左上角起点…")
+                        Text("正在归位光标到左下角起点…")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                 }
-                Text("点「开始录制」后先把光标归位到左上角作为统一物理起点（约 1.5 秒），再回触控区或全键盘正常操作；所有指针移动、滚轮、按键、点击按真实时序记录。回放前同样归位，因此每次播放的轨迹落点一致。")
+                Text("点「开始录制」后先把光标归位到左下角作为统一物理起点（约 1.5 秒），再回触控区或全键盘正常操作；所有指针移动、滚轮、按键、点击按真实时序记录。回放前同样归位，因此每次播放的轨迹落点一致。左下角起点也避开了 iPad 左上角双击锁屏的热区。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } header: {
@@ -89,7 +89,7 @@ struct MacroListView: View {
             } header: {
                 Text("播放")
             } footer: {
-                Text("每次播放（含循环的每一轮）都会先把光标归位到左上角，再按录制时序回放，所以轨迹落点每次一致。「指定次数」用 Stepper 设定 1–99 次；无限循环需手动停止。")
+                Text("每次播放（含循环的每一轮）都会先把光标归位到左下角，再按录制时序回放，所以轨迹落点每次一致。「指定次数」用 Stepper 设定 1–99 次；无限循环需手动停止。")
                     .font(.caption)
             }
 

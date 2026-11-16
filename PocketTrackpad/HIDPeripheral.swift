@@ -261,10 +261,10 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
     /// 回放注入时置 true，让 recordEvent 跳过，避免回放事件被再次录进去。
     private var isReplaying = false
 
-    // 「统一起点」归位：录制开始前、回放每一轮开始前，先把光标推到屏幕左上角。
+    // 「统一起点」归位：录制开始前、回放每一轮开始前，先把光标推到屏幕左下角。
     // HID 是相对位移，App 读不到主机光标绝对坐标；但连续发最大负位移会让光标
     // 一路饱和到物理原点，与起始位置、屏幕分辨率、指针加速都无关，是最可靠的锚点。
-    /// 归位剩余帧数（每帧 -127）。>0 时 tick() 强制发归位位移，不走 enqueue 故不会进录制。
+    /// 归位剩余帧数（每帧 X=-127 向左、Y=+127 向下，饱和到左下角）。>0 时 tick() 强制发归位位移，不走 enqueue 故不会进录制。
     private var homingFramesLeft = 0
     /// 归位完成后要执行的闭包（真正开始录制 / 开始一轮回放）。
     private var afterHoming: (() -> Void)?
@@ -979,13 +979,13 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
     }
 
     @objc private func tick() {
-        // 归位阶段：每帧强制发左上角方向的饱和位移，直接写 pending（不经 enqueue，
+        // 归位阶段：每帧强制发左下角方向的饱和位移，直接写 pending（不经 enqueue，
         // 因此不会被 recordEvent 录进宏），保证回放起点与录制起点是同一物理角落。
         var homingCompleted = false
         if homingFramesLeft > 0 {
             homingFramesLeft -= 1
-            pendingX = -127
-            pendingY = -127
+            pendingX = -127   // 向左饱和
+            pendingY = 127    // 向下饱和 → 归位到左下角，避开 iPad 左下角双击锁屏热区
             if homingFramesLeft == 0 { homingCompleted = true }
         }
 
@@ -1021,7 +1021,7 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         }
     }
 
-    /// 开始归位：连续若干帧把光标推向左上角物理原点。完成后执行 action。
+    /// 开始归位：连续若干帧把光标推向左下角物理原点。完成后执行 action。
     /// 帧数取 90（60Hz 约 1.5 秒），足以让任意屏幕尺寸 + 指针加速下的光标饱和到角落。
     private func beginHoming(then action: @escaping () -> Void) {
         if link == nil {
@@ -1032,7 +1032,7 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         afterHoming = action
         homingFramesLeft = 90
         isHoming = true
-        note("正在归位光标到屏幕左上角（统一起点），约 1.5 秒…")
+        note("正在归位光标到屏幕左下角（统一起点），约 1.5 秒…")
     }
 
     /// 取消归位：停止录制 / 停止回放时调用，避免残留闭包稍后误触发。
@@ -1157,13 +1157,13 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         ))
     }
 
-    /// 开始录制。先把光标归位到左上角物理原点，再开始计时——这样录下的位移
+    /// 开始录制。先把光标归位到左下角物理原点，再开始计时——这样录下的位移
     /// 以固定角落为起点，回放前同样归位即可保证轨迹落点一致。
     func startRecording() {
         guard !isRecording, !isHoming else { return }
         if isPlaying { stopPlayback() }
         recordingEvents = []
-        note("准备录制：先把光标归位到左上角作为统一起点")
+        note("准备录制：先把光标归位到左下角作为统一起点")
         beginHoming { [weak self] in
             guard let self = self else { return }
             self.recordingEvents = []
@@ -1206,12 +1206,12 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         }
         isPlaying = true
         note("开始回放「\(macro.name)」：\(mode.label)")
-        // 每轮开始前归位到左上角，保证与录制起点一致。归位期间 playbackLoopStart
+        // 每轮开始前归位到左下角，保证与录制起点一致。归位期间 playbackLoopStart
         // 保持 nil，playbackTick 会跳过注入；归位完成后再开始本轮计时。
         startNextLoopWithHoming(first: true)
     }
 
-    /// 归位后开始新的一轮回放（回放起点与录制起点都对齐到左上角物理原点）。
+    /// 归位后开始新的一轮回放（回放起点与录制起点都对齐到左下角物理原点）。
     private func startNextLoopWithHoming(first: Bool) {
         playbackIndex = 0
         playbackLoopStart = nil
@@ -1289,7 +1289,7 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
             case .infinite:
                 break
             }
-            // 下一轮：先归位到左上角再开始，保证循环每一轮的轨迹落点都一致。
+            // 下一轮：先归位到左下角再开始，保证循环每一轮的轨迹落点都一致。
             updatePlaybackRemaining()
             startNextLoopWithHoming(first: false)
         }
