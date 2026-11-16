@@ -207,6 +207,12 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
     private var bootReport: CBMutableCharacteristic?
     private var servicesToAdd: [CBMutableService] = []
     private var databaseBuilt = false
+    /// 构建当前 GATT 数据库时的 windowsMode 快照。模式切换后若拓扑与此不符，
+    /// start() 会自动拆除重建——否则 iPad 直连会用着 Windows 的双 Report ID 拓扑，
+    /// 主机读到的 Report Map 与预期不符，表现为「搜不到 / 连上不能用」。
+    private var databaseWindowsMode: Bool?
+    /// 防止「订阅断开」和「连接断开」两个回调重复触发广播恢复。
+    private var advertisingResumeScheduled = false
     private var serviceFailed = false
     /// 某些 iOS 版本可能拒绝在广播中放 16 位 SIG UUID，此时自动回退到 128 位。
     private var advertisingFallbackUsed = false
@@ -277,6 +283,23 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         guard let manager = manager else { return }
         switch manager.state {
         case .poweredOn:
+            // 关键修复：GATT 拓扑必须和当前模式一致。用户从 Windows 直连切回 iPad 时，
+            // 关闭开关只写了 UserDefaults、没重建数据库；此时 databaseBuilt 仍为 true，
+            // 若直接 advertise()，iPad 读到的还是双 Report ID 的 Windows Report Map，
+            // 导致搜不到 / 配对失败。检测到快照不符就彻底拆除重建。
+            if databaseBuilt, databaseWindowsMode != windowsMode {
+                note("检测到 GATT 拓扑与当前模式不符，自动重建（旧模式 Windows=\(String(describing: databaseWindowsMode))，当前 Windows=\(windowsMode)）")
+                disconnect()
+                // disconnect() 释放了 manager，需重新创建后再构建，否则永远等不到广播。
+                manager = CBPeripheralManager(
+                    delegate: self,
+                    queue: .main,
+                    options: [CBPeripheralManagerOptionShowPowerAlertKey: true]
+                )
+                note("已重建 CBPeripheralManager，正在按当前模式注册服务")
+                buildDatabaseIfNeeded()
+                return
+            }
             if databaseBuilt { advertise() } else { buildDatabaseIfNeeded() }
         case .unknown, .resetting:
             statusText = "等待蓝牙就绪"
@@ -354,6 +377,8 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         bootReport = nil
         servicesToAdd.removeAll()
         databaseBuilt = false
+        databaseWindowsMode = nil
+        advertisingResumeScheduled = false
         serviceFailed = false
         advertisingFallbackUsed = false
         buttonBits = 0
@@ -493,6 +518,7 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
     private func buildDatabaseIfNeeded() {
         guard !databaseBuilt, let manager = manager, manager.state == .poweredOn else { return }
         databaseBuilt = true
+        databaseWindowsMode = windowsMode
         serviceFailed = false
         mark("3 蓝牙 poweredOn，构建 GATT 数据库")
         servicesToAdd = makeServices()
@@ -552,6 +578,38 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
              : "广播 16 位 SIG UUID：1812 / 180F / 180A")
         note("广播 Local Name = PT-Pad；iPad 列表显示的是 iPhone 整机名（App 无法改写）")
         note("要显示 PT-Pad：iPad 蓝牙里重命名，或改 iPhone 名称后忽略此设备重新配对")
+    }
+
+    /// 主机断开后自动恢复广播。
+    ///
+    /// iOS 有一个坑：外设被中央设备（iPad）连接后，系统会停止广播，但**不会**
+    /// 通过任何 delegate 回调告知 App，导致 isAdvertising 一直是 true、界面按钮
+    /// 停在「停止广播」。用户若在 iPad 上「忽略此设备」，iPhone 这边不会自己
+    /// 重新广播，iPad 就再也搜不到了——这正是「又搜不到」的高频原因。
+    /// 因此在确认订阅清零后强制 stop→start 重新发起广播。
+    private func ensureAdvertisingAfterDisconnect() {
+        // 桥接模式下本来就不广播；manager 已被 disconnect 释放时也不处理。
+        guard !bridgeMode,
+              !advertisingResumeScheduled,
+              let manager = manager,
+              manager.state == .poweredOn,
+              databaseBuilt,
+              subscribers == 0 else { return }
+        advertisingResumeScheduled = true
+        manager.stopAdvertising()
+        isAdvertising = false
+        // 稍等，确保系统已彻底释放旧连接，否则 startAdvertising 会被拒。
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
+            guard let self = self else { return }
+            self.advertisingResumeScheduled = false
+            guard !self.bridgeMode,
+                  self.subscribers == 0,
+                  self.manager?.state == .poweredOn,
+                  !self.isAdvertising else { return }
+            self.startAdvertising(with: HIDSpec.advertisedServiceUUIDs, fallback: false)
+            self.statusText = "等待 iPad 配对"
+            self.note("检测到主机断开，已自动恢复广播；iPad 现在可重新搜索 PT-Pad")
+        }
     }
 
     // MARK: - CBPeripheralManagerDelegate
@@ -706,6 +764,23 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         let which = characteristic === inputReport2 ? "键盘报告(ID 2)"
                     : (characteristic === inputReport ? "鼠标报告(ID 1)" : id)
         note("主机取消订阅 \(which)")
+        // 最后一个订阅也断开：自动恢复广播，保证 iPad 忽略设备后能重新搜到。
+        if subscribers == 0 { ensureAdvertisingAfterDisconnect() }
+    }
+
+    /// 中央设备彻底断开连接（iOS 13+）。覆盖「连上但没订阅就断开」的情况，
+    /// 同样要在无订阅时恢复广播，避免 iPad 忽略设备后永久搜不到。
+    func peripheralManager(_ peripheral: CBPeripheralManager,
+                           didDisconnect central: CBCentral) {
+        note("主机已断开连接")
+        // 有时 didUnsubscribeFrom 不会在断连前到达，subscribers 会残留非 0，
+        // 令恢复逻辑永不触发。彻底断连即代表没有任何订阅，直接清零。
+        inputSubscribed = false
+        keyboardSubscribed = false
+        bootSubscribed = false
+        subscribers = 0
+        refreshKeyboardReady()
+        ensureAdvertisingAfterDisconnect()
     }
 
     func peripheralManagerIsReady(toUpdateSubscribers peripheral: CBPeripheralManager) {
