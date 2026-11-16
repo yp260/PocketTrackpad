@@ -18,7 +18,7 @@ Windows 的蓝牙栈会把它当成一台普通蓝牙键鼠，走系统自带的
 
 ### 步骤
 1. **先断开 iPad。** iOS 作为 BLE 外设时，一旦被某台主机连接就会停止广播，Windows 因此搜不到。
-   在 iPad 蓝牙里「忽略此设备」，并确认 iPhone 上 PocketTrackpad 当前没有连着 iPad。
+   在 iPad「设置 → 辅助功能 → 触控 → 辅助触控 → 设备」里忽略本设备，并确认 iPhone 上 PocketTrackpad 当前没有连着 iPad。
 2. 打开 PocketTrackpad → **设置** → 打开 **「Windows 直连（电脑零安装）**。
    开关会先断开现有连接、重建 GATT 服务（这一步是系统要求，无法热切换）。
 3. **在 Windows 上**：`设置 → 蓝牙和其他设备 → 添加设备 → 其他设备（蓝牙）`，**保持这个窗口开着**。

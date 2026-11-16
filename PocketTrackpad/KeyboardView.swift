@@ -336,7 +336,7 @@ struct KeyboardPanel: View {
         HStack(alignment: .top, spacing: 6) {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.caption2)
-            Text("键盘暂不可用：需在设置里开启「键鼠复合模式」，并在 iPad 蓝牙里忽略此设备后重新配对；主机还须处于 Report Protocol 并订阅 2A4D。")
+            Text("键盘暂不可用：需在设置里开启「键鼠复合模式」，并按「\(HIDSpec.ipadIgnorePath)」忽略后重新配对；主机还须处于 Report Protocol 并订阅 2A4D。")
                 .font(.caption2)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)

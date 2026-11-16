@@ -74,6 +74,12 @@ enum HIDSpec {
     /// 忽略发过去的鼠标位移报告，表现就是「订阅成功、持续发帧、指针却完全不动」。
     static let appearanceMouse = Data([0xC2, 0x03])
 
+    /// iPad 忽略虚拟 HID 设备的正确路径（用户 2026-11-16 实测确认）。
+    /// BLE HID 键鼠被 iPadOS 归到「辅助触控」框架管理，**不在**「设置 → 蓝牙 →
+    /// 我的设备」里，旧版本所有让用户去蓝牙列表找 ⓘ 忽略的引导都是错的。
+    /// 真正彻底解绑、刷新 Report Map 缓存的入口只有这里。
+    static let ipadIgnorePath = "iPad 设置 → 辅助功能 → 触控 → 辅助触控 → 设备 → 点键盘 → 忽略此设备"
+
     // MARK: - HID Characteristics
     static let hidInformation       = sig("2A4A")
     static let reportMap            = sig("2A4B")

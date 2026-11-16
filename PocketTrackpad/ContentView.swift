@@ -135,7 +135,7 @@ struct ContentView: View {
                 }
                 Button("取消", role: .cancel) {}
             } message: {
-                Text("两种方式都会重新广播，任何设备都能连接。\n\n【换设备说明】iOS 无法清除主机侧的配对，已配对设备会由系统自动回连。要彻底不被它抢连，必须在旧设备蓝牙设置里「忽略此设备」。注意：在 iPad 蓝牙列表里找的不是 PT-Pad，而是你 iPhone 的名字（设置 > 通用 > 关于本机 > 名称），点它旁边的 ⓘ 就能断开或忽略。\n\nWindows（推荐 · 零安装）：设置里开「Windows 直连」，打开 Windows 的 设置 → 蓝牙 → 添加设备 → 其他设备 窗口，再重新广播，列表出现 iPhone 后配对。搜不到就在 Windows 蓝牙高级设置把发现改为「高级」或点「显示所有设备」。若仍不兼容，改用「桥接（WiFi 转发）」+ 电脑端 windows\\pt_receiver.ps1（零安装）。")
+                Text("两种方式都会重新广播，任何设备都能连接。\n\n【换设备说明】iOS 无法清除主机侧的配对，已配对设备会由系统自动回连。要彻底不被它抢连，必须在旧设备上忽略本设备。iPad 的正确入口是：\(HIDSpec.ipadIgnorePath)。\n\nWindows（推荐 · 零安装）：设置里开「Windows 直连」，打开 Windows 的 设置 → 蓝牙 → 添加设备 → 其他设备 窗口，再重新广播，列表出现 iPhone 后配对。搜不到就在 Windows 蓝牙高级设置把发现改为「高级」或点「显示所有设备」。若仍不兼容，改用「桥接（WiFi 转发）」+ 电脑端 windows\\pt_receiver.ps1（零安装）。")
             }
         }
     }
@@ -410,7 +410,7 @@ struct SettingsView: View {
             } header: {
                 Text("实验功能 · 全键盘与回桌面")
             } footer: {
-                Text("开启后本设备同时声明为鼠标和键盘，全键盘与三指上滑都依赖这个开关。iPad 可能弹出键盘配对验证，也可能拒绝接管整个设备导致鼠标失效。切换开关会自动断开并移除 GATT 服务：请在 iPad 蓝牙里「忽略此设备」，回到主页面点「开始广播」，再重新配对。若指针或点击失效，关掉本开关、同样忽略设备重新配对即可回到纯鼠标，不需要重装 App。Command + H 只对 iPadOS 有效；Windows 显示桌面是 Win + D，macOS 是 F11。")
+                Text("开启后本设备同时声明为鼠标和键盘，全键盘与三指上滑都依赖这个开关。iPad 可能弹出键盘配对验证，也可能拒绝接管整个设备导致鼠标失效。切换开关会自动断开并移除 GATT 服务：请按「\(HIDSpec.ipadIgnorePath)」忽略，回到主页面点「开始广播」，再重新配对。若指针或点击失效，关掉本开关、同样忽略设备重新配对即可回到纯鼠标，不需要重装 App。Command + H 只对 iPadOS 有效；Windows 显示桌面是 Win + D，macOS 是 F11。")
                     .font(.caption)
             }
 
@@ -482,7 +482,7 @@ struct SettingsView: View {
             } header: {
                 Text("切换设备")
             } footer: {
-                Text("点「断开并重新广播」会断开当前连接、重建蓝牙服务并重新广播，任何设备都能连接。\n\n【换设备说明】蓝牙 HID 的配对信息存在主机侧，iOS 外设无法远程解除、也无法拒绝指定设备连接——已配对设备（如旧 iPad）会由系统自动回连。要彻底不被它抢连，必须在旧设备蓝牙设置里找到你的 iPhone 名称，点「忽略此设备」。注意：iPad 蓝牙列表里显示的是 iPhone 整机名，不是 PT-Pad。\n\nWindows（推荐 · 零安装）：打开「Windows 直连」，保持 Windows 的 设置 → 蓝牙 → 添加设备 → 其他设备 窗口，再重新广播，列表出现 iPhone 后配对。Windows 11（24H2）发现列表按类别过滤、iOS 无法设置该字段，若列表不显示，开「蓝牙设备发现：高级」或点「显示所有设备」。仍不兼容就改用「桥接（WiFi 转发）」+ 电脑端 windows\\pt_receiver.ps1（零安装）。")
+                Text("点「断开并重新广播」会断开当前连接、重建蓝牙服务并重新广播，任何设备都能连接。\n\n【换设备说明】蓝牙 HID 的配对信息存在主机侧，iOS 外设无法远程解除、也无法拒绝指定设备连接——已配对设备（如旧 iPad）会由系统自动回连。要彻底不被它抢连，必须在旧设备上忽略本设备。iPad 的正确入口是：\(HIDSpec.ipadIgnorePath)。\n\nWindows（推荐 · 零安装）：打开「Windows 直连」，保持 Windows 的 设置 → 蓝牙 → 添加设备 → 其他设备 窗口，再重新广播，列表出现 iPhone 后配对。Windows 11（24H2）发现列表按类别过滤、iOS 无法设置该字段，若列表不显示，开「蓝牙设备发现：高级」或点「显示所有设备」。仍不兼容就改用「桥接（WiFi 转发）」+ 电脑端 windows\\pt_receiver.ps1（零安装）。")
                     .font(.caption)
             }
 
@@ -494,7 +494,7 @@ struct SettingsView: View {
             } header: {
                 Text("关于")
             } footer: {
-                Text("【为什么 iPad 蓝牙列表里找不到本设备？】本 App 让 iPhone 以「蓝牙 HID 键鼠」身份连接 iPad。iPadOS 把 HID 键鼠当系统输入设备，配对后大部分版本不会像耳机那样列在「我的设备」里供你点 ⓘ 断开/忽略——这是系统行为，不是没连上。能正常使用恰好证明连接是好的。\n\n【怎么断开 / 忽略？】① 最快：直接点本 App 顶部「断开」即可断开，无需去 iPad。② 若 iPad 列表里以「iPhone 的名字」出现（设置 → 通用 → 关于本机 → 名称，不是 PT-Pad），点它旁边 ⓘ → 忽略此设备。③ 完全找不到、且想彻底清掉配对：iPad 设置 → 通用 → 传输或还原 iPad → 还原 → 还原网络设置（会同时清掉 WiFi 密码，需重输）。\n\n【为什么显示 iPhone 名而不是 PT-Pad？】iPad 列表读的是对端 GAP 整机名，App 无权改写；广播名 PT-Pad 只在「其他设备」搜索列表里短暂出现。要让它好认，可把 iPhone 名称改成「按键精灵」，再到 iPad 忽略旧配对重连一次。")
+                Text("【为什么 iPad 蓝牙列表里找不到本设备？】本 App 让 iPhone 以「蓝牙 HID 键鼠」身份连接 iPad。iPadOS 把 HID 键鼠当系统输入设备，归到「辅助触控」框架管理，不列在「设置 → 蓝牙 → 我的设备」里——这是系统行为，不是没连上。能正常使用恰好证明连接是好的。\n\n【怎么断开 / 忽略？】① 最快：直接点本 App 顶部「断开」即可断开，无需去 iPad。② 彻底忽略 / 换设备 / 刷新配对缓存：\(HIDSpec.ipadIgnorePath)。注意不在蓝牙列表里，那里找不到。③ 若还想清得更干净：最后再去做 iPad 设置 → 通用 → 传输或还原 iPad → 还原 → 还原网络设置（会同时清掉 WiFi 密码，需重输）。\n\n【为什么显示 iPhone 名而不是 PT-Pad？】iPad 读的是对端 GAP 整机名，App 无权改写；广播名 PT-Pad 只在搜索时短暂出现。要让它好认，可把 iPhone 名称改成「按键精灵」，再到「辅助触控 → 设备」里忽略旧配对重连一次。")
                     .font(.caption)
             }
         }
@@ -609,7 +609,7 @@ private struct DiagnosticStrip: View {
 
             if expanded {
                 if canOfferPlainMouse {
-                    Text("iPad 连上却完全没反应？复合 12 字节可能被当成键盘忽略鼠标。切到纯鼠标后再到 iPad 蓝牙「忽略此设备」重新配对。")
+                    Text("iPad 连上却完全没反应？复合 12 字节可能被当成键盘忽略鼠标。切到纯鼠标后再按「\(HIDSpec.ipadIgnorePath)」忽略并重新配对。")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                     Button {

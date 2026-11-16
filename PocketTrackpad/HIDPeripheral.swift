@@ -219,11 +219,11 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
             note("已开启键鼠复合模式：输入报告 12 字节 = 键盘 8 + 鼠标 4（键盘字段在前）")
             note("本版描述符键盘 Collection 排最前，iPad 更可能按实体键盘对待（隐藏软键盘）")
             note("三指上滑会发送 Command+H；iPad 可能把本设备识别为键盘而弹出配对验证")
-            note("若鼠标失效：关掉本开关 → iPad 忽略此设备 → 重新广播配对，即回到纯鼠标")
+            note("若鼠标失效：关掉本开关 → 按「\(HIDSpec.ipadIgnorePath)」忽略 → 重新广播配对，即回到纯鼠标")
         } else {
             statusText = "已回退纯鼠标，请重新广播并配对"
             note("已回退为纯鼠标模式：输入报告恢复 4 字节，与 v0.0.7 完全一致")
-            note("需在 iPad 蓝牙里忽略此设备再重新配对，缓存的旧 Report Map 才会刷新")
+            note("需按「\(HIDSpec.ipadIgnorePath)」忽略后重新配对，缓存的旧 Report Map 才会刷新")
         }
     }
 
@@ -474,14 +474,14 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
     /// 复合 12 字节（键盘在前）在部分 iPadOS 版本上会被当键盘接管、忽略鼠标位移，
     /// 表现为「显示已连接、订阅正常，但 iPad 完全无反应」。此入口关复合 + 拆链 +
     /// 按纯鼠标拓扑重建 GATT + 自动重播。注意主机缓存了旧 Report Map，需在 iPad
-    /// 蓝牙里「忽略此设备」后重新配对才会真正刷新。
+    /// 「辅助触控 → 设备」里忽略后重新配对才会真正刷新（不在蓝牙列表里）。
     func switchToPlainMouse() {
         if windowsMode { windowsMode = false }
         if compositeDevice { compositeDevice = false }   // didSet 内已 disconnect()
         disconnect()
         start()
         note("已切到纯鼠标模式（4 字节，与 v0.0.7 一致）：GATT 已重建并重播")
-        note("重要：请在 iPad 蓝牙里「忽略此设备」后重新配对，旧 Report Map 缓存才会刷新")
+        note("重要：请按「\(HIDSpec.ipadIgnorePath)」忽略后重新配对，旧 Report Map 缓存才会刷新")
         statusText = "纯鼠标模式 · 请忽略设备重配"
     }
 
@@ -533,13 +533,14 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         refreshKeyboardReady()
         statusText = "已断开连接"
         note("已断开；点「开始广播」重建服务后，Windows / Mac 等主机即可发现")
-        note("若 iPad 仍在附近且保留配对，可能自动重连；必要时先在 iPad 蓝牙里忽略此设备")
+        note("若 iPad 仍在附近且保留配对，可能自动重连；必要时按「\(HIDSpec.ipadIgnorePath)」忽略")
         mark("7 运行中（已主动断开）")
     }
 
     /// 「选择新设备」：断开后开始广播，但本轮避开上次连接的设备。
     /// 若它自动回连，App 会立刻拆链重播，给其他设备留出连接窗口。
-    /// 这是尽力而为——iOS 无 API 阻止已配对主机发起连接，根治须在旧设备忽略本设备。
+    /// 这是尽力而为——iOS 无 API 阻止已配对主机发起连接，根治须在旧设备忽略本设备
+    /// （iPad 走「辅助触控 → 设备」，不在蓝牙列表）。
     func selectNewDevice() {
         bridge.disconnect()
         note("选择新设备：本轮将避开上次设备" + (lastCentralID.map { "（\($0.prefix(8))）" } ?? ""))
@@ -576,11 +577,11 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         refreshKeyboardReady()
 
         // 不再避开任何设备：iOS 无法拒绝指定 central，任何设备都能正常连接。
-        // 换设备请在旧设备蓝牙里「忽略此设备」，本按钮只做断开 + 重建 + 重播。
+        // 换设备请在旧设备的忽略入口解绑（iPad 走辅助触控），本按钮只做断开 + 重建 + 重播。
         avoidCentralID = nil
         avoidRejectCount = 0
         statusText = "等待设备配对"
-        note("已重新广播：任何设备都能连接；若旧设备自动回连，请到其蓝牙设置里「忽略此设备」")
+        note("已重新广播：任何设备都能连接；若旧 iPad 自动回连，请按「\(HIDSpec.ipadIgnorePath)」忽略")
         start()
     }
 
@@ -777,7 +778,7 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
              ? "广播回退模式：128 位完整 UUID（主机可能不显示）"
              : "广播 16 位 SIG UUID：1812 / 180F / 180A")
         note("广播 Local Name = PT-Pad；iPad 列表显示的是 iPhone 整机名（App 无法改写）")
-        note("要显示 PT-Pad：iPad 蓝牙里重命名，或改 iPhone 名称后忽略此设备重新配对")
+        note("要显示 PT-Pad：改 iPhone 名称后按「\(HIDSpec.ipadIgnorePath)」忽略并重新配对")
     }
 
     /// 主机断开后自动恢复广播。
