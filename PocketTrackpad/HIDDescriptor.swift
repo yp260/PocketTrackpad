@@ -74,6 +74,14 @@ enum HIDSpec {
     /// 忽略发过去的鼠标位移报告，表现就是「订阅成功、持续发帧、指针却完全不动」。
     static let appearanceMouse = Data([0xC2, 0x03])
 
+    /// GAP Appearance = HID Touchpad (0x03C9)，小端两字节（Bluetooth SIG 标准值）。
+    /// 触控板模式把它声明为 Touchpad，让 iPad「设置 → 通用」有机会出现独立的
+    /// 「触控板」菜单（跟踪速度 / 轻点来点按 / 双指辅助点按）。
+    /// 注意：iPadOS 原生三指切应用 / 四指手势只对 Magic Trackpad 2 / 妙控键盘
+    /// 的私有协议开放，第三方 BLE 设备拿不到；本 App 的三指手势是 App 侧识别后
+    /// 转成 Cmd+Tab 等键盘快捷键发出的，属于模拟，不是系统原生手势。
+    static let appearanceTouchpad = Data([0xC9, 0x03])
+
     /// iPad 忽略虚拟 HID 设备的正确路径（用户 2026-11-16 实测确认）。
     /// BLE HID 键鼠被 iPadOS 归到「辅助触控」框架管理，**不在**「设置 → 蓝牙 →
     /// 我的设备」里，旧版本所有让用户去蓝牙列表找 ⓘ 忽略的引导都是错的。
@@ -204,6 +212,8 @@ enum HIDSpec {
     /// Command(Left GUI) 位与 H 键的 HID 键码（三指上滑回桌面用）。
     static let commandModifier: UInt8 = modLeftGUI
     static let homeKeycode: UInt8 = 0x0B
+    /// Tab 键 HID 键码（三指左右滑切换 App：Cmd+Tab / Cmd+Shift+Tab）。
+    static let tabKeycode: UInt8 = 0x2B
 
     /// Report Map 里键盘字段声明的 Usage Maximum = 101 (0x65)。
     /// 超过这个范围的键码主机不会解析，全键盘布局只使用 0x00...0x65 内的键。

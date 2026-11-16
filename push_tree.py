@@ -42,7 +42,7 @@ tree = gh("POST", "/git/trees", {
 })
 print("tree =", tree["sha"])
 
-msg = "fix: 归位后加静默帧——对齐录制/回放的指针加速起点，进一步收紧宏落点误差\n\n用户反馈 v0.0.47 准确度提高不少、问能否再提高。残差根因：录制时归位完成后人有自然停顿\n（指针加速已衰减到静止）才动手势；回放时归位一完成就立刻注入第一条位移（仍带归位 90 帧\n高速移动的高加速状态）。同一串位移在两种加速状态下屏幕落点不同，表现为开头段落偏移。\n修复：beginHoming 在归位 90 帧后追加静默 30 帧（force 发 x=y=0 空报告），让主机指针加速\n衰减到静止；录制与回放都经过这段静默，加速起点一致。静默帧不进录制（isRecording 在归位\n完成后才置 true、flush 仅在位移非 0 时记录），回放注入也因 playbackLoopStart 仍为 nil 跳过。\n用 didHome 标志保证归位最后一帧不被同帧静默覆盖位移。归位总时长 1.5s→2s。报告格式与配对不变。"
+msg = "feat: 触控板模式开关——Appearance 声明 Touchpad + 三指左右滑切 App\n\n用户要求 iPad 把虚拟键鼠识别为触控板，且要可回退开关。研究确认：iPad「设置 → 通用」里「触控板」\n与「鼠标」是两个独立菜单，系统按 GAP Appearance 归类；标准 Appearance 有 Touchpad=0x03C9。\n实现：\n- HIDDescriptor 加 appearanceTouchpad(0x03C9) 与 Tab 键码 0x2B；\n- HIDPeripheral 加 trackpadMode 持久化开关（默认关、可回退），开启时 2A01 返回 Touchpad、\n  自动开复合模式（保证 Cmd+Tab 的键盘通道）、与 Windows/桥接模式互斥、切换断开重建 GATT 并\n  提示按辅助触控路径忽略重配；诊断条加角色标识；\n- 新增 switchApp(forward:) 发 Cmd+Tab / Cmd+Shift+Tab；\n- TrackpadSurface 加三指左右滑手势（与三指上滑按方向互斥），映射切 App，更新提示文案；\n- ContentView 设置页加「识别为触控板」开关和说明，preview/ui-preview.html 同步。\n重要限制已在 UI 说明：iPadOS 原生三指/四指手势只对 Magic Trackpad 2 私有协议开放，第三方 BLE\n拿不到；本 App 三指左右滑是 App 侧识别后转键盘快捷键的模拟实现，不是系统原生手势。\n报告格式不变（仍复合 12 字节，仅 Appearance 不同），配对流程不变。"
 
 commit = gh("POST", "/git/commits", {
     "message": msg, "tree": tree["sha"], "parents": [BASE]

@@ -69,8 +69,19 @@ struct TrackpadSurface: UIViewRepresentable {
         homeSwipe.delegate = context.coordinator
         view.addGestureRecognizer(homeSwipe)
 
+        // 三指左右滑：切 App（Cmd+Tab / Cmd+Shift+Tab）。与三指上滑同为 3 触点，
+        // 靠方向互斥——上滑只认 dy<=-80，左右滑只认 |dx|>=80 且横向占优。
+        let appSwipe = UIPanGestureRecognizer(target: context.coordinator,
+                                              action: #selector(Coordinator.handleAppSwipe(_:)))
+        appSwipe.minimumNumberOfTouches = 3
+        appSwipe.maximumNumberOfTouches = 3
+        appSwipe.cancelsTouchesInView = false
+        appSwipe.delegate = context.coordinator
+        view.addGestureRecognizer(appSwipe)
+
         let hint = UILabel()
-        hint.text = Self.hintText(composite: hid.compositeDevice || hid.bridgeMode)
+        hint.text = Self.hintText(composite: hid.compositeDevice || hid.bridgeMode,
+                                  trackpad: hid.trackpadMode)
         // 键盘页的小触控区不显示任何提示文字；全屏触控板保留手势说明。
         hint.isHidden = compact
         hint.numberOfLines = 0
@@ -92,14 +103,19 @@ struct TrackpadSurface: UIViewRepresentable {
 
     func updateUIView(_ uiView: UIView, context: Context) {
         context.coordinator.hid = hid
-        context.coordinator.hint?.text = Self.hintText(composite: hid.compositeDevice || hid.bridgeMode)
+        context.coordinator.hint?.text = Self.hintText(composite: hid.compositeDevice || hid.bridgeMode,
+                                                       trackpad: hid.trackpadMode)
         context.coordinator.hint?.isHidden = compact
         Self.applyStyle(uiView, edgeToEdge: edgeToEdge, compact: compact)
     }
 
-    private static func hintText(composite: Bool) -> String {
+    private static func hintText(composite: Bool, trackpad: Bool) -> String {
         let base = "单指移动指针  ·  轻点左键  ·  双击左键\n双指滚动  ·  长按右键"
-        return composite ? base + "\n三指上滑回桌面（Command+H）" : base
+        guard composite else { return base }
+        if trackpad {
+            return base + "\n三指上滑回桌面  ·  三指左右滑切 App"
+        }
+        return base + "\n三指上滑回桌面（Command+H）"
     }
 
     private static func applyStyle(_ view: UIView, edgeToEdge: Bool, compact: Bool) {
@@ -124,6 +140,9 @@ struct TrackpadSurface: UIViewRepresentable {
         private var didHideHint = false
         private var homeStartY: CGFloat = 0
         private var homeFired = false
+        private var appStartX: CGFloat = 0
+        private var appStartY: CGFloat = 0
+        private var appFired = false
 
         init(hid: HIDPeripheral) { self.hid = hid }
 
@@ -213,6 +232,7 @@ struct TrackpadSurface: UIViewRepresentable {
 
         /// 三指上滑 80pt：发送 Command+H（回主屏幕）。
         /// homeFired 保证一次手势只触发一次，抬手后复位。
+        /// 横向占优时交给 handleAppSwipe，避免同一次左右滑误触发回桌面。
         @objc func handleHomeSwipe(_ g: UIPanGestureRecognizer) {
             switch g.state {
             case .began:
@@ -220,8 +240,9 @@ struct TrackpadSurface: UIViewRepresentable {
                 homeFired = false
             case .changed:
                 guard !homeFired else { return }
-                let dy = g.translation(in: g.view).y - homeStartY
-                if dy <= -80 {
+                let t = g.translation(in: g.view)
+                let dy = t.y - homeStartY
+                if dy <= -80, abs(dy) >= abs(t.x) {
                     homeFired = true
                     hideHint()
                     hid.goHome()
@@ -229,6 +250,30 @@ struct TrackpadSurface: UIViewRepresentable {
                 }
             default:
                 homeFired = false
+            }
+        }
+
+        /// 三指左右滑 80pt：切 App。向右=Cmd+Tab（下一个），向左=Cmd+Shift+Tab（上一个）。
+        /// 与三指上滑靠方向互斥：只有横向占优（|dx|>80 且 |dx|>|dy|）才触发。
+        @objc func handleAppSwipe(_ g: UIPanGestureRecognizer) {
+            switch g.state {
+            case .began:
+                let t = g.translation(in: g.view)
+                appStartX = t.x
+                appStartY = t.y
+                appFired = false
+            case .changed:
+                guard !appFired else { return }
+                let t = g.translation(in: g.view)
+                let dx = t.x - appStartX
+                let dy = t.y - appStartY
+                guard abs(dx) >= 80, abs(dx) > abs(dy) else { return }
+                appFired = true
+                hideHint()
+                hid.switchApp(forward: dx > 0)
+                HapticPlayer.shared.play()
+            default:
+                appFired = false
             }
         }
     }

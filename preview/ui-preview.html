@@ -463,6 +463,10 @@ body.shot .phone { margin:0; }
         <br><b>键盘限制</b>：按键走 USB HID 键码（0x00~0x65），中文、emoji 和输入法切换由主机决定，不能直接写入字符；
         多媒体键（音量、亮度）属于 Consumer Page，本描述符未声明，无法发送。全键盘与三指上滑共用 12 字节键鼠复合报告，
         必须保持「键鼠复合模式」开启并在 iPad 忽略设备后重新配对。
+        <br><b>触控板模式</b>：设置里新增「识别为触控板」开关，把 GAP Appearance 从 Mouse(0x03C2) 改成标准
+        Touchpad(0x03C9)，让 iPad「设置 → 通用」有机会出现独立的「触控板」菜单；开启时自动打开键鼠复合模式。
+        三指左右滑 = Cmd+Tab / Cmd+Shift+Tab 切换 App（App 侧识别手势转成键盘快捷键的模拟实现，不是系统原生手势——
+        原生三指/四指手势只对 Magic Trackpad 2 私有协议开放）。切换需忽略设备重配，出问题关掉开关重配即可回退鼠标。
       </div>
     </div>
   </div>
@@ -478,6 +482,7 @@ body.shot .phone { margin:0; }
     sensitivity: 1.4, scrollSensitivity: 1.0, naturalScrolling: false,
     keyClickEnabled: true, keyClickVolume: 0.6,
     compositeDevice: true,
+    trackpadMode: false,
     bridgeMode: false, bridgeHost: "192.168.1.100", bridgePort: "5000",
     bridgeStatus: "桥接端未连接",
     keyboardPage: "letters", sticky: 0,
@@ -585,7 +590,10 @@ body.shot .phone { margin:0; }
 
   function padHint() {
     var base = "单指移动指针  ·  轻点左键  ·  双击左键<br>双指滚动  ·  长按右键";
-    return s.compositeDevice ? base + "<br>三指上滑回桌面（Command+H）" : base;
+    if (!s.compositeDevice) return base;
+    return s.trackpadMode
+      ? base + "<br>三指上滑回桌面  ·  三指左右滑切 App"
+      : base + "<br>三指上滑回桌面（Command+H）";
   }
   function padInner(cls, mini) {
     return "<div class=\"" + cls + "\" data-act=\"pad\" data-code=\"TrackpadSurface.swift:72-88\">" +
@@ -832,6 +840,14 @@ body.shot .phone { margin:0; }
         row("输入报告", s.compositeDevice ? "12 字节（键盘 8 + 鼠标 4）" : "4 字节（纯鼠标）") +
       "</div>" +
       "<div class=\"form-footer\" data-code=\"ContentView.swift:250-252\">开启后本设备同时声明为鼠标和键盘，全键盘与三指上滑都依赖这个开关。iPad 可能弹出键盘配对验证，也可能拒绝接管整个设备导致鼠标失效。切换开关会自动断开并移除 GATT 服务：请按「iPad 设置 → 辅助功能 → 触控 → 辅助触控 → 设备 → 点键盘 → 忽略此设备」忽略，回到主页面点「开始广播」，再重新配对。若指针或点击失效，关掉本开关、同样忽略设备重新配对即可回到纯鼠标，不需要重装 App。Command + H 只对 iPadOS 有效；Windows 显示桌面是 Win + D，macOS 是 F11。</div>" +
+      "<div class=\"sec-head\" data-code=\"ContentView.swift:417\">触控板模式（实验）</div>" +
+      "<div class=\"group\" data-code=\"ContentView.swift:418-422\">" +
+        "<div class=\"form-row line\" data-code=\"ContentView.swift:418\"><span>识别为触控板</span><span class=\"spacer\"></span>" +
+          "<button class=\"toggle" + (s.trackpadMode ? " on" : "") + "\" data-act=\"trackpad\" aria-label=\"识别为触控板\"></button></div>" +
+        row("设备类型", s.trackpadMode ? "Touchpad（触控板）" : "Mouse（鼠标）") +
+        row("三指左右滑", "切换 App（Cmd+Tab / Cmd+Shift+Tab）") +
+      "</div>" +
+      "<div class=\"form-footer\" data-code=\"ContentView.swift:423-425\">开启后把设备的 GAP 外观从「鼠标」改成标准「触控板」(0x03C9)，iPad 有机会把本设备当触控板，并在 设置 → 通用 出现独立的「触控板」菜单（跟踪速度 / 轻点来点按 / 双指辅助点按）。开启时会自动打开键鼠复合模式，三指左右滑即可用 Cmd+Tab 切换 App。重要限制：iPadOS 原生三指切应用、四指捏合只对 Magic Trackpad 2 / 妙控键盘私有协议开放，第三方蓝牙拿不到；本 App 三指左右滑是转成键盘快捷键的模拟实现，不是系统原生手势。切换会断开重建蓝牙服务：请按「iPad 设置 → 辅助功能 → 触控 → 辅助触控 → 设备 → 点键盘 → 忽略此设备」忽略，回主页面点「开始广播」再重新配对。若「连上但指针不动」，关掉本开关同样忽略重配即可回退鼠标模式。</div>" +
       "<div class=\"sec-head\" data-code=\"ContentView.swift:334\">桥接（连 Windows / Android）</div>" +
       "<div class=\"group\" data-code=\"ContentView.swift:335-362\">" +
         "<div class=\"form-row line\" data-code=\"ContentView.swift:337\"><span>启用桥接（WiFi 转发）</span><span class=\"spacer\"></span>" +
@@ -900,6 +916,7 @@ body.shot .phone { margin:0; }
       : (s.connected ? "已连接 · 全屏触控" : "引导页"));
     return kv("当前页面", screenName) +
       kv("输入模式", s.screen === "keyboard" ? "全键盘" : (s.connected ? "触控板" : "未连接")) +
+      kv("设备类型", s.trackpadMode ? "Touchpad（触控板 0x03C9）" : "Mouse（鼠标 0x03C2）") +
       kv("键盘页", pageName) +
       kv("粘滞修饰键", stickyNames()) +
       kv("键盘可用", kbReady() ? "可用（12 字节复合报告）" : "不可用") +
@@ -1049,6 +1066,14 @@ body.shot .phone { margin:0; }
       el.classList.toggle("on", s.compositeDevice);
       log("键鼠复合模式 → " + (s.compositeDevice ? "开（报告 12 字节）" : "关（报告 4 字节纯鼠标）"));
       log("真机切换会移除 GATT 服务：需在 iPad 辅助触控 → 设备里忽略后重新广播配对");
+      render();
+    }
+    else if (act === "trackpad") {
+      s.trackpadMode = !s.trackpadMode;
+      el.classList.toggle("on", s.trackpadMode);
+      if (s.trackpadMode && !s.compositeDevice) s.compositeDevice = true;
+      log("触控板模式 → " + (s.trackpadMode ? "开（Appearance=Touchpad 0x03C9，自动开复合）" : "关（Appearance=Mouse）"));
+      log("真机需按 iPad 辅助触控 → 设备里忽略后重新广播配对，iPad 才会重读设备类型");
       render();
     }
     else if (act === "bridge") {

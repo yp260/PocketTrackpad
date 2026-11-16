@@ -415,6 +415,17 @@ struct SettingsView: View {
             }
 
             Section {
+                Toggle("识别为触控板", isOn: $hid.trackpadMode)
+                LabeledRow(title: "设备类型", detail: hid.trackpadMode ? "Touchpad（触控板）" : "Mouse（鼠标）")
+                LabeledRow(title: "三指左右滑", detail: "切换 App（Cmd+Tab / Cmd+Shift+Tab）")
+            } header: {
+                Text("触控板模式（实验）")
+            } footer: {
+                Text("开启后把设备的 GAP 外观从「鼠标」改成标准的「触控板」(0x03C9)，iPad 有机会把本设备当触控板，并在 设置 → 通用 里出现独立的「触控板」菜单（跟踪速度 / 轻点来点按 / 双指辅助点按）。开启时会自动打开键鼠复合模式，三指左右滑即可用 Cmd+Tab 切换 App。\n\n重要限制：iPadOS 系统原生的三指切应用、四指捏合等手势只对 Magic Trackpad 2 / 妙控键盘的私有协议开放，第三方蓝牙设备拿不到；本 App 的三指左右滑是 App 侧识别手势后转成键盘快捷键的模拟实现，不是系统原生手势。\n\n切换会自动断开并重建蓝牙服务：请按「\(HIDSpec.ipadIgnorePath)」忽略设备，回到主页面点「开始广播」再重新配对，iPad 才会重读新的设备类型。若出现「连上但指针不动」，关掉本开关、同样忽略重配即可回到鼠标模式。")
+                    .font(.caption)
+            }
+
+            Section {
                 Toggle("Windows 直连（电脑零安装）", isOn: $hid.windowsMode)
                 LabeledRow(title: "电脑端要求", detail: "不装任何软件")
                 LabeledRow(title: "设备显示", detail: "iPhone 整机名")
