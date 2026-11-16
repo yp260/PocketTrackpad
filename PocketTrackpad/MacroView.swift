@@ -40,8 +40,18 @@ struct MacroListView: View {
                     } label: {
                         Label("开始录制", systemImage: "record.circle")
                     }
+                    .disabled(hid.isHoming || hid.isPlaying)
                 }
-                Text("点「开始录制」后回到触控区或全键盘正常操作，所有指针移动、滚轮、按键、点击都会按真实时序记录；再回来点「停止并保存」。回放时走的是与实时操作完全相同的发送链路。")
+                if hid.isHoming {
+                    HStack(spacing: 8) {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text("正在归位光标到左上角起点…")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Text("点「开始录制」后先把光标归位到左上角作为统一物理起点（约 1.5 秒），再回触控区或全键盘正常操作；所有指针移动、滚轮、按键、点击按真实时序记录。回放前同样归位，因此每次播放的轨迹落点一致。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } header: {
@@ -79,7 +89,7 @@ struct MacroListView: View {
             } header: {
                 Text("播放")
             } footer: {
-                Text("「指定次数」用下面的 Stepper 设定 1–99 次；无限循环需手动停止。停止回放时会补发全松开帧，避免主机卡键。")
+                Text("每次播放（含循环的每一轮）都会先把光标归位到左上角，再按录制时序回放，所以轨迹落点每次一致。「指定次数」用 Stepper 设定 1–99 次；无限循环需手动停止。")
                     .font(.caption)
             }
 
@@ -92,6 +102,7 @@ struct MacroListView: View {
                 } else {
                     ForEach(store.macros) { macro in
                         MacroRow(macro: macro,
+                                 playDisabled: hid.isHoming || hid.isRecording,
                                  onPlay: { play(macro) },
                                  onEdit: { editingMacro = macro })
                     }
@@ -150,6 +161,7 @@ struct MacroListView: View {
 
 private struct MacroRow: View {
     let macro: Macro
+    var playDisabled: Bool = false
     let onPlay: () -> Void
     let onEdit: () -> Void
 
@@ -174,6 +186,7 @@ private struct MacroRow: View {
                 .font(.caption)
                 .buttonStyle(.bordered)
                 .controlSize(.mini)
+                .disabled(playDisabled)
                 Button { onEdit() } label: {
                     Label("编辑", systemImage: "square.and.pencil")
                 }
