@@ -145,7 +145,9 @@ enum KeyboardLayout {
         labels.compactMap { KeyDef.function($0) }
     }
 
-    /// 常驻控制行：四个粘滞修饰键 + 空格 + 退格 + 回车。
+    /// 常驻控制行：四个粘滞修饰键 + 空格 + 下键 + 回车。
+    /// 下键由原导航行挪到这里（原退格键位），退格键挪到 M 行末尾、上键挪到原下键位，
+    /// 形成 ↓ / ⌫ / ↑ 三键循环换位。
     private static var controlRow: [KeyDef] {
         var row: [KeyDef] = [
             .sticky("Ctrl", mask: HIDSpec.modLeftControl),
@@ -154,7 +156,7 @@ enum KeyboardLayout {
             .sticky("⇧", mask: HIDSpec.modLeftShift)
         ]
         if let space = KeyDef.key("Space", weight: 2.6) { row.append(space) }
-        if let back = KeyDef.function("⌫", weight: 1.2) { row.append(back) }
+        if let down = KeyDef.function("↓", weight: 1.2) { row.append(down) }
         if let enter = KeyDef.function("⏎", weight: 1.2) { row.append(enter) }
         return row
     }
@@ -170,10 +172,11 @@ enum KeyboardLayout {
                 line("1234567890"),
                 letters("QWERTYUIOP"),
                 [.spacer(0.5)] + letters("ASDFGHJKL") + [.spacer(0.5)],
-                // Esc / ↑ 顶掉原来的左右空白，分别贴住键区左右边缘。
-                functionLine(["Esc"]) + letters("ZXCVBNM") + functionLine(["↑"]),
+                // M 行末尾由 ↑ 换成 ⌫（退格键从控制行挪上来）。
+                functionLine(["Esc"]) + letters("ZXCVBNM") + functionLine(["⌫"]),
+                // 导航行原 ↓ 位置换成 ↑（上键从 M 行挪下来）。
                 functionLine(["Tab", "Caps", "Del", "Home", "End",
-                              "←", "↓", "→"]),
+                              "←", "↑", "→"]),
                 controlRow
             ]
         case .symbols:

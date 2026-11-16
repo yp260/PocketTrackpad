@@ -42,7 +42,7 @@ tree = gh("POST", "/git/trees", {
 })
 print("tree =", tree["sha"])
 
-msg = "docs: 修正 iPad 忽略虚拟 HID 设备的引导——改指辅助触控路径\n\n用户实测找到：iPadOS 上 BLE HID 虚拟键鼠不在「设置 → 蓝牙 → 我的设备」里，真正的忽略入口是「设置 → 辅助功能 → 触控 → 辅助触控 → 设备 → 点键盘 → 忽略此设备」，点进去忽略才是真正解绑、刷新 Report Map 缓存。此前 App 内所有「到 iPad 蓝牙里忽略此设备」的引导都指向找不到的地方（HID 键鼠归辅助触控框架管理，与常规蓝牙配件分开），是错误引导。修复：HIDDescriptor 新增统一常量 ipadIgnorePath，所有用户可见文案与日志 note（HIDPeripheral、KeyboardView、ContentView）统一改为正确路径；同步 README、windows/README、preview/ui-preview.html。无功能逻辑变更。"
+msg = "feat: 主键位三键循环换位 + 修复宏回放点击位置整体偏移\n\n用户两项反馈：\n1) 主键位 ↓(下) / ⌫(退格) / ↑(上) 三键循环换位——下键移到控制行原退格位、退格键移到 M 行末尾原上键位、上键移到导航行原下键位。KeyboardView.swift 的 controlRow 与 rows(for:.letters) 调整，preview/ui-preview.html 同步并补两条变更记录。\n2) 宏录制/回放点击位置整体偏移。根因：flush 用 Int8(clamping:) 后立即把 pendingX/pendingY 清零，超 1 字节范围的位移被直接丢弃。录制时位移逐帧小增量不超限，但 recordEvent 30ms 合并后宏里存的是累加的大位移，回放时一次性 enqueue 超过 127 的部分被截断丢掉，轨迹逐段缩短、点击落点整体偏移。修复：改为 pendingX -= Int(x) 发多少减多少，余数留到下一帧续发，录制/回放走完全相同的位移总量。好处是改发送端，已保存的旧宏回放也自动正确，无需重录。无报告格式/协议变更。"
 
 commit = gh("POST", "/git/commits", {
     "message": msg, "tree": tree["sha"], "parents": [BASE]

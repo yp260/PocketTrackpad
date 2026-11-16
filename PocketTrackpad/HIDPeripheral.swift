@@ -1421,9 +1421,14 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         let x = Int8(clamping: pendingX)
         let y = Int8(clamping: pendingY)
         let w = Int8(clamping: pendingWheel)
-        pendingX = 0
-        pendingY = 0
-        pendingWheel = 0
+        // 单帧报告每轴只有 1 字节，范围 -127...127。超出部分不能直接丢弃：
+        // 录制时位移是逐帧小增量（各自不超限），但 30ms 合并后宏里存的是累加的大位移，
+        // 回放时一次性 enqueue 进来会超过 127，若在此清零就会把溢出部分永久丢掉，
+        // 导致回放轨迹逐段缩短、点击落点整体偏移。改为「发多少减多少」，余数留到
+        // 下一帧继续发，保证录制/回放走完全相同的位移总量。
+        pendingX -= Int(x)
+        pendingY -= Int(y)
+        pendingWheel -= Int(w)
 
         var mod = modifier
         var keys = keycodes

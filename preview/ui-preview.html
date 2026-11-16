@@ -421,6 +421,8 @@ body.shot .phone { margin:0; }
             <tr><td>30</td><td>断开后弹「切换设备」指引 + 设置「切换设备」分组：连 Windows / Android 须先在 iPad「辅助触控 → 设备」里忽略本设备防自动抢连；并写明 Windows 时序要点（先开电脑添加窗口再点开始广播、发现窗口短）与局限（Windows / 部分 Android 与 iOS HID 外设配对不完全兼容，可能需 ESP32 硬件桥）</td><td>ContentView.swift:76<br>ContentView.swift:513-525<br>ContentView.swift:262-272</td></tr>
             <tr><td>31</td><td>按键音：全键盘每次按键响一声机械键盘 click 音（打包的 keyclick.wav），底部左键 / 右键 / 滚轮键与触控区轻点同样有反馈音；设置页「按键音」分组可开关 + 调音量（0 静音）+ 试听；键盘页工具条加喇叭按钮，在 静音 / 25% / 50% / 100% 之间循环</td><td>KeyClickPlayer.swift<br>KeyboardView.swift:294-305,366<br>ContentView.swift:270-289</td></tr>
             <tr><td>32</td><td>桥接（连 Windows / Android）：开关 + 桥接端地址与端口输入 + 「保存地址」+「重新握手」；Windows 零硬件方案（电脑运行 windows/pt_receiver.py，地址填电脑局域网 IP）与 ESP32 方案（手机连 PT-Bridge 热点，地址 192.168.4.1）并列说明；地址持久化，心跳自动重连</td><td>ContentView.swift:334-363<br>BridgeTransport.swift:34-99<br>HIDPeripheral.swift:233-243</td></tr>
+            <tr><td>33</td><td>主键位 ↓ / ⌫ / ↑ 三键循环换位：下键移到控制行原退格键位，退格键移到 M 行末尾原上键位，上键移到导航行原下键位</td><td>KeyboardView.swift:148-176</td></tr>
+            <tr><td>34</td><td>修复宏回放点击位置整体偏移：flush 时位移超 1 字节范围不再丢弃，余数留到下一帧续发（30ms 合并的大位移回放时不再被截断）</td><td>HIDPeripheral.swift:1418-1432</td></tr>
           </tbody>
         </table>
       </div>
@@ -687,7 +689,7 @@ body.shot .phone { margin:0; }
     return [
       ["Ctrl", 1, "st", 0x01], ["Opt", 1, "st", 0x04],
       ["Cmd", 1, "st", 0x08], ["⇧", 1, "st", 0x02],
-      ["Space", 2.6, "space"], ["⌫", 1.2, "fn"], ["⏎", 1.2, "fn"]
+      ["Space", 2.6, "space"], ["↓", 1.2, "fn"], ["⏎", 1.2, "fn"]
     ];
   }
   /* 两页布局：功能页已并入主键位，F1~F12 / 方向键 / 常用导航键都在主键位页；
@@ -706,9 +708,9 @@ body.shot .phone { margin:0; }
       kbLine("1234567890".split("")),
       kbLine("QWERTYUIOP".split("")),
       [["", 0.5, "gap"]].concat(kbLine("ASDFGHJKL".split("")), [["", 0.5, "gap"]]),
-      // Esc 贴 Z 左侧（键区左边缘），↑ 贴 M 右侧（键区右边缘）。
-      [["Esc", 1, "fn"]].concat(kbLine("ZXCVBNM".split("")), [["↑", 1, "fn"]]),
-      kbLine(["Tab", "Caps", "Del", "Home", "End", "←", "↓", "→"], "fn"),
+      // ↓ / ⌫ / ↑ 三键循环换位：M 行末尾是 ⌫，导航行原 ↓ 位换成 ↑，控制行原 ⌫ 位换成 ↓。
+      [["Esc", 1, "fn"]].concat(kbLine("ZXCVBNM".split("")), [["⌫", 1, "fn"]]),
+      kbLine(["Tab", "Caps", "Del", "Home", "End", "←", "↑", "→"], "fn"),
       kbCtrlRow()
     ];
   }
