@@ -36,7 +36,15 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
     /// 连接是否存在明显问题，供界面用红色/橙色高亮诊断条。
     var hasConnectionProblem: Bool {
         if bridgeMode { return !bridgeActive }
+        // Windows 直连模式若既没鼠标也没键盘订阅，说明 iPad 正在尝试连但读不懂双报告，
+        // 属异常状态，应高亮提醒用户切回 iPad 模式。
+        if windowsMode && !inputSubscribed && !keyboardSubscribed { return true }
         return !inputSubscribed || !readyToUpdate
+    }
+
+    /// 等待配对时的状态文字：Windows 直连不能再写「等待 iPad 配对」，否则误导用户。
+    var pairingStatusText: String {
+        windowsMode ? "等待 Windows 配对" : "等待 iPad 配对"
     }
 
     /// 真正能收发数据才算「链路已建立」，界面据此切换全屏触控区。
@@ -417,6 +425,16 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         note("已重新发送握手包；若电脑端接收器正在运行，应立刻显示「已连接」")
     }
 
+    /// 一键从 Windows 直连切回 iPad：关开关 + 拆掉 Windows 双报告拓扑 + 按 iPad 拓扑重建并重播。
+    /// 设置页的 Toggle 只改持久化标志，要等下次点「开始广播」才重建；这个入口一步到位。
+    func switchToiPadMode() {
+        guard windowsMode else { return }
+        windowsMode = false
+        disconnect()
+        start()
+        note("已切回 iPad 模式：GATT 按 iPad 拓扑重建，正在重新广播")
+    }
+
     func stopAdvertising() {
         manager?.stopAdvertising()
         isAdvertising = false
@@ -765,8 +783,8 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
                   self.manager?.state == .poweredOn,
                   !self.isAdvertising else { return }
             self.startAdvertising(with: HIDSpec.advertisedServiceUUIDs, fallback: false)
-            self.statusText = "等待 iPad 配对"
-            self.note("检测到主机断开，已自动恢复广播；iPad 现在可重新搜索 PT-Pad")
+            self.statusText = self.pairingStatusText
+            self.note("检测到主机断开，已自动恢复广播；现在可重新搜索 \(self.pairingStatusText)")
         }
     }
 
@@ -818,7 +836,7 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
             note("广播失败: \(error.localizedDescription)")
         } else {
             isAdvertising = true
-            statusText = advertisingFallbackUsed ? "广播中（兼容模式）" : "等待 iPad 配对"
+            statusText = advertisingFallbackUsed ? "广播中（兼容模式）" : pairingStatusText
             mark("7 运行中（广播正常）")
             if advertisingFallbackUsed {
                 note("当前 iOS 版本禁止广播 16 位 SIG UUID，主机大概率不会显示本设备")
@@ -955,7 +973,7 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         if characteristic === bootReport { bootSubscribed = false }
         subscribers = max(0, subscribers - 1)
         refreshKeyboardReady()
-        statusText = isAdvertising ? "等待 iPad 配对" : "广播已停止"
+        statusText = isAdvertising ? pairingStatusText : "广播已停止"
         let which = characteristic === inputReport2 ? "键盘报告(ID 2)"
                     : (characteristic === inputReport ? "鼠标报告(ID 1)" : id)
         note("主机取消订阅 \(which)")

@@ -188,6 +188,30 @@ struct ContentView: View {
                             .font(.caption2)
                             .foregroundStyle(.tertiary)
                     } else if hid.windowsMode {
+                        // 醒目提醒：Windows 直连用双报告拓扑，iPad 连不上。给一键切回入口。
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                Text("当前是 Windows 直连模式，iPad 会连不上")
+                                    .font(.caption.weight(.semibold))
+                            }
+                            .foregroundStyle(.orange)
+                            Text("Windows 模式用专用双报告格式，iPad 读不懂、订阅为 0。要连 iPad 请先切回，本按钮会自动重建 GATT 并重新广播。")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                            Button {
+                                hid.switchToiPadMode()
+                            } label: {
+                                Text("一键切回 iPad 模式")
+                                    .font(.caption.weight(.semibold))
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.small)
+                        }
+                        .padding(10)
+                        .background(Color.orange.opacity(0.12),
+                                    in: RoundedRectangle(cornerRadius: 10))
                         Text("Windows 打开 设置 → 蓝牙和其他设备 → 添加设备 → 其他设备，保持窗口开着。")
                             .font(.caption)
                             .foregroundStyle(.secondary)
