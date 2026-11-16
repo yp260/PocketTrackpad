@@ -69,6 +69,10 @@ enum HIDSpec {
 
     /// GAP Appearance = HID Keyboard (0x03C1)，小端两字节。
     static let appearanceValue = Data([0xC1, 0x03])
+    /// GAP Appearance = HID Mouse (0x03C2)，小端两字节。
+    /// 纯鼠标模式必须声明 Mouse 而非 Keyboard：否则 iPadOS 会按键盘接管设备、
+    /// 忽略发过去的鼠标位移报告，表现就是「订阅成功、持续发帧、指针却完全不动」。
+    static let appearanceMouse = Data([0xC2, 0x03])
 
     // MARK: - HID Characteristics
     static let hidInformation       = sig("2A4A")

@@ -668,7 +668,14 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
             inputReport = report
             inputReport2 = nil
 
-            hid.characteristics = [info, control, map, mode, report, boot, bootKbdIn, bootKbdOut]
+            if compositeDevice {
+                hid.characteristics = [info, control, map, mode, report, boot, bootKbdIn, bootKbdOut]
+            } else {
+                // 纯鼠标：只挂鼠标特征、不挂 Boot Keyboard。配合 Appearance=Mouse，
+                // 让 iPadOS 干净地把它当鼠标接管（早期 v0.0.7 验证可用的配置）。
+                // 挂 Boot Keyboard + 声明 Keyboard 会让 iPadOS 按键盘接管并忽略鼠标位移。
+                hid.characteristics = [info, control, map, mode, report, boot]
+            }
         }
 
         // ---- Device Information 0x180A ----
@@ -1017,7 +1024,11 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         case "2A26": return Data("1.0.0".utf8)
         case "2A50": return HIDSpec.pnpIDValue
         case "2A19": return Data([100])
-        case "2A01": return windowsMode ? HIDSpec.appearanceCombo : HIDSpec.appearanceValue
+        case "2A01":
+            if windowsMode { return HIDSpec.appearanceCombo }
+            // 纯鼠标声明 Mouse，复合模式声明 Keyboard（needs 全键盘/选词）。
+            // 纯鼠标若声明 Keyboard，iPadOS 会按键盘接管并忽略鼠标位移 → 指针不动。
+            return compositeDevice ? HIDSpec.appearanceValue : HIDSpec.appearanceMouse
         case "2A22": return Data(repeating: 0, count: 8)  // Boot Keyboard Input
         case "2A23": return Data([0])                     // Boot Keyboard Output (LED)
         default:     return nil
