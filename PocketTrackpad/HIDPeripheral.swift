@@ -291,7 +291,8 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
                 note("检测到 GATT 拓扑与当前模式不符，自动重建（旧模式 Windows=\(String(describing: databaseWindowsMode))，当前 Windows=\(windowsMode)）")
                 disconnect()
                 // disconnect() 释放了 manager，需重新创建后再构建，否则永远等不到广播。
-                manager = CBPeripheralManager(
+                // 注意用 self.manager：上面的 `guard let manager` 是局部 let 常量。
+                self.manager = CBPeripheralManager(
                     delegate: self,
                     queue: .main,
                     options: [CBPeripheralManagerOptionShowPowerAlertKey: true]
