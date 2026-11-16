@@ -310,6 +310,11 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
     // 一路饱和到物理原点，与起始位置、屏幕分辨率、指针加速都无关，是最可靠的锚点。
     /// 归位剩余帧数（每帧 X=-127 向左、Y=+127 向下，饱和到左下角）。>0 时 tick() 强制发归位位移，不走 enqueue 故不会进录制。
     private var homingFramesLeft = 0
+    /// 归位到位后的静默帧数：连续发空位移帧，让主机侧「指针加速」从归位时的
+    /// 高速状态衰减到静止。录制与回放都经过这段静默，两者的加速起点才一致——
+    /// 否则录制时人手有反应停顿（已衰减）、回放归位完立刻注入（仍高速），
+    /// 同一串位移在两种加速状态下屏幕落点不同，表现为开头段落偏移。
+    private var settleFramesLeft = 0
     /// 归位完成后要执行的闭包（真正开始录制 / 开始一轮回放）。
     private var afterHoming: (() -> Void)?
     /// 归位中标志，给 UI 显示状态用。
@@ -1053,11 +1058,26 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         // 归位阶段：每帧强制发左下角方向的饱和位移，直接写 pending（不经 enqueue，
         // 因此不会被 recordEvent 录进宏），保证回放起点与录制起点是同一物理角落。
         var homingCompleted = false
+        var didHome = false
         if homingFramesLeft > 0 {
             homingFramesLeft -= 1
             pendingX = -127   // 向左饱和
             pendingY = 127    // 向下饱和，两轴合力把光标锁定到左下角物理原点（避开角落锁屏热区）
-            if homingFramesLeft == 0 { homingCompleted = true }
+            didHome = true
+        }
+
+        // 静默阶段：归位到位后连发空位移帧，让主机侧指针加速衰减到静止。
+        // 录制时人手有自然停顿、回放时归位完立刻注入——不强制对齐这段，两者
+        // 的加速起点就不同，开头位移会被放大导致落点偏移。空帧直接写 pending
+        // 为 0（不经 enqueue），不进录制；force 让空报告也真正发出去。
+        // !didHome 保证归位最后一帧不被同帧的静默覆盖位移。
+        var settling = false
+        if !didHome, homingFramesLeft == 0, settleFramesLeft > 0 {
+            settleFramesLeft -= 1
+            pendingX = 0
+            pendingY = 0
+            settling = true
+            if settleFramesLeft == 0 { homingCompleted = true }
         }
 
         // 回放注入与发送共用同一个 CADisplayLink（本 tick）：注入一帧位移立刻
@@ -1086,7 +1106,9 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
             emptyKeyFramesLeft -= 1
             keyReleased = true
         }
-        flush(force: false, modifier: modifier, keycodes: keycodes,
+        // settling 强制发空位移帧（x=y=0），让主机把指针加速状态归零；
+        // 空帧不会进录制（flush 内 recordEvent 仅在位移非 0 时调用）。
+        flush(force: settling, modifier: modifier, keycodes: keycodes,
               keyReleased: keyReleased)
 
         // 看门狗：若 readyToUpdate 卡在 false 超过 1 秒（订阅中、非桥接），
@@ -1121,8 +1143,10 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         }
     }
 
-    /// 开始归位：连续若干帧把光标推向左下角物理原点。完成后执行 action。
-    /// 帧数取 90（60Hz 约 1.5 秒），足以让任意屏幕尺寸 + 指针加速下的光标饱和到角落。
+    /// 开始归位：连续若干帧把光标推向左下角物理原点，再静默若干帧让加速归零，
+    /// 完成后执行 action。归位 90 帧 + 静默 30 帧（60Hz 约 2 秒）。
+    /// 归位帧数足以让任意屏幕尺寸 + 指针加速下的光标饱和到角落；静默帧让录制
+    /// 与回放从相同的「静止加速」状态起步，消除开头段落的落点偏移。
     private func beginHoming(then action: @escaping () -> Void) {
         if link == nil {
             let l = CADisplayLink(target: self, selector: #selector(tick))
@@ -1131,13 +1155,15 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         }
         afterHoming = action
         homingFramesLeft = 90
+        settleFramesLeft = 30
         isHoming = true
-        note("正在归位光标到屏幕左下角（统一起点），约 1.5 秒…")
+        note("正在归位光标到屏幕左下角（统一起点），约 2 秒…")
     }
 
     /// 取消归位：停止录制 / 停止回放时调用，避免残留闭包稍后误触发。
     private func cancelHoming() {
         homingFramesLeft = 0
+        settleFramesLeft = 0
         afterHoming = nil
         isHoming = false
     }
