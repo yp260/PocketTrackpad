@@ -39,7 +39,7 @@ struct ContentView: View {
                 // 断开后不要停留在键盘界面，下次连上仍从触控板开始。
                 if newValue == 0 { showKeyboard = false }
             }
-            .navigationTitle(connected ? "PT-Pad · \(hid.connectedDeviceName)" : "口袋触控板")
+            .navigationTitle(connected ? "PT-Pad · \(hid.connectedDeviceName)" : "按键精灵")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -134,7 +134,7 @@ struct ContentView: View {
                 }
                 Button("取消", role: .cancel) {}
             } message: {
-                Text("「选择新设备」会跳过上次连接的设备：若它自动回连，App 会立刻断开让位，给你用新设备（Windows / Android / 另一台 iPad）连接的机会。\n\n但 iOS 系统限制：App 无法清除主机侧的配对，已配对设备由系统自动回连，App 只能「连上就拆」最多 3 次。要彻底不再被它抢连，必须在旧设备蓝牙设置里「忽略此设备」。\n\nWindows（推荐 · 零安装）：设置里开「Windows 直连」，打开 Windows 的 设置 → 蓝牙 → 添加设备 → 其他设备 窗口，再点「选择新设备」，列表出现 iPhone 后配对。搜不到就在 Windows 蓝牙高级设置把发现改为「高级」或点「显示所有设备」。若仍不兼容，改用「桥接（WiFi 转发）」+ 电脑端 windows\\pt_receiver.ps1（零安装）。")
+                Text("「选择新设备」会跳过上次连接的设备：若它自动回连，App 会立刻断开让位，给你用新设备（Windows / Android / 另一台 iPad）连接的机会。\n\n但 iOS 系统限制：App 无法清除主机侧的配对，已配对设备由系统自动回连，App 只能「连上就拆」最多 3 次。要彻底不再被它抢连，必须在旧设备蓝牙设置里「忽略此设备」。注意：在 iPad 蓝牙列表里找的不是 PT-Pad，而是你 iPhone 的名字（设置 > 通用 > 关于本机 > 名称），点它旁边的 ⓘ 就能断开或忽略。\n\nWindows（推荐 · 零安装）：设置里开「Windows 直连」，打开 Windows 的 设置 → 蓝牙 → 添加设备 → 其他设备 窗口，再点「选择新设备」，列表出现 iPhone 后配对。搜不到就在 Windows 蓝牙高级设置把发现改为「高级」或点「显示所有设备」。若仍不兼容，改用「桥接（WiFi 转发）」+ 电脑端 windows\\pt_receiver.ps1（零安装）。")
             }
         }
     }
@@ -192,7 +192,7 @@ struct ContentView: View {
                             .font(.caption2)
                             .foregroundStyle(.tertiary)
                     } else {
-                        Text("iPad 上打开 设置 > 蓝牙，在「其他设备」里选择 PT-Pad 完成配对。")
+                        Text("iPad 上打开 设置 > 蓝牙，在「其他设备」里选择你的 iPhone（可能显示为 PT-Pad）完成配对。")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         Text("用右上角的「开始广播」启动蓝牙；连接成功后会自动出现全屏触控区。")
@@ -463,7 +463,7 @@ struct SettingsView: View {
             } header: {
                 Text("关于")
             } footer: {
-                Text("iPad 蓝牙列表优先显示 iPhone 整机名（GAP Device Name），不是广播名称，App 无权改写。要显示 PT-Pad：① 在 iPad 设置 → 蓝牙 → 已连接设备旁的更多信息按钮 → 名称，改成 PT-Pad（改完不要再忽略此设备）；或 ② 把 iPhone 设置 → 通用 → 关于本机 → 名称 改成 PT-Pad，再到 iPad 蓝牙里「忽略此设备」后重新配对。两条路径都不需要重装 App。")
+                Text("【为什么 iPad 蓝牙列表里找不到本设备？】本 App 让 iPhone 以「蓝牙 HID 键鼠」身份连接 iPad。iPadOS 把 HID 键鼠当系统输入设备，配对后大部分版本不会像耳机那样列在「我的设备」里供你点 ⓘ 断开/忽略——这是系统行为，不是没连上。能正常使用恰好证明连接是好的。\n\n【怎么断开 / 忽略？】① 最快：直接点本 App 顶部「断开」即可断开，无需去 iPad。② 若 iPad 列表里以「iPhone 的名字」出现（设置 → 通用 → 关于本机 → 名称，不是 PT-Pad），点它旁边 ⓘ → 忽略此设备。③ 完全找不到、且想彻底清掉配对：iPad 设置 → 通用 → 传输或还原 iPad → 还原 → 还原网络设置（会同时清掉 WiFi 密码，需重输）。\n\n【为什么显示 iPhone 名而不是 PT-Pad？】iPad 列表读的是对端 GAP 整机名，App 无权改写；广播名 PT-Pad 只在「其他设备」搜索列表里短暂出现。要让它好认，可把 iPhone 名称改成「按键精灵」，再到 iPad 忽略旧配对重连一次。")
                     .font(.caption)
             }
         }

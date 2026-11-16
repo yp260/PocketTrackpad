@@ -1,4 +1,4 @@
-# 口袋触控板 PocketTrackpad
+# 按键精灵（PocketTrackpad）
 
 把 iPhone 虚拟成蓝牙触控板 / 鼠标，连接 iPad 后作为系统级指针使用。
 
