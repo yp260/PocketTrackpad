@@ -232,6 +232,29 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
     private var queuedPacket: (Data, CBMutableCharacteristic)?
     private var link: CADisplayLink?
 
+    // MARK: - 宏录制 / 回放状态
+
+    /// 是否正在录制。录制期间所有输入事件连同时间戳写入 recordingEvents。
+    @Published private(set) var isRecording = false
+    /// 是否正在回放。回放期间输入走的是注入路径，不再二次录制。
+    @Published private(set) var isPlaying = false
+    /// 当前回放的宏名（界面显示）。
+    @Published private(set) var playingMacroName = ""
+    /// 剩余播放次数（无限循环为 -1），给界面显示进度。
+    @Published private(set) var playbackRemaining = 0
+
+    private var recordingEvents: [MacroEvent] = []
+    private var recordingStart: Date?
+    private var playbackMacro: Macro?
+    private var playbackEvents: [MacroEvent] = []
+    private var playbackMode: PlayMode = .once
+    private var playbackIndex = 0
+    private var playbackLoopsDone = 0
+    private var playbackLoopStart: Date?
+    private var playbackLink: CADisplayLink?
+    /// 回放注入时置 true，让 recordEvent 跳过，避免回放事件被再次录进去。
+    private var isReplaying = false
+
     // MARK: - 生命周期
 
     func start() {
@@ -723,6 +746,9 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         pendingX += dx
         pendingY += dy
         pendingWheel += wheel
+        // 录制：位移与滚轮分开成两个事件（滚轮是独立语义，回放时要能单独编辑）。
+        if dx != 0 || dy != 0 { recordEvent(kind: .move, dx: dx, dy: dy) }
+        if wheel != 0 { recordEvent(kind: .wheel, wheel: wheel) }
     }
 
     @objc private func tick() {
@@ -806,18 +832,23 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         let modHex = String(modifiers, radix: 16, uppercase: true)
         let keyHex = String(keycode, radix: 16, uppercase: true)
         note("键盘 → \(label)（keycode 0x\(keyHex)，modifier 0x\(modHex)）")
+        recordEvent(kind: .key, keycode: keycode, modifiers: modifiers, label: label)
     }
 
     /// 按住 / 松开某个按键。mask: 1=左键, 2=右键, 4=中键
     func setButton(_ mask: UInt8, pressed: Bool) {
         if pressed { buttonBits |= mask } else { buttonBits &= ~mask }
         flush(force: true)
+        recordEvent(kind: pressed ? .buttonDown : .buttonUp, mask: mask)
     }
 
     /// 短按点击；count = 2 时为双击。
     func click(_ mask: UInt8, count: Int = 1) {
         buttonBits |= mask
         flush(force: true)
+        // 连击的后续次由下方 asyncAfter 递归触发，递归里也会各记一次 click；
+        // 因此这里只记第一下，递归调用 click(count-1) 时再各记一次，语义完整。
+        recordEvent(kind: .click, mask: mask, count: 1)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.045) { [weak self] in
             guard let self = self else { return }
             self.buttonBits &= ~mask
@@ -828,6 +859,175 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
                 }
             }
         }
+    }
+
+    // MARK: - 宏录制 / 回放引擎
+
+    /// 记录一个输入事件。回放注入期间（isReplaying）跳过，避免二次录制；
+    /// move / wheel 这类高频事件按 30ms 合并到上一条同类事件，控制数据量。
+    private func recordEvent(kind: MacroEvent.Kind,
+                             dx: Int = 0, dy: Int = 0, wheel: Int = 0,
+                             keycode: UInt8 = 0, modifiers: UInt8 = 0,
+                             mask: UInt8 = 0, count: Int = 1,
+                             label: String = "") {
+        guard isRecording, !isReplaying, let start = recordingStart else { return }
+        let t = Date().timeIntervalSince(start)
+
+        // 高频位移合并：同一类且间隔 < 30ms 的连续事件累加，避免一秒数百条。
+        if kind == .move || kind == .wheel,
+           let last = recordingEvents.indices.last,
+           recordingEvents[last].kind == kind,
+           t - recordingEvents[last].t < 0.03 {
+            recordingEvents[last].dx += dx
+            recordingEvents[last].dy += dy
+            recordingEvents[last].wheel += wheel
+            return
+        }
+
+        recordingEvents.append(MacroEvent(
+            kind: kind, t: t, dx: dx, dy: dy, wheel: wheel,
+            keycode: keycode, modifiers: modifiers, mask: mask,
+            count: count, label: label
+        ))
+    }
+
+    /// 开始录制。会清空上一次的暂存事件；不打断当前链路，用户边操作边录。
+    func startRecording() {
+        guard !isRecording else { return }
+        if isPlaying { stopPlayback() }
+        recordingEvents = []
+        recordingStart = Date()
+        isRecording = true
+        note("开始录制：现在操作触控板 / 键盘，所有键鼠动作会按时间轴记录")
+    }
+
+    /// 停止录制并返回生成的宏（不含 id，由调用方存入 MacroStore）。
+    @discardableResult
+    func stopRecording(name: String) -> Macro? {
+        guard isRecording else { return nil }
+        isRecording = false
+        let duration = recordingStart.map { Date().timeIntervalSince($0) } ?? 0
+        recordingStart = nil
+        let macro = Macro(name: name, duration: duration, events: recordingEvents)
+        recordingEvents = []
+        note("录制结束：共 \(macro.events.count) 个动作，时长 \(String(format: "%.1f", duration)) 秒")
+        return macro
+    }
+
+    /// 播放指定宏。mode 控制循环次数；播放期间产生的输入都来自注入，不会二次录制。
+    func play(macro: Macro, mode: PlayMode) {
+        if isRecording { _ = stopRecording(name: macro.name) }
+        stopPlayback()
+        playbackMacro = macro
+        playbackEvents = macro.events
+        playbackMode = mode
+        playbackIndex = 0
+        playbackLoopsDone = 0
+        playingMacroName = macro.name
+        updatePlaybackRemaining()
+
+        if playbackLink == nil {
+            let l = CADisplayLink(target: self, selector: #selector(playbackTick))
+            l.add(to: .main, forMode: .common)
+            playbackLink = l
+        }
+        playbackLoopStart = Date()
+        isPlaying = true
+        note("开始回放「\(macro.name)」：\(mode.label)")
+    }
+
+    /// 停止回放并复位计数。
+    func stopPlayback() {
+        guard isPlaying || playbackLink != nil else { return }
+        playbackLink?.invalidate()
+        playbackLink = nil
+        isPlaying = false
+        isReplaying = false
+        playbackMacro = nil
+        playbackEvents = []
+        playbackIndex = 0
+        playbackLoopsDone = 0
+        playbackLoopStart = nil
+        playingMacroName = ""
+        playbackRemaining = 0
+        // 回放可能在按键按下 / 鼠标按下的中途被停掉，补发全松开避免主机卡键。
+        pendingModifier = 0
+        pendingKeycode = 0
+        keyReleaseAt = nil
+        emptyKeyFramesLeft = 3
+        buttonBits = 0
+        flush(force: true, modifier: 0, keycodes: [], keyReleased: true)
+        note("回放已停止")
+    }
+
+    /// 用编辑后的事件列表替换当前正在播放的宏内容（编辑页即时生效用）。
+    func replacePlayingEvents(_ events: [MacroEvent]) {
+        guard isPlaying else { return }
+        playbackEvents = events
+        playbackIndex = min(playbackIndex, events.count)
+    }
+
+    private func updatePlaybackRemaining() {
+        switch playbackMode {
+        case .once: playbackRemaining = 1
+        case .times(let n): playbackRemaining = max(0, n - playbackLoopsDone)
+        case .infinite: playbackRemaining = -1
+        }
+    }
+
+    @objc private func playbackTick() {
+        guard isPlaying, let macro = playbackMacro, let loopStart = playbackLoopStart else { return }
+        let elapsed = Date().timeIntervalSince(loopStart)
+        let loopDuration = max(macro.playbackDuration, playbackEvents.last?.t ?? 0) + 0.05
+
+        // 时间到了就注入所有到期事件；即使某一帧卡顿漏过多个事件也不会丢。
+        while playbackIndex < playbackEvents.count,
+              playbackEvents[playbackIndex].t <= elapsed {
+            inject(playbackEvents[playbackIndex])
+            playbackIndex += 1
+        }
+
+        // 一轮结束：按播放模式决定重播还是停止。
+        if elapsed >= loopDuration {
+            playbackLoopsDone += 1
+            switch playbackMode {
+            case .once:
+                stopPlayback()
+                return
+            case .times(let n):
+                if playbackLoopsDone >= n {
+                    stopPlayback()
+                    return
+                }
+            case .infinite:
+                break
+            }
+            // 下一轮：重置时间基准与事件游标。
+            playbackIndex = 0
+            playbackLoopStart = Date()
+            updatePlaybackRemaining()
+            note("回放第 \(playbackLoopsDone + 1) 轮")
+        }
+    }
+
+    /// 把一个事件注入回正常输入链路。isReplaying 保证不会被 recordEvent 再录一次。
+    private func inject(_ event: MacroEvent) {
+        isReplaying = true
+        switch event.kind {
+        case .move:
+            enqueue(dx: event.dx, dy: event.dy)
+        case .wheel:
+            enqueue(wheel: event.wheel)
+        case .key:
+            sendKey(event.keycode, modifiers: event.modifiers, label: event.label)
+        case .buttonDown:
+            setButton(event.mask, pressed: true)
+        case .buttonUp:
+            setButton(event.mask, pressed: false)
+        case .click:
+            click(event.mask)
+        }
+        isReplaying = false
     }
 
     private var activeReport: CBMutableCharacteristic? {

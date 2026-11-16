@@ -5,6 +5,8 @@ struct ContentView: View {
 
     @EnvironmentObject private var hid: HIDPeripheral
     @State private var showSettings = false
+    /// 键鼠宏管理（录制 / 编辑 / 回放）。
+    @State private var showMacros = false
     /// true = 全键盘，false = 触控板。只在已连接时生效，断开自动回到触控板。
     @State private var showKeyboard = false
     /// 断开后弹出「切换设备」指引（配对信息在主机侧，iPad 会自动回连）。
@@ -41,14 +43,25 @@ struct ContentView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button {
-                        showSettings = true
-                    } label: {
-                        Image(systemName: "gearshape")
-                            .font(.footnote)
+                    HStack(spacing: 12) {
+                        Button {
+                            showMacros = true
+                        } label: {
+                            Image(systemName: hid.isRecording ? "record.circle.fill" : "record.circle")
+                                .font(.footnote)
+                                .foregroundStyle(hid.isRecording ? Color.red : Color.accentColor)
+                        }
+                        .controlSize(.mini)
+                        .accessibilityLabel("键鼠宏")
+                        Button {
+                            showSettings = true
+                        } label: {
+                            Image(systemName: "gearshape")
+                                .font(.footnote)
+                        }
+                        .controlSize(.mini)
+                        .accessibilityLabel("设置")
                     }
-                    .controlSize(.mini)
-                    .accessibilityLabel("设置")
                 }
                 ToolbarItemGroup(placement: .navigationBarTrailing) {
                     if connected {
@@ -100,6 +113,11 @@ struct ContentView: View {
             }
             .navigationDestination(isPresented: $showSettings) {
                 SettingsView()
+            }
+            .sheet(isPresented: $showMacros) {
+                NavigationStack {
+                    MacroListView()
+                }
             }
             .alert("已断开", isPresented: $showSwitchHelp) {
                 Button("知道了", role: .cancel) {}
