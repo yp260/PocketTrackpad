@@ -33,8 +33,20 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         return "协议 \(proto) · 鼠标订阅\(inputSubscribed ? "✓" : "✗") · 键盘订阅\(keyboardSubscribed ? "✓" : "✗") · Boot订阅\(bootSubscribed ? "✓" : "✗") · 发送\(readyToUpdate ? "就绪" : "阻塞") · 报告 \(report)"
     }
 
-    /// BLE 已订阅，或桥接端已连上，都算「链路已建立」，界面据此切换全屏触控区。
-    var isLinkActive: Bool { subscribers > 0 || bridgeActive }
+    /// 连接是否存在明显问题，供界面用红色/橙色高亮诊断条。
+    var hasConnectionProblem: Bool {
+        if bridgeMode { return !bridgeActive }
+        return !inputSubscribed || !readyToUpdate
+    }
+
+    /// 真正能收发数据才算「链路已建立」，界面据此切换全屏触控区。
+    /// 不能用 subscribers>0：iPad 配对时会订阅 Report Map / HID Info 等只读特征，
+    /// subscribers 会 >0，但这些数据特征并不能发送输入报告，导致「假连接」——
+    /// 界面显示已连接，实际 inputSubscribed 为 false，一份报告都发不出去。
+    /// 只有订阅了真正能发数据的报告特征才算连上。
+    var isLinkActive: Bool {
+        bridgeActive || inputSubscribed || keyboardSubscribed || bootSubscribed
+    }
 
     /// 当前链路对端的可读名称，显示在界面「已连接」之后，让用户一眼看出连的是谁。
     ///

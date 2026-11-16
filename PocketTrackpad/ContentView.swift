@@ -25,6 +25,9 @@ struct ContentView: View {
                     } else {
                         // 触控区顶部常驻一条切换栏：一键切到全键盘。
                         TrackpadTopBar(showKeyboard: $showKeyboard)
+                        // 连接诊断常驻细条：连上后也能看到协议/订阅/发送状态，
+                        // 便于「连上却动不了」时一眼定位卡点（可点按切换展开）。
+                        DiagnosticStrip()
                         TrackpadSurface(edgeToEdge: true)
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                             .ignoresSafeArea(.container, edges: .horizontal)
@@ -547,6 +550,31 @@ private struct TrackpadTopBar: View {
         .frame(height: 46)
         .background(Color(.secondarySystemBackground))
         .overlay(alignment: .bottom) { Divider() }
+    }
+}
+
+/// 连接诊断常驻细条：触摸区顶部一行小字显示协议 / 订阅 / 发送状态。
+/// 「连上却动不了」时用它一眼区分是协议模式、订阅还是发送阻塞的问题。
+private struct DiagnosticStrip: View {
+    @EnvironmentObject private var hid: HIDPeripheral
+
+    private var hasProblem: Bool { hid.hasConnectionProblem }
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: hasProblem ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+                .font(.system(size: 10))
+                .foregroundStyle(hasProblem ? Color.orange : Color.green)
+            Text(hid.diagnosticText)
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundStyle(hasProblem ? Color.orange : Color.secondary)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 5)
+        .background(hasProblem ? Color.orange.opacity(0.10) : Color(.secondarySystemBackground))
     }
 }
 
