@@ -581,20 +581,55 @@ private struct TrackpadTopBar: View {
 /// 「连上却动不了」时用它一眼区分是协议模式、订阅还是发送阻塞的问题。
 private struct DiagnosticStrip: View {
     @EnvironmentObject private var hid: HIDPeripheral
+    @State private var expanded = false
 
     private var hasProblem: Bool { hid.hasConnectionProblem }
+    /// 复合报告在部分 iPadOS 上会被当键盘接管、忽略鼠标位移。给一键切纯鼠标入口。
+    private var canOfferPlainMouse: Bool { hid.compositeDevice && !hid.windowsMode && !hid.bridgeMode }
 
     var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: hasProblem ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
-                .font(.system(size: 10))
-                .foregroundStyle(hasProblem ? Color.orange : Color.green)
-            Text(hid.diagnosticText)
-                .font(.system(size: 9, design: .monospaced))
-                .foregroundStyle(hasProblem ? Color.orange : Color.secondary)
-                .lineLimit(2)
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 0)
+        VStack(alignment: .leading, spacing: 6) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.15)) { expanded.toggle() }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: hasProblem ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+                        .font(.system(size: 10))
+                        .foregroundStyle(hasProblem ? Color.orange : Color.green)
+                    Text(hid.diagnosticText)
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundStyle(hasProblem ? Color.orange : Color.secondary)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 9))
+                        .rotationEffect(.degrees(expanded ? 180 : 0))
+                        .foregroundStyle(.tertiary)
+                }
+            }
+            .buttonStyle(.plain)
+
+            if expanded {
+                if canOfferPlainMouse {
+                    Text("iPad 连上却完全没反应？复合 12 字节可能被当成键盘忽略鼠标。切到纯鼠标后再到 iPad 蓝牙「忽略此设备」重新配对。")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    Button {
+                        hid.switchToPlainMouse()
+                    } label: {
+                        Text("一键切到纯鼠标模式")
+                            .font(.caption.weight(.semibold))
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                } else {
+                    Text("当前已是纯鼠标 / 其他模式，无需切换。")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 5)

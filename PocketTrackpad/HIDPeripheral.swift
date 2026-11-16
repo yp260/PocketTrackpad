@@ -435,6 +435,21 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         note("已切回 iPad 模式：GATT 按 iPad 拓扑重建，正在重新广播")
     }
 
+    /// 一键切到「纯鼠标 4 字节」模式：历史上 iPad 上最稳定、验证过能用的配置。
+    /// 复合 12 字节（键盘在前）在部分 iPadOS 版本上会被当键盘接管、忽略鼠标位移，
+    /// 表现为「显示已连接、订阅正常，但 iPad 完全无反应」。此入口关复合 + 拆链 +
+    /// 按纯鼠标拓扑重建 GATT + 自动重播。注意主机缓存了旧 Report Map，需在 iPad
+    /// 蓝牙里「忽略此设备」后重新配对才会真正刷新。
+    func switchToPlainMouse() {
+        if windowsMode { windowsMode = false }
+        if compositeDevice { compositeDevice = false }   // didSet 内已 disconnect()
+        disconnect()
+        start()
+        note("已切到纯鼠标模式（4 字节，与 v0.0.7 一致）：GATT 已重建并重播")
+        note("重要：请在 iPad 蓝牙里「忽略此设备」后重新配对，旧 Report Map 缓存才会刷新")
+        statusText = "纯鼠标模式 · 请忽略设备重配"
+    }
+
     func stopAdvertising() {
         manager?.stopAdvertising()
         isAdvertising = false
