@@ -666,7 +666,14 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
     }
 
     private func advertise() {
-        guard let manager = manager, manager.state == .poweredOn, !isAdvertising else { return }
+        guard let manager = manager, manager.state == .poweredOn else { return }
+        // isAdvertising 只是 App 本地记录：iOS 在主机会话建立后由系统层面停止广播，
+        // 却不回调 App，该标志会卡在 true。若据此 return，start() 后再也不会真正广播，
+        // 表现就是 iPad 搜不到设备。这里不因它而 return，先停再播，保证主机一定能搜到。
+        if isAdvertising {
+            manager.stopAdvertising()
+            isAdvertising = false
+        }
         mark("6 全部服务注册完成，准备广播")
         // 广播包里必须放 16 位 SIG UUID，不能放 128 位完整形式。两个独立原因：
         //
@@ -706,10 +713,10 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
     /// 因此在确认订阅清零后强制 stop→start 重新发起广播。
     private func ensureAdvertisingAfterDisconnect() {
         // 桥接模式下本来就不广播；manager 已被 disconnect 释放时也不处理。
-        // 「选择新设备」避让进行中也不自动恢复——由 rejectAndRebroadcastOldCentral 统一重播，
-        // 否则两套逻辑会同时 startAdvertising 互相打断。
+        // 注意：避让模式（avoidCentralID != nil）下也必须恢复广播——否则「选择新设备」
+        // 让位 3 次失败或旧设备忽略后，广播永久停掉，iPad 再也搜不到。
+        // 与让位重播的防冲突交给 advertisingResumeScheduled + advertiser 幂等处理。
         guard !bridgeMode,
-              avoidCentralID == nil,
               !advertisingResumeScheduled,
               let manager = manager,
               manager.state == .poweredOn,
@@ -875,9 +882,14 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
                 }
                 return
             } else {
-                // 连续让位 3 次仍被抢连：系统栈层面无法继续阻止，如实告知用户。
-                note("旧设备持续自动回连，iOS 无法继续阻止；请到旧设备蓝牙设置里「忽略此设备」")
-                statusText = "已连回旧设备 · 请在其蓝牙里忽略本设备"
+                // 连续让位 3 次仍被抢连：系统栈层面无法继续阻止。
+                // 关键：必须解除避让状态，否则 avoidCentralID 永久卡住，
+                // 之后 iPad 断开就再也不会自动恢复广播 → 搜不到。宁可让旧设备连上，
+                // 也不能让广播永久停摆。用户仍可随时点「断开 / 选择新设备」重试。
+                avoidCentralID = nil
+                avoidRejectCount = 0
+                note("旧设备持续自动回连，iOS 无法继续阻止；已解除避让，恢复普通连接。要彻底换设备请在其蓝牙里「忽略此设备」")
+                statusText = "已连接 · 已解除避让"
             }
         }
 
