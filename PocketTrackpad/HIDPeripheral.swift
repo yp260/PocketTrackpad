@@ -985,7 +985,7 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         if homingFramesLeft > 0 {
             homingFramesLeft -= 1
             pendingX = -127   // 向左饱和
-            pendingY = 127    // 向下饱和 → 归位到左下角，避开 iPad 左下角双击锁屏热区
+            pendingY = 127    // 向下饱和，两轴合力把光标锁定到左下角物理原点（避开角落锁屏热区）
             if homingFramesLeft == 0 { homingCompleted = true }
         }
 
