@@ -24,6 +24,25 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
     /// BLE 已订阅，或桥接端已连上，都算「链路已建立」，界面据此切换全屏触控区。
     var isLinkActive: Bool { subscribers > 0 || bridgeActive }
 
+    /// 当前链路对端的可读名称，显示在界面「已连接」之后，让用户一眼看出连的是谁。
+    ///
+    /// 说明（系统限制）：iPhone 在本方案里是 BLE 外设，iPad / Windows 是主机。
+    /// CoreBluetooth 在外设角色下只把对端的 `CBCentral.identifier`（UUID）交给 App，
+    /// **不提供蓝牙设备名**（如「张三的 iPad」）。任何第三方 App 都无法读到该名字，
+    /// 因此这里按连接来源给出可辨识的标识：
+    ///   - 桥接模式：显示用户填写的真实目标地址（IP:端口），能精确定位到某一台电脑；
+    ///   - Windows 原生直连：显示「Windows 电脑」；
+    ///   - 其余 BLE 连接：显示「iPad」。
+    var connectedDeviceName: String {
+        if bridgeMode {
+            return "\(bridge.currentHost):\(bridge.currentPort)"
+        }
+        if windowsMode {
+            return "Windows 电脑"
+        }
+        return "iPad"
+    }
+
     /// 桥接传输层：把 12 字节复合 HID 报告通过 UDP 发给桥接端。
     /// 仅在「桥接模式」下参与输入上报；关闭时完全不触碰网络。
     lazy var bridge: BridgeTransport = {

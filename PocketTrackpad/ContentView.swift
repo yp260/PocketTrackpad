@@ -37,7 +37,7 @@ struct ContentView: View {
                 // 断开后不要停留在键盘界面，下次连上仍从触控板开始。
                 if newValue == 0 { showKeyboard = false }
             }
-            .navigationTitle(connected ? "PT-Pad" : "口袋触控板")
+            .navigationTitle(connected ? "PT-Pad · \(hid.connectedDeviceName)" : "口袋触控板")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -55,9 +55,17 @@ struct ContentView: View {
                         Circle()
                             .fill(Color.green)
                             .frame(width: 6, height: 6)
-                        Text("已连接")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
+                        // 两行紧凑显示：状态 + 对端设备名。权限所限只能显示连接来源
+                        // （iPad / Windows 电脑 / 桥接 IP），读不到对端蓝牙设备名。
+                        VStack(alignment: .trailing, spacing: 0) {
+                            Text("已连接")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                            Text(hid.connectedDeviceName)
+                                .font(.system(size: 9))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
                         Button("断开") {
                             if hid.bridgeMode {
                                 hid.disconnectBridge()
