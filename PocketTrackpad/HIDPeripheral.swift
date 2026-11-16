@@ -21,6 +21,18 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
     /// 桥接端是否已真正连上：以收到 welcome 回包为准。
     @Published private(set) var bridgeActive = false
 
+    /// 连接诊断：把「连上却动不了」的关键状态直接暴露到界面，便于定位卡点。
+    var diagnosticText: String {
+        if bridgeMode {
+            return "桥接模式 · 链路\(bridgeActive ? "已建立" : "未建立") · 目标 \(bridge.currentHost):\(bridge.currentPort)"
+        }
+        let proto = protocolMode == 0 ? "Boot" : "Report"
+        let report = windowsMode ? "Windows 双报告"
+                    : (protocolMode == 0 && bootSubscribed ? "Boot 鼠标 3 字节"
+                       : (compositeDevice ? "复合 12 字节" : "纯鼠标 4 字节"))
+        return "协议 \(proto) · 鼠标订阅\(inputSubscribed ? "✓" : "✗") · 键盘订阅\(keyboardSubscribed ? "✓" : "✗") · Boot订阅\(bootSubscribed ? "✓" : "✗") · 发送\(readyToUpdate ? "就绪" : "阻塞") · 报告 \(report)"
+    }
+
     /// BLE 已订阅，或桥接端已连上，都算「链路已建立」，界面据此切换全屏触控区。
     var isLinkActive: Bool { subscribers > 0 || bridgeActive }
 
@@ -236,6 +248,8 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
     private var emptyKeyFramesLeft = 0
     private var readyToUpdate = true
     private var queuedPacket: (Data, CBMutableCharacteristic)?
+    /// readyToUpdate 卡在 false 的起始时间。超过阈值仍不恢复就强制复位（看门狗）。
+    private var readyBlockedSince: Date?
     private var link: CADisplayLink?
 
     // MARK: - 宏录制 / 回放状态
@@ -304,6 +318,11 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
 
     func start() {
         mark("1 调用 start()")
+        // 复位可能卡死的发送状态：BLE 拥塞时 readyToUpdate 会变 false，
+        // 若 peripheralManagerIsReady 回调因系统原因没来，之后所有报告都会
+        // 堆在 queuedPacket 发不出，表现就是「已连接但完全动不了」。
+        readyToUpdate = true
+        queuedPacket = nil
         if manager == nil {
             // 所有 delegate 回调都落在主线程，避免 UI 状态跨线程写入。
             manager = CBPeripheralManager(
@@ -1023,6 +1042,29 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         }
         flush(force: false, modifier: modifier, keycodes: keycodes,
               keyReleased: keyReleased)
+
+        // 看门狗：若 readyToUpdate 卡在 false 超过 1 秒（订阅中、非桥接），
+        // 说明系统的 peripheralManagerIsReady 回调迟迟不来，强制复位并补发队列，
+        // 否则会出现「已连接但指针/键盘完全不动」。
+        if !bridgeMode && subscribers > 0 {
+            if !readyToUpdate {
+                if readyBlockedSince == nil { readyBlockedSince = Date() }
+                else if let since = readyBlockedSince,
+                        Date().timeIntervalSince(since) > 1.0 {
+                    note("发送通道阻塞超时，已强制复位（看门狗）")
+                    readyToUpdate = true
+                    readyBlockedSince = nil
+                    if let q = queuedPacket {
+                        queuedPacket = nil
+                        send(q.0, on: q.1)
+                    }
+                }
+            } else {
+                readyBlockedSince = nil
+            }
+        } else {
+            readyBlockedSince = nil
+        }
 
         // 归位帧全部发出后再执行闭包（开始录制 / 开始一轮回放）。
         if homingCompleted {

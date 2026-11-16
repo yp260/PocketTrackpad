@@ -238,14 +238,21 @@ struct ContentView: View {
                 .background(Color(.secondarySystemBackground),
                             in: RoundedRectangle(cornerRadius: 14))
 
-                // 连接日志：初始只有一行短日志，若不限宽会明显比其他卡片窄。
+                // 连接日志：顶部放实时诊断行，方便一眼看出「连上却动不了」卡在哪。
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("连接日志")
+                    Text("连接日志 · 连接诊断")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
+                    Text(hid.diagnosticText)
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(.primary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(6)
+                        .background(Color(.tertiarySystemBackground),
+                                    in: RoundedRectangle(cornerRadius: 6))
                     ScrollView {
                         VStack(alignment: .leading, spacing: 2) {
-                            ForEach(hid.logLines.suffix(10), id: \.self) { line in
+                            ForEach(hid.logLines.suffix(30), id: \.self) { line in
                                 Text(line)
                                     .font(.system(size: 10, design: .monospaced))
                                     .foregroundStyle(.secondary)
@@ -255,7 +262,7 @@ struct ContentView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                     }
                     .frame(maxWidth: .infinity)
-                    .frame(height: 108)
+                    .frame(height: 140)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(12)
