@@ -20,6 +20,8 @@ struct PocketTrackpadApp: App {
                 .environmentObject(haptics)
                 .environmentObject(macros)
                 .onAppear {
+                    // 升级后一次性把默认开启的复合模式切回纯鼠标（iPad 上更稳定）。
+                    hid.applyStartupMigration()
                     // 锁屏后 iOS 会停止 BLE 广播，因此使用期间保持屏幕常亮。
                     UIApplication.shared.isIdleTimerDisabled = true
                     // 不自动启动蓝牙，改由界面上的「开始广播」按钮触发。

@@ -30,7 +30,7 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         let report = windowsMode ? "Windows 双报告"
                     : (protocolMode == 0 && bootSubscribed ? "Boot 鼠标 3 字节"
                        : (compositeDevice ? "复合 12 字节" : "纯鼠标 4 字节"))
-        return "协议 \(proto) · 鼠标订阅\(inputSubscribed ? "✓" : "✗") · 键盘订阅\(keyboardSubscribed ? "✓" : "✗") · Boot订阅\(bootSubscribed ? "✓" : "✗") · 发送\(readyToUpdate ? "就绪" : "阻塞") · 报告 \(report)"
+        return "协议 \(proto) · 鼠标订阅\(inputSubscribed ? "✓" : "✗") · 键盘订阅\(keyboardSubscribed ? "✓" : "✗") · Boot订阅\(bootSubscribed ? "✓" : "✗") · 发送\(readyToUpdate ? "就绪" : "阻塞") · 已发\(sentFrames)帧 · 报告 \(report)"
     }
 
     /// 连接是否存在明显问题，供界面用红色/橙色高亮诊断条。
@@ -272,6 +272,14 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
     private var readyBlockedSince: Date?
     private var link: CADisplayLink?
 
+    /// 发送帧计数：诊断「App 到底有没有把报告发出去」。
+    /// 滑动触控区时若此数持续增长，说明 App 侧发送正常、问题在 iPadOS 解析；
+    /// 若不增长，说明手势没进到发送链路，问题在 App 侧。
+    @Published private(set) var sentFrames = 0
+    /// 一次性迁移标记：把历史上默认开启的复合模式切回纯鼠标（iPad 上更稳定）。
+    /// 只迁移一次，用户之后手动开回复合不会被反复重置。
+    private static let plainMouseMigratedKey = "PocketTrackpad.plainMouseMigrated.v1"
+
     // MARK: - 宏录制 / 回放状态
 
     /// 是否正在录制。录制期间所有输入事件连同时间戳写入 recordingEvents。
@@ -335,6 +343,19 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
     private var avoidRejectCount = 0
 
     // MARK: - 生命周期
+
+    /// 升级后一次性迁移：复合模式自引入起默认开启，部分 iPadOS 会把它当键盘接管、
+    /// 忽略鼠标位移，造成「已连接却完全无反应」。首次运行本版时自动切回纯鼠标
+    /// （iPad 上验证稳定的配置）；只迁移一次，用户之后可到设置里手动开回复合。
+    func applyStartupMigration() {
+        let migrated = UserDefaults.standard.bool(forKey: Self.plainMouseMigratedKey)
+        guard !migrated else { return }
+        UserDefaults.standard.set(true, forKey: Self.plainMouseMigratedKey)
+        if compositeDevice {
+            compositeDevice = false
+            note("兼容性升级：已自动从复合模式切回纯鼠标（iPad 上更稳定）。如需全键盘/三指回桌面，可到设置里重新开启键鼠复合模式")
+        }
+    }
 
     func start() {
         mark("1 调用 start()")
@@ -1496,6 +1517,7 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
             return
         }
         readyToUpdate = manager.updateValue(data, for: characteristic, onSubscribedCentrals: nil)
+        if readyToUpdate { sentFrames += 1 }
         if !readyToUpdate {
             queuedPacket = (data, characteristic)
         }
