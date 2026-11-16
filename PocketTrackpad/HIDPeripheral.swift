@@ -279,6 +279,9 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
     /// 一次性迁移标记：把历史上默认开启的复合模式切回纯鼠标（iPad 上更稳定）。
     /// 只迁移一次，用户之后手动开回复合不会被反复重置。
     private static let plainMouseMigratedKey = "PocketTrackpad.plainMouseMigrated.v1"
+    /// 一次性迁移标记：彻底清除「避开上次设备」这个有害机制（iOS 无法拒绝指定
+    /// central，「连上就拆」只会把用户想连回的 iPad 拒之门外，导致订阅永远为 0）。
+    private static let avoidanceClearedKey = "PocketTrackpad.avoidanceCleared.v1"
 
     // MARK: - 宏录制 / 回放状态
 
@@ -349,11 +352,22 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
     /// （iPad 上验证稳定的配置）；只迁移一次，用户之后可到设置里手动开回复合。
     func applyStartupMigration() {
         let migrated = UserDefaults.standard.bool(forKey: Self.plainMouseMigratedKey)
-        guard !migrated else { return }
-        UserDefaults.standard.set(true, forKey: Self.plainMouseMigratedKey)
-        if compositeDevice {
-            compositeDevice = false
-            note("兼容性升级：已自动从复合模式切回纯鼠标（iPad 上更稳定）。如需全键盘/三指回桌面，可到设置里重新开启键鼠复合模式")
+        if !migrated {
+            UserDefaults.standard.set(true, forKey: Self.plainMouseMigratedKey)
+            if compositeDevice {
+                compositeDevice = false
+                note("兼容性升级：已自动从复合模式切回纯鼠标（iPad 上更稳定）。如需全键盘/三指回桌面，可到设置里重新开启键鼠复合模式")
+            }
+        }
+        // 彻底清除「避开上次设备」：iOS 无法拒绝指定 central，"连上就拆"只会把
+        // 用户想连回的 iPad 拒之门外（订阅永远 0、连不上）。关闭持久化开关并清空残留。
+        let avoidanceCleared = UserDefaults.standard.bool(forKey: Self.avoidanceClearedKey)
+        if !avoidanceCleared {
+            UserDefaults.standard.set(true, forKey: Self.avoidanceClearedKey)
+            selectNewDeviceMode = false
+            avoidCentralID = nil
+            avoidRejectCount = 0
+            note("连接修复：已永久关闭「避开上次设备」——此模式会导致 iPad 连不上，任何设备现在都能正常连接")
         }
     }
 
@@ -561,43 +575,13 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         cancelHoming()
         refreshKeyboardReady()
 
-        // 锁定要避开的目标，最多让位 3 次，然后重新开始广播。
-        avoidCentralID = lastCentralID
+        // 不再避开任何设备：iOS 无法拒绝指定 central，任何设备都能正常连接。
+        // 换设备请在旧设备蓝牙里「忽略此设备」，本按钮只做断开 + 重建 + 重播。
+        avoidCentralID = nil
         avoidRejectCount = 0
-        statusText = "等待新设备连接（已跳过上次设备）"
-        note("已开始广播：请在新设备上搜索 PT-Pad；上次设备若抢连会自动让位")
+        statusText = "等待设备配对"
+        note("已重新广播：任何设备都能连接；若旧设备自动回连，请到其蓝牙设置里「忽略此设备」")
         start()
-    }
-
-    /// 旧设备自动回连时的让位处理：彻底拆链后重新广播，给新设备连接窗口。
-    private func rejectAndRebroadcastOldCentral() {
-        guard avoidCentralID != nil else { return }
-        note("让位：拆除旧设备链路并重新广播")
-        manager?.stopAdvertising()
-        manager?.removeAllServices()
-        manager?.delegate = nil
-        manager = nil
-        isAdvertising = false
-        subscribers = 0
-        inputSubscribed = false
-        keyboardSubscribed = false
-        bootSubscribed = false
-        inputReport = nil
-        inputReport2 = nil
-        bootReport = nil
-        servicesToAdd.removeAll()
-        databaseBuilt = false
-        databaseWindowsMode = nil
-        advertisingResumeScheduled = false
-        buttonBits = 0
-        refreshKeyboardReady()
-        statusText = "等待新设备连接（已跳过上次设备）"
-        // 稍等再重播，确保系统释放旧链路，否则 startAdvertising 可能被拒。
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) { [weak self] in
-            guard let self = self, self.avoidCentralID != nil else { return }
-            self.start()
-            self.note("已重新广播，等待新设备（让位 \(self.avoidRejectCount)/3）")
-        }
     }
 
     // MARK: - GATT 数据库
@@ -949,40 +933,17 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         subscribers += 1
         refreshKeyboardReady()
 
-        // 记住这次连上来的主机身份，供「选择新设备」模式识别旧设备。
+        // 记住这次连上来的主机身份（仅用于展示设备名，绝不用于拒绝连接）。
         let thisID = central.identifier.uuidString
         lastCentralID = thisID
 
-        // 「选择新设备」模式：若连上来的正是本轮要避开的旧设备，立刻拆链重播，
-        // 给它之后的窗口让新设备接入。iOS 无法拒绝指定 central，只能连上即拆。
-        if let avoid = avoidCentralID, thisID == avoid {
-            if avoidRejectCount < 3 {
-                avoidRejectCount += 1
-                note("检测到上次设备自动回连（第 \(avoidRejectCount) 次），正在断开让位给新设备")
-                statusText = "旧设备自动回连，正在让位…"
-                // 延迟一帧再拆链，避免在 CoreBluetooth 回调里同步释放 manager。
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
-                    guard let self = self else { return }
-                    self.rejectAndRebroadcastOldCentral()
-                }
-                return
-            } else {
-                // 连续让位 3 次仍被抢连：系统栈层面无法继续阻止。
-                // 关键：必须解除避让状态，否则 avoidCentralID 永久卡住，
-                // 之后 iPad 断开就再也不会自动恢复广播 → 搜不到。宁可让旧设备连上，
-                // 也不能让广播永久停摆。用户仍可随时点「断开 / 选择新设备」重试。
-                avoidCentralID = nil
-                avoidRejectCount = 0
-                note("旧设备持续自动回连，iOS 无法继续阻止；已解除避让，恢复普通连接。要彻底换设备请在其蓝牙里「忽略此设备」")
-                statusText = "已连接 · 已解除避让"
-            }
-        }
-
-        // 连上来的不是要避开的设备（即新设备）→ 正常连接，结束本轮避开状态。
-        if avoidCentralID != nil, thisID != avoidCentralID {
+        // 关键修复：iOS 无 API 拒绝指定 central，"连上就拆"的唯一实际效果是
+        // 把用户想连回的 iPad 拒之门外（订阅永远 0、连不上）。因此无论 avoidCentralID
+        // 因任何历史原因残留为何值，这里都不再拆链——任何设备连上都正常提供服务。
+        if avoidCentralID != nil || avoidRejectCount != 0 {
             avoidCentralID = nil
             avoidRejectCount = 0
-            note("新设备已连接，退出「跳过上次设备」")
+            note("已清除残留的避开状态：任何设备均可正常连接")
         }
 
         statusText = "已连接 · 可以移动指针"

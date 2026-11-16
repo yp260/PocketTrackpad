@@ -101,8 +101,6 @@ struct ContentView: View {
                         } else {
                             if hid.isAdvertising {
                                 hid.stopAdvertising()
-                            } else if hid.selectNewDeviceMode {
-                                hid.selectNewDevice()
                             } else {
                                 hid.start()
                             }
@@ -128,8 +126,8 @@ struct ContentView: View {
                     MacroListView()
                 }
             }
-            .alert("已断开 · 连接哪台设备？", isPresented: $showSwitchHelp) {
-                Button("选择新设备（跳过上次）") {
+            .alert("已断开 · 重新连接", isPresented: $showSwitchHelp) {
+                Button("断开并重新广播") {
                     hid.selectNewDevice()
                 }
                 Button("普通开始广播") {
@@ -137,7 +135,7 @@ struct ContentView: View {
                 }
                 Button("取消", role: .cancel) {}
             } message: {
-                Text("「选择新设备」会跳过上次连接的设备：若它自动回连，App 会立刻断开让位，给你用新设备（Windows / Android / 另一台 iPad）连接的机会。\n\n但 iOS 系统限制：App 无法清除主机侧的配对，已配对设备由系统自动回连，App 只能「连上就拆」最多 3 次。要彻底不再被它抢连，必须在旧设备蓝牙设置里「忽略此设备」。注意：在 iPad 蓝牙列表里找的不是 PT-Pad，而是你 iPhone 的名字（设置 > 通用 > 关于本机 > 名称），点它旁边的 ⓘ 就能断开或忽略。\n\nWindows（推荐 · 零安装）：设置里开「Windows 直连」，打开 Windows 的 设置 → 蓝牙 → 添加设备 → 其他设备 窗口，再点「选择新设备」，列表出现 iPhone 后配对。搜不到就在 Windows 蓝牙高级设置把发现改为「高级」或点「显示所有设备」。若仍不兼容，改用「桥接（WiFi 转发）」+ 电脑端 windows\\pt_receiver.ps1（零安装）。")
+                Text("两种方式都会重新广播，任何设备都能连接。\n\n【换设备说明】iOS 无法清除主机侧的配对，已配对设备会由系统自动回连。要彻底不被它抢连，必须在旧设备蓝牙设置里「忽略此设备」。注意：在 iPad 蓝牙列表里找的不是 PT-Pad，而是你 iPhone 的名字（设置 > 通用 > 关于本机 > 名称），点它旁边的 ⓘ 就能断开或忽略。\n\nWindows（推荐 · 零安装）：设置里开「Windows 直连」，打开 Windows 的 设置 → 蓝牙 → 添加设备 → 其他设备 窗口，再重新广播，列表出现 iPhone 后配对。搜不到就在 Windows 蓝牙高级设置把发现改为「高级」或点「显示所有设备」。若仍不兼容，改用「桥接（WiFi 转发）」+ 电脑端 windows\\pt_receiver.ps1（零安装）。")
             }
         }
     }
@@ -479,13 +477,12 @@ struct SettingsView: View {
                 Button {
                     hid.selectNewDevice()
                 } label: {
-                    Label("选择新设备（跳过上次设备）", systemImage: "arrow.triangle.2.circlepath")
+                    Label("断开并重新广播", systemImage: "arrow.triangle.2.circlepath")
                 }
-                Toggle("开始广播时避开上次设备", isOn: $hid.selectNewDeviceMode)
             } header: {
                 Text("切换设备")
             } footer: {
-                Text("「选择新设备」会断开当前连接并重新广播，本轮跳过上次连过的设备：若它自动回连，App 会立刻拆链让位（最多 3 次），给你连接新设备的机会。开关打开后，每次点「开始广播」都自动跳过上次设备。\n\n【系统限制】蓝牙 HID 的配对信息存在主机侧，iOS 外设无法远程解除、也无法拒绝指定设备连接——已配对设备由系统自动回连，App 只能「连上就拆」。要彻底不被旧设备抢连，必须在旧设备蓝牙设置里「忽略此设备」。\n\nWindows（推荐 · 零安装）：打开「Windows 直连」，保持 Windows 的 设置 → 蓝牙 → 添加设备 → 其他设备 窗口，再点「选择新设备」，列表出现 iPhone 后配对。Windows 11（24H2）发现列表按类别过滤、iOS 无法设置该字段，若列表不显示，开「蓝牙设备发现：高级」或点「显示所有设备」。仍不兼容就改用「桥接（WiFi 转发）」+ 电脑端 windows\\pt_receiver.ps1（零安装）。")
+                Text("点「断开并重新广播」会断开当前连接、重建蓝牙服务并重新广播，任何设备都能连接。\n\n【换设备说明】蓝牙 HID 的配对信息存在主机侧，iOS 外设无法远程解除、也无法拒绝指定设备连接——已配对设备（如旧 iPad）会由系统自动回连。要彻底不被它抢连，必须在旧设备蓝牙设置里找到你的 iPhone 名称，点「忽略此设备」。注意：iPad 蓝牙列表里显示的是 iPhone 整机名，不是 PT-Pad。\n\nWindows（推荐 · 零安装）：打开「Windows 直连」，保持 Windows 的 设置 → 蓝牙 → 添加设备 → 其他设备 窗口，再重新广播，列表出现 iPhone 后配对。Windows 11（24H2）发现列表按类别过滤、iOS 无法设置该字段，若列表不显示，开「蓝牙设备发现：高级」或点「显示所有设备」。仍不兼容就改用「桥接（WiFi 转发）」+ 电脑端 windows\\pt_receiver.ps1（零安装）。")
                     .font(.caption)
             }
 
