@@ -42,7 +42,7 @@ tree = gh("POST", "/git/trees", {
 })
 print("tree =", tree["sha"])
 
-msg = "feat: 主键位三键循环换位 + 修复宏回放点击位置整体偏移\n\n用户两项反馈：\n1) 主键位 ↓(下) / ⌫(退格) / ↑(上) 三键循环换位——下键移到控制行原退格位、退格键移到 M 行末尾原上键位、上键移到导航行原下键位。KeyboardView.swift 的 controlRow 与 rows(for:.letters) 调整，preview/ui-preview.html 同步并补两条变更记录。\n2) 宏录制/回放点击位置整体偏移。根因：flush 用 Int8(clamping:) 后立即把 pendingX/pendingY 清零，超 1 字节范围的位移被直接丢弃。录制时位移逐帧小增量不超限，但 recordEvent 30ms 合并后宏里存的是累加的大位移，回放时一次性 enqueue 超过 127 的部分被截断丢掉，轨迹逐段缩短、点击落点整体偏移。修复：改为 pendingX -= Int(x) 发多少减多少，余数留到下一帧续发，录制/回放走完全相同的位移总量。好处是改发送端，已保存的旧宏回放也自动正确，无需重录。无报告格式/协议变更。"
+msg = "fix: 宏回放落点偏移且每次不同——逐帧复现位移序列 + 合并回放调度到同一 tick\n\n用户反馈 v0.0.46 后仍偏移且每次偏移量不同。真根因是帧序列不匹配 + iPadOS 非线性指针加速：\n1) 录制时 enqueue 的位移按 30ms 合并成大值存进宏，回放一次性注入、一帧发出；而 iPadOS 对 HID 相对位移有非线性加速——同样总位移，逐帧小增量发出与合成一个大帧发出，屏幕实际移动距离不同，落点必然偏移。\n2) 回放调度用独立 playbackLink，与负责发送的 tick 相位不定，同一位移每次被拆成的帧序列都不同，叠加指针加速就表现为「每次偏移量都不一样」。\n修复：\n- 录制改为在 flush() 里记录「本帧真正发出的位移值」（已 clamp 的 x/y/w，逐帧），不再在 enqueue 记手势原始增量，去掉 30ms 合并；\n- 删除独立 playbackLink，回放注入并入 tick()（pumpPlayback），注入与发送同帧；\n- pumpPlayback 每帧最多注入一条位移事件，强制把位移摊到多帧，一比一复现录制帧序列；非位移事件可同帧注入。\n注意：录制格式变更，旧宏需重新录制才能受益。录制/回放仍走同一 BLE HID 链路，报告格式与配对不变。"
 
 commit = gh("POST", "/git/commits", {
     "message": msg, "tree": tree["sha"], "parents": [BASE]

@@ -302,7 +302,6 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
     private var playbackIndex = 0
     private var playbackLoopsDone = 0
     private var playbackLoopStart: Date?
-    private var playbackLink: CADisplayLink?
     /// 回放注入时置 true，让 recordEvent 跳过，避免回放事件被再次录进去。
     private var isReplaying = false
 
@@ -1043,9 +1042,11 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         pendingX += dx
         pendingY += dy
         pendingWheel += wheel
-        // 录制：位移与滚轮分开成两个事件（滚轮是独立语义，回放时要能单独编辑）。
-        if dx != 0 || dy != 0 { recordEvent(kind: .move, dx: dx, dy: dy) }
-        if wheel != 0 { recordEvent(kind: .wheel, wheel: wheel) }
+        // 录制位移不在 enqueue 记，改到 flush() 里记「本帧真正发出的位移」。
+        // 原因：iPadOS / Windows 对 HID 相对位移有非线性指针加速——同样总位移，
+        // 拆成 N 个小帧发出与合成 1 个大帧发出，屏幕实际移动距离不同。宏必须逐帧
+        // 复现录制时发给主机的帧序列，才能让点击落点一致。手势层的 enqueue 增量
+        // 会被合并/分帧，不能直接当宏事件记录。
     }
 
     @objc private func tick() {
@@ -1058,6 +1059,12 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
             pendingY = 127    // 向下饱和，两轴合力把光标锁定到左下角物理原点（避开角落锁屏热区）
             if homingFramesLeft == 0 { homingCompleted = true }
         }
+
+        // 回放注入与发送共用同一个 CADisplayLink（本 tick）：注入一帧位移立刻
+        // flush 一帧，逐帧复现录制时的帧序列。此前回放用独立 playbackLink，与
+        // 本 tick 相位不定，同一位移每次被拆成的帧序列都不同，叠加 iPadOS 的
+        // 非线性指针加速，表现就是「点击落点偏移且每次偏移量不一样」。
+        pumpPlayback()
 
         var modifier: UInt8 = 0
         var keycodes: [UInt8] = []
@@ -1222,8 +1229,9 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
 
     // MARK: - 宏录制 / 回放引擎
 
-    /// 记录一个输入事件。回放注入期间（isReplaying）跳过，避免二次录制；
-    /// move / wheel 这类高频事件按 30ms 合并到上一条同类事件，控制数据量。
+    /// 记录一个输入事件。回放注入期间（isReplaying）跳过，避免二次录制。
+    /// 位移（move / wheel）不再在这里按时间合并——改为在 flush() 里记录每帧
+    /// 真正发给主机的位移值，逐帧复现才能对齐 iPadOS 的非线性指针加速曲线。
     private func recordEvent(kind: MacroEvent.Kind,
                              dx: Int = 0, dy: Int = 0, wheel: Int = 0,
                              keycode: UInt8 = 0, modifiers: UInt8 = 0,
@@ -1231,17 +1239,6 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
                              label: String = "") {
         guard isRecording, !isReplaying, let start = recordingStart else { return }
         let t = Date().timeIntervalSince(start)
-
-        // 高频位移合并：同一类且间隔 < 30ms 的连续事件累加，避免一秒数百条。
-        if kind == .move || kind == .wheel,
-           let last = recordingEvents.indices.last,
-           recordingEvents[last].kind == kind,
-           t - recordingEvents[last].t < 0.03 {
-            recordingEvents[last].dx += dx
-            recordingEvents[last].dy += dy
-            recordingEvents[last].wheel += wheel
-            return
-        }
 
         recordingEvents.append(MacroEvent(
             kind: kind, t: t, dx: dx, dy: dy, wheel: wheel,
@@ -1292,15 +1289,10 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         playingMacroName = macro.name
         updatePlaybackRemaining()
 
-        if playbackLink == nil {
-            let l = CADisplayLink(target: self, selector: #selector(playbackTick))
-            l.add(to: .main, forMode: .common)
-            playbackLink = l
-        }
         isPlaying = true
         note("开始回放「\(macro.name)」：\(mode.label)")
         // 每轮开始前归位到左下角，保证与录制起点一致。归位期间 playbackLoopStart
-        // 保持 nil，playbackTick 会跳过注入；归位完成后再开始本轮计时。
+        // 保持 nil，pumpPlayback 会跳过注入；归位完成后再开始本轮计时。
         startNextLoopWithHoming(first: true)
     }
 
@@ -1317,9 +1309,7 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
 
     /// 停止回放并复位计数。
     func stopPlayback() {
-        guard isPlaying || playbackLink != nil else { return }
-        playbackLink?.invalidate()
-        playbackLink = nil
+        guard isPlaying else { return }
         isPlaying = false
         isReplaying = false
         cancelHoming()
@@ -1355,17 +1345,29 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         }
     }
 
-    @objc private func playbackTick() {
+    /// 由 tick() 每一帧调用。事件按各自时间戳到期注入，但位移每帧最多注入一条：
+    /// 录制时是逐帧发出位移的，回放必须同样逐帧摊开，不能一帧塞多条让它们累加后
+    /// 合成一个大帧——否则 iPadOS 的非线性指针加速会让落点偏移，且因帧相位漂移
+    /// 每次偏移都不同。非位移事件（按键/点击/滚轮）可同帧全部注入。
+    private func pumpPlayback() {
         guard isPlaying, let macro = playbackMacro, let loopStart = playbackLoopStart else { return }
         let elapsed = Date().timeIntervalSince(loopStart)
         let loopDuration = max(macro.playbackDuration, playbackEvents.last?.t ?? 0) + 0.05
 
-        // 时间到了就注入所有到期事件；即使某一帧卡顿漏过多个事件也不会丢。
-        while playbackIndex < playbackEvents.count,
-              playbackEvents[playbackIndex].t <= elapsed {
-            inject(playbackEvents[playbackIndex])
-            playbackIndex += 1
+        // 计时到点才注入；位移类每帧只放一条，其余事件当帧补齐。
+        // 用「到期事件里是否已有位移」作为本帧闸门，保证位移严格逐帧。
+        var movedThisFrame = false
+        var scan = playbackIndex
+        while scan < playbackEvents.count,
+              playbackEvents[scan].t <= elapsed {
+            let ev = playbackEvents[scan]
+            let isMove = (ev.kind == .move || ev.kind == .wheel)
+            if isMove && movedThisFrame { break }
+            inject(ev)
+            scan += 1
+            if isMove { movedThisFrame = true }
         }
+        playbackIndex = scan
 
         // 一轮结束：按播放模式决定重播还是停止。
         if elapsed >= loopDuration {
@@ -1445,6 +1447,12 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         // 否则按键会被当成一直按住（或一直没按）。
         let keyboardPending = mod != 0 || !keys.isEmpty || keyReleased
         guard force || x != 0 || y != 0 || w != 0 || keyboardPending else { return }
+
+        // 录制：记下「本帧真正发出的位移」而非手势层的原始增量。回放时每帧注入
+        // 一条、逐帧复现这个序列，iPadOS 的非线性指针加速才会得出同样的落点。
+        // recordEvent 内部已用 isRecording && !isReplaying 过滤，回放不会二次录制。
+        if x != 0 || y != 0 { recordEvent(kind: .move, dx: Int(x), dy: Int(y)) }
+        if w != 0 { recordEvent(kind: .wheel, wheel: Int(w)) }
 
         // 桥接模式：直接把 12 字节复合报告发给桥接端（ESP32 或 Windows 电脑接收器）。
         // 布局与 HIDSpec.compositeReportMap 逐字节对应，App 这侧的手势 / 键盘逻辑完全不变。
