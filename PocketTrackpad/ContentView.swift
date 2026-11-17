@@ -9,8 +9,6 @@ struct ContentView: View {
     @State private var showMacros = false
     /// true = 全键盘，false = 触控板。只在已连接时生效，断开自动回到触控板。
     @State private var showKeyboard = false
-    /// 断开后弹出「切换设备」指引（配对信息在主机侧，iPad 会自动回连）。
-    @State private var showSwitchHelp = false
 
     /// 主机订阅了 Input Report（BLE），或 ESP32 硬件桥已连上，都算真正连上。
     private var connected: Bool { hid.isLinkActive }
@@ -82,40 +80,24 @@ struct ContentView: View {
                                 .foregroundStyle(.secondary)
                                 .lineLimit(1)
                         }
-                        Button("断开") {
-                            if hid.bridgeMode {
-                                hid.disconnectBridge()
-                            } else {
-                                hid.disconnect()
-                                showSwitchHelp = true
-                            }
-                        }
-                        .font(.caption2)
-                        .buttonStyle(.bordered)
-                        .controlSize(.mini)
-                        .accessibilityLabel("断开当前连接")
-                    }
-                    Button {
+                    } else {
+                        // 只保留「开始 / 连接」入口。断开与停止广播实测会被系统自动回连 /
+                        // 自动恢复广播抵消，没有实际意义，故从工具栏移除。
                         if hid.bridgeMode {
-                            if hid.bridgeActive { hid.disconnectBridge() } else { hid.startBridge() }
-                        } else {
-                            if hid.isAdvertising {
-                                hid.stopAdvertising()
-                            } else {
-                                hid.start()
+                            Button { hid.startBridge() } label: {
+                                Text("连接桥接").font(.caption2)
                             }
-                        }
-                    } label: {
-                        if hid.bridgeMode {
-                            Text(hid.bridgeActive ? "断开桥接" : "连接桥接")
-                                .font(.caption2)
+                            .buttonStyle(.bordered)
+                            .controlSize(.mini)
                         } else {
-                            Text(hid.isAdvertising ? "停止广播" : "开始广播")
-                                .font(.caption2)
+                            // 正在广播但未连上点时，点它可重启广播（不会停止）。
+                            Button { hid.start() } label: {
+                                Text("开始广播").font(.caption2)
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.mini)
                         }
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.mini)
                 }
             }
             .navigationDestination(isPresented: $showSettings) {
@@ -125,17 +107,10 @@ struct ContentView: View {
                 NavigationStack {
                     MacroListView()
                 }
-            }
-            .alert("已断开 · 重新连接", isPresented: $showSwitchHelp) {
-                Button("断开并重新广播") {
-                    hid.selectNewDevice()
-                }
-                Button("普通开始广播") {
-                    hid.start()
-                }
-                Button("取消", role: .cancel) {}
-            } message: {
-                Text("两种方式都会重新广播，任何设备都能连接。\n\n【换设备说明】iOS 无法清除主机侧的配对，已配对设备会由系统自动回连。要彻底不被它抢连，必须在旧设备上忽略本设备。iPad 的正确入口是：\(HIDSpec.ipadIgnorePath)。\n\n连 Windows / Android：用 ESP32 硬件桥——手机连上 ESP32 的 PT-Bridge 热点，设置里开「桥接」、填 192.168.4.1，点「连接桥接」，再到电脑系统蓝牙里配对 PT-Pad 即可，电脑端无需安装任何软件。")
+                // 宏面板只占屏幕下部，顶部露出主界面的齿轮 / 已连接等状态栏，
+                // 不再整屏遮挡；仍可下拉手势关闭面板。
+                .presentationDetents([.fraction(0.80)])
+                .interactiveDismissDisabled(false)
             }
         }
     }
@@ -315,7 +290,7 @@ struct SettingsView: View {
                     Slider(value: $hid.scrollSensitivity, in: 0.3...3.0, step: 0.1)
                 }
                 Toggle("自然滚动", isOn: $hid.naturalScrolling)
-                Text("默认：向上滑 = 滚轮下滑。打开自然滚动后方向整体反转（跟手）。三种滚动入口：底部滚轮键、触摸板左边缘（滚屏幕左侧）、触摸板右边缘（滚屏幕右侧）——边缘滑动会先把光标推到屏幕对应侧再滚动，适合 iPad 分屏。双指已改为拖拽（需滑动超过 8pt 才按下左键，轻点不会拖动图标）。设置会自动保存。")
+                Text("默认：向上滑 = 滚轮下滑。打开自然滚动后方向整体反转（跟手）。两种滚动入口：触摸板右侧竖条滚轮（在竖条上上下滑动）、底部滚轮键。双指已改为拖拽（需滑动超过 8pt 才按下左键，轻点不会拖动图标）。设置会自动保存。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

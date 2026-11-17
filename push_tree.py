@@ -42,7 +42,15 @@ tree = gh("POST", "/git/trees", {
 })
 print("tree =", tree["sha"])
 
-msg = "feat: 默认参数调整与手势修正（v0.0.58）\n\n用户要求：三指上滑改为最小化当前程序/返回桌面（原 Command+H 在其 iPadOS 上表现为关闭程序）；指针默认 1.8x；按键音默认关；振动默认关；键鼠复合默认开；双指轻点 app 图标不要误拖动；触摸板左右边缘控制屏幕两侧滚动。\n- 默认值改用版本化新 key，老用户升级即生效：sensitivity.v2=1.8、keyClickEnabled.v2=false、hapticEnabled.v2=false、compositeDevice.v2=true。\n- 移除早期「首次运行强制切回纯鼠标」迁移，否则会把 composite v2 的 true 又改回 false。\n- 三指上滑 Command+H -> Command+M（keycode 0x0B -> 0x10），文案/日志/预览同步。\n- 双指拖拽加 8pt 阈值：累计位移超阈值才 setButton 按下左键，轻点不拖动图标。\n- 触摸板左右边缘滚动：单指起点落在边缘窄条则先把光标用饱和位移推到屏幕对应侧（独立计数、不进宏录制），再上下滑发 wheel；与底部滚轮键并存，方向约定一致。\n- 内联层：HIDDescriptor/HIDPeripheral/KeyClickPlayer/HapticPlayer/TrackpadSurface/ContentView + preview/README 同步（JS 语法已校验）。"
+msg = json.dumps(
+    "feat: 滚动改右侧竖条 + 删除无效断开/停止广播（v0.0.59）\n\n"
+    "用户实测反馈：边缘触发滚动不好用、宏录制面板整屏遮挡顶部状态栏、断开会自动回连且停止广播不起作用。\n"
+    "- 删除 v0.0.58 的边缘滚动全部机制（edgeLocate 状态/tick 分支/movePointerToSide、TrackpadSurface 边缘分流），改为触摸板右侧画一条可见竖条滚轮：起点落在条上只发 wheel（方向倍率沿用底部滚轮键），不发指针位移，条上轻点/长按不触发点击。滚动入口由三种减为两种。\n"
+    "- 宏录制 sheet 改 presentationDetents fraction 0.80，只占下部 80%，顶部露出齿轮/已连接，可下拉关闭。\n"
+    "- 删除工具栏「断开」与「停止广播/开始广播」切换按钮（点了自动回连、不起作用）：已连接只显示绿点+已连接，未连接只留「开始广播」（桥接为「连接桥接」）入口；删 stopAdvertising()/disconnectBridge()、切换设备 alert 与 showSwitchHelp 状态。\n"
+    "- HIDPeripheral/TrackpadSurface/ContentView + preview/README 同步（JS 语法已校验）。",
+    ensure_ascii=False
+)
 
 commit = gh("POST", "/git/commits", {
     "message": msg, "tree": tree["sha"], "parents": [BASE]

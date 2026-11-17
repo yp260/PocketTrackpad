@@ -206,10 +206,6 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
     private var pendingX = 0
     private var pendingY = 0
     private var pendingWheel = 0
-    /// 边缘滚动定位：剩余要发的饱和水平位移帧数 / 每帧 dx。
-    /// 走独立计数、在 tick() 里直接写 pending（不经 enqueue），因此不会被录进宏。
-    private var edgeLocateFramesLeft = 0
-    private var edgeLocateDx: Int = 0
     /// 键盘状态由 tick() 统一合进 60Hz 报告流：按下期间持续带键码，到期自动释放。
     /// 这样按下与释放走同一条链路，不会被 queuedPacket 覆盖导致按键卡住。
     /// modifier 不再写死 Command，全键盘可发任意 Ctrl / Shift / Option / Command 组合。
@@ -365,16 +361,6 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         bridge.connect()
     }
 
-    /// 断开桥接端 UDP 连接；不影响本机 BLE 路径（关掉桥模式后用「开始广播」即可直连 iPad）。
-    func disconnectBridge() {
-        bridge.disconnect()
-        subscribers = 0
-        statusText = "桥接端已断开"
-        note("已断开桥接端；回到 iPad 直连请关掉「桥接」开关，或点「连接桥接端」重试")
-        mark("7 运行中（已断开桥接端）")
-        refreshKeyboardReady()
-    }
-
     /// 设置 ESP32 硬件桥的地址（默认 192.168.4.1:5000）。
     func setBridgeTarget(host: String, port: String) {
         let p = UInt16(port.trimmingCharacters(in: .whitespaces)) ?? 5000
@@ -400,13 +386,6 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         note("已切到纯鼠标模式（4 字节，与 v0.0.7 一致）：GATT 已重建并重播")
         note("重要：请按「\(HIDSpec.ipadIgnorePath)」忽略后重新配对，旧 Report Map 缓存才会刷新")
         statusText = "纯鼠标模式 · 请忽略设备重配"
-    }
-
-    func stopAdvertising() {
-        manager?.stopAdvertising()
-        isAdvertising = false
-        statusText = "广播已停止"
-        note("停止广播")
     }
 
     /// 主动断开当前主机，让 Windows / Mac 等其他主机可以重新发现本设备。
@@ -438,8 +417,6 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         pendingX = 0
         pendingY = 0
         pendingWheel = 0
-        edgeLocateFramesLeft = 0
-        edgeLocateDx = 0
         pendingModifier = 0
         pendingKeycode = 0
         keyReleaseAt = nil
@@ -480,8 +457,6 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         pendingX = 0
         pendingY = 0
         pendingWheel = 0
-        edgeLocateFramesLeft = 0
-        edgeLocateDx = 0
         pendingModifier = 0
         pendingKeycode = 0
         keyReleaseAt = nil
@@ -940,14 +915,6 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
             if settleFramesLeft == 0 { homingCompleted = true }
         }
 
-        // 边缘滚动定位：每帧发饱和水平位移把光标推到屏幕左 / 右侧，直接写 pending
-        // （不经 enqueue，不进录制）。与归位 / 静默互斥：录制回放的归位优先级更高。
-        if !didHome, homingFramesLeft == 0, settleFramesLeft == 0, edgeLocateFramesLeft > 0 {
-            edgeLocateFramesLeft -= 1
-            pendingX = edgeLocateDx
-            pendingY = 0
-        }
-
         // 回放注入与发送共用同一个 CADisplayLink（本 tick）：注入一帧位移立刻
         // flush 一帧，逐帧复现录制时的帧序列。此前回放用独立 playbackLink，与
         // 本 tick 相位不定，同一位移每次被拆成的帧序列都不同，叠加 iPadOS 的
@@ -1034,22 +1001,6 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         settleFramesLeft = 0
         afterHoming = nil
         isHoming = false
-    }
-
-    /// 触摸板左右边缘滚动的定位步骤：先用饱和 dx 把光标推到屏幕左 / 右侧，
-    /// 使随后的滚轮事件作用在该侧的窗口 / 区域（iPad 分屏时左边缘滚左侧、右边缘滚右侧）。
-    /// HID 是相对位移、无绝对定位能力，沿用宏归位的经验值：90 帧 × 127 计数，
-    /// 足以从屏幕任意位置饱和到边缘。走独立计数在 tick() 里直接写 pending，
-    /// 不经 enqueue，因此不会被录进宏（这是导航操作，不应污染录制轨迹）。
-    func movePointerToSide(left: Bool) {
-        edgeLocateDx = left ? -127 : 127
-        edgeLocateFramesLeft = 90
-        if link == nil {
-            let l = CADisplayLink(target: self, selector: #selector(tick))
-            l.add(to: .main, forMode: .common)
-            link = l
-        }
-        note("触摸板\(left ? "左" : "右")边缘滚动：光标已推向屏幕\(left ? "左" : "右")侧")
     }
 
     /// 三指上滑：发一次 Command + M，最小化当前程序 / 返回桌面（App 保留后台，不关闭）。

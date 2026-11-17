@@ -3,7 +3,7 @@ import UIKit
 
 /// 用 UIKit 手势识别器实现触控区：SwiftUI 原生手势无法可靠区分
 /// 单指平移 / 双指拖拽 / 轻点 / 长按，这里用 UIPanGestureRecognizer 的
-/// minimumNumberOfTouches / maximumNumberOfTouches 做硬隔离。滚动在底部滚轮键。
+/// minimumNumberOfTouches / maximumNumberOfTouches 做硬隔离。滚动在右侧滚轮条 / 底部滚轮键。
 struct TrackpadSurface: UIViewRepresentable {
 
     @EnvironmentObject var hid: HIDPeripheral
@@ -99,6 +99,37 @@ struct TrackpadSurface: UIViewRepresentable {
         ])
         context.coordinator.hint = hint
 
+        // 右侧竖直滚轮条：直接画在触控区右侧，手指按住它上下滑动即滚动。
+        // 它只是视觉提示（isUserInteractionEnabled=false，不吞触摸），命中判定放在
+        // handleMove 里做，复用同一个单指 pan，避免与指针移动手势互相抢。
+        let bar = UIView()
+        bar.isUserInteractionEnabled = false
+        bar.backgroundColor = UIColor.secondarySystemFill.withAlphaComponent(0.9)
+        bar.layer.cornerRadius = 13
+        bar.layer.cornerCurve = .continuous
+        bar.layer.borderColor = UIColor.separator.cgColor
+        bar.layer.borderWidth = 1
+        bar.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(bar)
+
+        let grip = UIImageView(image: UIImage(systemName: "arrow.up.and.down"))
+        grip.tintColor = UIColor.secondaryLabel
+        grip.contentMode = .scaleAspectFit
+        grip.translatesAutoresizingMaskIntoConstraints = false
+        bar.addSubview(grip)
+
+        NSLayoutConstraint.activate([
+            bar.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -10),
+            bar.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+            bar.widthAnchor.constraint(equalToConstant: compact ? 20 : 26),
+            bar.heightAnchor.constraint(equalTo: view.heightAnchor, multiplier: compact ? 0.6 : 0.42),
+            grip.centerXAnchor.constraint(equalTo: bar.centerXAnchor),
+            grip.centerYAnchor.constraint(equalTo: bar.centerYAnchor),
+            grip.widthAnchor.constraint(equalToConstant: 14),
+            grip.heightAnchor.constraint(equalToConstant: 26)
+        ])
+        context.coordinator.scrollBar = bar
+
         return view
     }
 
@@ -110,7 +141,7 @@ struct TrackpadSurface: UIViewRepresentable {
     }
 
     private static func hintText(composite: Bool) -> String {
-        let base = "单指移动指针  ·  轻点左键  ·  双击左键\n双指按住拖动 = 拖拽（图标/选中文字）\n单指长按右键  ·  底部滚轮键 / 左右边缘上下滑 = 滚动"
+        let base = "单指移动指针  ·  轻点左键  ·  双击左键\n双指按住拖动 = 拖拽（图标/选中文字）\n单指长按右键  ·  右侧滚轮条 / 底部滚轮键 = 滚动"
         return composite ? base + "\n三指上滑最小化 / 回桌面  ·  三指左右滑切 App" : base
     }
 
@@ -127,13 +158,14 @@ struct TrackpadSurface: UIViewRepresentable {
     final class Coordinator: NSObject, UIGestureRecognizerDelegate {
         var hid: HIDPeripheral
         weak var hint: UILabel?
+        weak var scrollBar: UIView?
 
         private var lastMove: CGPoint = .zero
         private var residualX: CGFloat = 0
         private var residualY: CGFloat = 0
-        /// 边缘滚动：-1=手势起点在左边缘（滚屏幕左侧），1=右边缘，0=普通指针移动。
-        private var edgeScrollSide = 0
-        private var edgeScrollResidual: CGFloat = 0
+        /// 右侧滚轮条：手指起点是否落在竖条内。落在其上只发 wheel、不发指针位移。
+        private var scrollBarActive = false
+        private var scrollBarResidual: CGFloat = 0
         private var lastDrag: CGPoint = .zero
         private var residualDragX: CGFloat = 0
         private var residualDragY: CGFloat = 0
@@ -163,50 +195,33 @@ struct TrackpadSurface: UIViewRepresentable {
             UIView.animate(withDuration: 0.25) { self.hint?.alpha = 0 }
         }
 
-        /// 触摸板边缘窄条宽度（pt）：单指手势起点落在这里即进入边缘滚动。
-        /// 取视图宽的 12%，最小 28、最大 56pt，避免小触控区里边缘吞掉正常移动区。
-        private func edgeWidth(for view: UIView?) -> CGFloat {
-            let w = view?.bounds.width ?? 320
-            return min(56, max(28, w * 0.12))
-        }
-
-        /// 单指平移：中间区域移动指针；起点在左/右边缘窄条则改为「先推光标到屏幕对应侧，
-        /// 再上下滑动发滚轮」——iPad 分屏时左边缘滚左侧、右边缘滚右侧。
-        /// 边缘模式只发 wheel、不发指针位移，避免滚动时把光标带离目标侧。
+        /// 单指平移：普通区域移动指针；起点落在右侧滚轮条内则只发 wheel。
+        /// 滚轮条方向约定与底部滚轮键一致（默认上滑=滚轮下滑，自然滚动开关可反转）。
         @objc func handleMove(_ g: UIPanGestureRecognizer) {
             switch g.state {
             case .began:
                 lastMove = .zero
                 residualX = 0
                 residualY = 0
-                edgeScrollResidual = 0
+                scrollBarResidual = 0
                 hideHint()
-                let startX = g.location(in: g.view).x
-                let ew = edgeWidth(for: g.view)
-                let viewW = g.view?.bounds.width ?? 0
-                if startX <= ew {
-                    edgeScrollSide = -1
-                    hid.movePointerToSide(left: true)
-                } else if startX >= viewW - ew {
-                    edgeScrollSide = 1
-                    hid.movePointerToSide(left: false)
-                } else {
-                    edgeScrollSide = 0
-                }
+                let start = g.location(in: g.view)
+                // 命中范围略大于竖条本身，方便手指按住。
+                scrollBarActive = scrollBar.map {
+                    $0.frame.insetBy(dx: -10, dy: -6).contains(start)
+                } ?? false
             case .changed:
                 let t = g.translation(in: g.view)
                 let stepX = t.x - lastMove.x
                 let stepY = t.y - lastMove.y
                 lastMove = t
 
-                if edgeScrollSide != 0 {
-                    // 边缘滚动：按纵向位移发 wheel，方向约定与底部滚轮键一致
-                    // （默认上滑=滚轮下滑，自然滚动开关可反转）。
+                if scrollBarActive {
                     let scale = CGFloat(hid.scrollSensitivity) / 4.0
                     let direction: CGFloat = hid.naturalScrolling ? -1 : 1
-                    let raw = stepY * scale * direction + edgeScrollResidual
+                    let raw = stepY * scale * direction + scrollBarResidual
                     let d = Int(raw.rounded(.toNearestOrAwayFromZero))
-                    edgeScrollResidual = raw - CGFloat(d)
+                    scrollBarResidual = raw - CGFloat(d)
                     if d != 0 { hid.enqueue(wheel: d) }
                     return
                 }
@@ -221,14 +236,14 @@ struct TrackpadSurface: UIViewRepresentable {
                 hid.enqueue(dx: ix, dy: iy)
             default:
                 lastMove = .zero
-                edgeScrollSide = 0
+                scrollBarActive = false
             }
         }
 
         /// 双指按住拖动 = 按住左键并移动指针（拖拽选中文字 / 文件等）。
         /// 防误触：began 不再立即按下左键，累计位移超过阈值（8pt）才真正进入拖动；
         /// 轻点或微小移动不会按住左键，避免在 iPad 主屏 app 图标上误触发拖动。
-        /// 滚动已移到底部滚轮键与左右边缘，双指不再发 wheel。
+        /// 滚动已移到底部滚轮键与右侧滚轮条，双指不再发 wheel。
         @objc func handleDrag(_ g: UIPanGestureRecognizer) {
             switch g.state {
             case .began:
@@ -278,7 +293,17 @@ struct TrackpadSurface: UIViewRepresentable {
             }
         }
 
+        /// 手势起点是否落在右侧滚轮条内（与 handleMove 相同的命中范围）。
+        /// 滚轮条上只做滚动，不触发轻点/双击/长按，避免按住条准备滚动时误发右键。
+        private func isOnScrollBar(_ g: UIGestureRecognizer) -> Bool {
+            guard let view = g.view else { return false }
+            return scrollBar.map {
+                $0.frame.insetBy(dx: -10, dy: -6).contains(g.location(in: view))
+            } ?? false
+        }
+
         @objc func handleTap(_ g: UITapGestureRecognizer) {
+            guard !isOnScrollBar(g) else { return }
             hideHint()
             hid.click(0x01)
             KeyClickPlayer.shared.play()
@@ -286,6 +311,7 @@ struct TrackpadSurface: UIViewRepresentable {
         }
 
         @objc func handleDoubleTap(_ g: UITapGestureRecognizer) {
+            guard !isOnScrollBar(g) else { return }
             hideHint()
             hid.click(0x01, count: 2)
             KeyClickPlayer.shared.play()
@@ -293,7 +319,7 @@ struct TrackpadSurface: UIViewRepresentable {
         }
 
         @objc func handleLongPress(_ g: UILongPressGestureRecognizer) {
-            guard g.state == .began else { return }
+            guard g.state == .began, !isOnScrollBar(g) else { return }
             hideHint()
             hid.click(0x02)
             KeyClickPlayer.shared.play()
