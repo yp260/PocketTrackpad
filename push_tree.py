@@ -43,12 +43,13 @@ tree = gh("POST", "/git/trees", {
 print("tree =", tree["sha"])
 
 msg = json.dumps(
-    "feat: 滚动改右侧竖条 + 删除无效断开/停止广播（v0.0.59）\n\n"
-    "用户实测反馈：边缘触发滚动不好用、宏录制面板整屏遮挡顶部状态栏、断开会自动回连且停止广播不起作用。\n"
-    "- 删除 v0.0.58 的边缘滚动全部机制（edgeLocate 状态/tick 分支/movePointerToSide、TrackpadSurface 边缘分流），改为触摸板右侧画一条可见竖条滚轮：起点落在条上只发 wheel（方向倍率沿用底部滚轮键），不发指针位移，条上轻点/长按不触发点击。滚动入口由三种减为两种。\n"
-    "- 宏录制 sheet 改 presentationDetents fraction 0.80，只占下部 80%，顶部露出齿轮/已连接，可下拉关闭。\n"
-    "- 删除工具栏「断开」与「停止广播/开始广播」切换按钮（点了自动回连、不起作用）：已连接只显示绿点+已连接，未连接只留「开始广播」（桥接为「连接桥接」）入口；删 stopAdvertising()/disconnectBridge()、切换设备 alert 与 showSwitchHelp 状态。\n"
-    "- HIDPeripheral/TrackpadSurface/ContentView + preview/README 同步（JS 语法已校验）。",
+    "feat: 竖条收窄 + 宏面板上移 + 宏编辑全面可改 + 断开重连回主界面（v0.0.60）\n\n"
+    "用户实测反馈：右侧竖条还是太宽、宏面板太靠下、宏编辑页要能改坐标/替换/插入动作、断开并重新广播要移回主界面原断开位置、断开好像不起作用。\n"
+    "- 右侧滚轮竖条宽度减半：26pt→13pt（compact 20→10），圆角 13→6、箭头图标同步缩小；命中范围仍外扩 10pt。\n"
+    "- 宏面板 presentationDetents fraction 0.80→0.90，顶边盖住「触控区/全键盘」切换栏，导航条仍露出。\n"
+    "- 重写 MacroView 宏编辑器：每个动作可改类型（移动/滚轮/按键/按下/抬起/点击）与参数（dx/dy、绝对到达坐标换算、滚轮量、键位+修饰键、鼠标键+连击次数），「插」在中间插入、「改」编辑、左滑删除；本地副本点完成才回写。\n"
+    "- 「断开并重新广播」从设置页移回右上角原断开位置（按钮名「断开重连」）；selectNewDevice 拆 GATT 重建重播（桥接模式断 UDP 重握手），新增 8 秒限时避开窗口（旧设备抢连则拆链重播、最多 8 次，超时放行），解决断开被自动回连抵消的问题；applyStartupMigration 清 avoidUntil。\n"
+    "- TrackpadSurface/ContentView/HIDPeripheral/MacroView + preview/README 同步（JS 语法已校验）。",
     ensure_ascii=False
 )
 

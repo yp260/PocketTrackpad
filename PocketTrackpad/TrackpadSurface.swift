@@ -105,7 +105,7 @@ struct TrackpadSurface: UIViewRepresentable {
         let bar = UIView()
         bar.isUserInteractionEnabled = false
         bar.backgroundColor = UIColor.secondarySystemFill.withAlphaComponent(0.9)
-        bar.layer.cornerRadius = 13
+        bar.layer.cornerRadius = 6
         bar.layer.cornerCurve = .continuous
         bar.layer.borderColor = UIColor.separator.cgColor
         bar.layer.borderWidth = 1
@@ -121,12 +121,14 @@ struct TrackpadSurface: UIViewRepresentable {
         NSLayoutConstraint.activate([
             bar.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -10),
             bar.centerYAnchor.constraint(equalTo: view.centerYAnchor),
-            bar.widthAnchor.constraint(equalToConstant: compact ? 20 : 26),
+            // 竖条宽度收窄一半：全屏 13pt / 键盘页小触控区 10pt；
+            // 命中范围仍用外扩 10pt，保证细条也容易按住。
+            bar.widthAnchor.constraint(equalToConstant: compact ? 10 : 13),
             bar.heightAnchor.constraint(equalTo: view.heightAnchor, multiplier: compact ? 0.6 : 0.42),
             grip.centerXAnchor.constraint(equalTo: bar.centerXAnchor),
             grip.centerYAnchor.constraint(equalTo: bar.centerYAnchor),
-            grip.widthAnchor.constraint(equalToConstant: 14),
-            grip.heightAnchor.constraint(equalToConstant: 26)
+            grip.widthAnchor.constraint(equalToConstant: 10),
+            grip.heightAnchor.constraint(equalToConstant: 22)
         ])
         context.coordinator.scrollBar = bar
 

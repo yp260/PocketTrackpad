@@ -113,7 +113,7 @@ struct MacroListView: View {
             } header: {
                 Text("已保存的宏（\(store.macros.count)）")
             } footer: {
-                Text("左滑可删除。编辑页可修改每个动作的时间间隔、替换按键、删除动作。")
+                Text("左滑可删除。编辑页可改每个动作的类型、时间、坐标 / 按键 / 点击参数，也能在中间插入新动作。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -201,11 +201,17 @@ private struct MacroRow: View {
 
 // MARK: - 宏编辑器
 
+/// 供 .sheet(item:) 使用的编辑目标（动作下标）。
+private struct EventEditTarget: Identifiable {
+    let index: Int
+    var id: Int { index }
+}
+
 struct MacroEditorView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var draft: Macro
-    @State private var showKeyPicker = false
-    @State private var replaceIndex = 0
+    /// 正在编辑的动作；nil = 没有打开动作编辑页。
+    @State private var editTarget: EventEditTarget?
     let onSave: (Macro) -> Void
 
     init(macro: Macro, onSave: @escaping (Macro) -> Void) {
@@ -223,23 +229,25 @@ struct MacroEditorView: View {
 
             Section {
                 ForEach(Array(draft.events.indices), id: \.self) { idx in
-                    EventEditorRow(event: $draft.events[idx], onReplaceKey: {
-                        replaceIndex = idx
-                        showKeyPicker = true
-                    })
+                    EventEditorRow(
+                        event: $draft.events[idx],
+                        index: idx,
+                        cumulative: cumulativePosition(upTo: idx),
+                        onEdit: { editTarget = EventEditTarget(index: idx) },
+                        onInsertAfter: { insertEvent(after: idx) },
+                        onDelete: { draft.events.remove(at: idx) }
+                    )
                 }
-                .onDelete { indexSet in
-                    draft.events.remove(atOffsets: indexSet)
+                Button {
+                    insertEvent(after: nil)
+                } label: {
+                    Label("在末尾添加动作", systemImage: "plus.circle")
                 }
-                if draft.events.isEmpty {
-                    Text("没有任何动作，可左滑删除这条宏重新录制。")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+                .font(.subheadline)
             } header: {
                 Text("动作（\(draft.events.count)）")
             } footer: {
-                Text("「间隔」是该动作距录制起点的秒数，改大即延后发生。按键行点「替换键位」可改成任意键。整体时序以每个动作的时间为准。")
+                Text("点任一动作可改类型、时间、坐标 / 按键 / 点击参数；点「插」在它后面插入新动作，或左滑删除。坐标以录制起点（左下角）为原点，X 向右为正、Y 向下为正。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -269,14 +277,45 @@ struct MacroEditorView: View {
                 .fontWeight(.semibold)
             }
         }
-        .sheet(isPresented: $showKeyPicker) {
-            KeyPickerView(event: draft.events[replaceIndex]) { picked in
-                if replaceIndex < draft.events.count {
-                    draft.events[replaceIndex] = picked
-                }
-                showKeyPicker = false
+        .sheet(item: $editTarget) { target in
+            if target.index < draft.events.count {
+                EventEditorView(
+                    event: draft.events[target.index],
+                    positionBefore: target.index > 0
+                        ? cumulativePosition(upTo: target.index - 1) : (x: 0, y: 0),
+                    index: target.index,
+                    onCommit: { edited in
+                        if target.index < draft.events.count {
+                            draft.events[target.index] = edited
+                        }
+                        editTarget = nil
+                    }
+                )
             }
         }
+    }
+
+    /// 到第 idx 个动作为止的累计指针位置（只累计 move 的 dx/dy）。
+    private func cumulativePosition(upTo idx: Int) -> (x: Int, y: Int) {
+        var x = 0, y = 0
+        guard idx >= 0, !draft.events.isEmpty else { return (x, y) }
+        for i in 0...min(idx, draft.events.count - 1) where draft.events[i].kind == .move {
+            x += draft.events[i].dx
+            y += draft.events[i].dy
+        }
+        return (x, y)
+    }
+
+    /// 在指定动作之后插入一条新动作（默认「左键单击」，随后立刻打开编辑页改类型/参数）。
+    private func insertEvent(after idx: Int?) {
+        let at: Int
+        if let idx = idx { at = min(idx + 1, draft.events.count) }
+        else { at = draft.events.count }
+        let prevT = at > 0 ? draft.events[at - 1].t : 0
+        let nextT = at < draft.events.count ? draft.events[at].t : prevT + 0.5
+        let newT = nextT > prevT ? prevT + min(0.25, (nextT - prevT) / 2) : prevT + 0.25
+        draft.events.insert(MacroEvent(kind: .click, t: newT, mask: 0x01), at: at)
+        editTarget = EventEditTarget(index: at)
     }
 }
 
@@ -284,42 +323,243 @@ struct MacroEditorView: View {
 
 private struct EventEditorRow: View {
     @Binding var event: MacroEvent
-    let onReplaceKey: () -> Void
+    let index: Int
+    let cumulative: (x: Int, y: Int)
+    let onEdit: () -> Void
+    let onInsertAfter: () -> Void
+    let onDelete: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text(String(format: "%.2f s", event.t))
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                Text(String(format: "%.2f", event.t))
                     .font(.system(size: 12, design: .monospaced))
                     .foregroundStyle(.secondary)
-                    .frame(width: 62, alignment: .leading)
+                    .frame(width: 42, alignment: .leading)
+                Text("#\(index + 1)")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
                 Text(event.summary)
                     .font(.subheadline)
-                Spacer()
-                if event.kind == .key {
-                    Button("替换键位") { onReplaceKey() }
-                        .font(.caption)
-                        .buttonStyle(.bordered)
-                        .controlSize(.mini)
-                }
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+                Button("改") { onEdit() }
+                    .font(.caption2)
+                    .buttonStyle(.bordered)
+                    .controlSize(.mini)
+                Button("插") { onInsertAfter() }
+                    .font(.caption2)
+                    .buttonStyle(.bordered)
+                    .controlSize(.mini)
             }
-            // 用滑杆微调该动作的发生时刻（0–30 秒，精度 0.01 秒），补足 TextField
-            // 在小屏上不好输入小数的问题。
-            Slider(value: Binding(
-                get: { min(max(event.t, 0), 30) },
-                set: { event.t = $0 }
-            ), in: 0...30, step: 0.01)
+            if event.kind == .move {
+                Text("到达坐标 X \(cumulative.x) · Y \(cumulative.y)")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
         }
         .padding(.vertical, 2)
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            Button(role: .destructive) { onDelete() } label: {
+                Label("删除", systemImage: "trash")
+            }
+        }
     }
 }
 
-// MARK: - 键位选择器
+// MARK: - 动作编辑页（类型 / 时间 / 坐标 / 按键 / 点击）
 
-private struct KeyPickerView: View {
+private struct EventEditorView: View {
     @Environment(\.dismiss) private var dismiss
-    let event: MacroEvent
-    let onPick: (MacroEvent) -> Void
+    /// 编辑本地副本，点「完成」才回写；点「取消」丢弃本次改动。
+    @State private var event: MacroEvent
+    let positionBefore: (x: Int, y: Int)
+    let index: Int
+    let onCommit: (MacroEvent) -> Void
+
+    init(event: MacroEvent,
+         positionBefore: (x: Int, y: Int),
+         index: Int,
+         onCommit: @escaping (MacroEvent) -> Void) {
+        _event = State(initialValue: event)
+        self.positionBefore = positionBefore
+        self.index = index
+        self.onCommit = onCommit
+    }
+
+    @State private var absoluteX = ""
+    @State private var absoluteY = ""
+
+    private static let intFormatter: NumberFormatter = {
+        let f = NumberFormatter()
+        f.numberStyle = .none
+        f.allowsFloats = false
+        return f
+    }()
+    private static let doubleFormatter: NumberFormatter = {
+        let f = NumberFormatter()
+        f.numberStyle = .decimal
+        f.maximumFractionDigits = 2
+        return f
+    }()
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("操作类型") {
+                    Picker("类型", selection: $event.kind) {
+                        Text("移动指针").tag(MacroEvent.Kind.move)
+                        Text("滚轮").tag(MacroEvent.Kind.wheel)
+                        Text("按键").tag(MacroEvent.Kind.key)
+                        Text("鼠标按下").tag(MacroEvent.Kind.buttonDown)
+                        Text("鼠标抬起").tag(MacroEvent.Kind.buttonUp)
+                        Text("点击").tag(MacroEvent.Kind.click)
+                    }
+                    .pickerStyle(.menu)
+                }
+
+                Section("发生时间") {
+                    HStack {
+                        Text("距录制起点")
+                        Spacer()
+                        TextField("秒", value: $event.t, formatter: Self.doubleFormatter)
+                            .keyboardType(.numbersAndPunctuation)
+                            .multilineTextAlignment(.trailing)
+                            .frame(width: 90)
+                        Text("秒")
+                    }
+                    Slider(value: $event.t, in: 0...60, step: 0.01)
+                }
+
+                switch event.kind {
+                case .move:
+                    Section("指针位移（本帧相对位移）") {
+                        Stepper("水平 dx：\(event.dx)", value: $event.dx, in: -2000...2000, step: 1)
+                        Stepper("垂直 dy：\(event.dy)", value: $event.dy, in: -2000...2000, step: 1)
+                        HStack(spacing: 8) {
+                            Text("dx")
+                            TextField("0", value: $event.dx, formatter: Self.intFormatter)
+                                .keyboardType(.numbersAndPunctuation)
+                                .textFieldStyle(.roundedBorder)
+                            Text("dy")
+                            TextField("0", value: $event.dy, formatter: Self.intFormatter)
+                                .keyboardType(.numbersAndPunctuation)
+                                .textFieldStyle(.roundedBorder)
+                        }
+                    }
+                    Section("位置坐标（原点：录制起点左下角）") {
+                        Text("本步执行后到达：X \(positionBefore.x + event.dx) · Y \(positionBefore.y + event.dy)")
+                            .font(.subheadline)
+                        HStack(spacing: 8) {
+                            Text("设到 X")
+                            TextField("X", text: $absoluteX)
+                                .keyboardType(.numbersAndPunctuation)
+                                .textFieldStyle(.roundedBorder)
+                            Text("Y")
+                            TextField("Y", text: $absoluteY)
+                                .keyboardType(.numbersAndPunctuation)
+                                .textFieldStyle(.roundedBorder)
+                        }
+                        Button("应用坐标") {
+                            let tx = Int(absoluteX.trimmingCharacters(in: .whitespaces)) ?? positionBefore.x + event.dx
+                            let ty = Int(absoluteY.trimmingCharacters(in: .whitespaces)) ?? positionBefore.y + event.dy
+                            event.dx = tx - positionBefore.x
+                            event.dy = ty - positionBefore.y
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        Text("HID 只能发相对位移，所以绝对坐标会换算成本步 dx/dy；改这一步会同时改变其后所有动作的实际落点。")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                case .wheel:
+                    Section("滚轮") {
+                        Stepper("滚动量：\(event.wheel)", value: $event.wheel, in: -500...500, step: 1)
+                        HStack {
+                            Text("数值")
+                            TextField("0", value: $event.wheel, formatter: Self.intFormatter)
+                                .keyboardType(.numbersAndPunctuation)
+                                .textFieldStyle(.roundedBorder)
+                        }
+                        Text("正数 = 滚轮上滑，负数 = 下滑（受自然滚动开关影响）。")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                case .key:
+                    Section("按键") {
+                        let name = event.label.isEmpty ? String(format: "0x%02X", event.keycode) : event.label
+                        Text("当前：\(MacroEvent.modifierText(event.modifiers).isEmpty ? "" : MacroEvent.modifierText(event.modifiers) + " + ")\(name)")
+                            .font(.subheadline)
+                        Toggle("Ctrl", isOn: modifierBinding(0x01))
+                        Toggle("Shift", isOn: modifierBinding(0x02))
+                        Toggle("Opt", isOn: modifierBinding(0x04))
+                        Toggle("Cmd", isOn: modifierBinding(0x08))
+                    }
+                    Section("选择键位") {
+                        KeyGridView { label in
+                            if let resolved = HIDKeycode.resolve(label) {
+                                event.keycode = resolved.keycode
+                                event.modifiers = resolved.modifier
+                                event.label = label
+                            }
+                        }
+                    }
+                case .buttonDown, .buttonUp:
+                    Section("鼠标键") {
+                        mouseMaskPicker
+                    }
+                case .click:
+                    Section("点击") {
+                        mouseMaskPicker
+                        Stepper("连击次数：\(event.count)", value: $event.count, in: 1...10, step: 1)
+                    }
+                }
+            }
+            .navigationTitle("编辑动作 \(index + 1)")
+            .navigationBarTitleDisplayMode(.inline)
+            .onAppear {
+                absoluteX = String(positionBefore.x + event.dx)
+                absoluteY = String(positionBefore.y + event.dy)
+            }
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("取消") { dismiss() }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("完成") {
+                        onCommit(event)
+                        dismiss()
+                    }
+                    .fontWeight(.semibold)
+                }
+            }
+        }
+    }
+
+    private var mouseMaskPicker: some View {
+        Picker("鼠标键", selection: $event.mask) {
+            Text("左键").tag(UInt8(0x01))
+            Text("右键").tag(UInt8(0x02))
+            Text("中键").tag(UInt8(0x04))
+        }
+        .pickerStyle(.segmented)
+    }
+
+    private func modifierBinding(_ bit: UInt8) -> Binding<Bool> {
+        Binding(
+            get: { event.modifiers & bit != 0 },
+            set: { on in
+                if on { event.modifiers |= bit }
+                else { event.modifiers &= ~bit }
+            }
+        )
+    }
+}
+
+// MARK: - 键位网格（动作编辑页内直接选键）
+
+private struct KeyGridView: View {
+    let onPick: (String) -> Void
 
     /// 常用键：功能键来自 HIDKeycode.named，再加字母与数字。
     private static let commonKeys: [String] = {
@@ -333,36 +573,16 @@ private struct KeyPickerView: View {
     private let columns = [GridItem(.adaptive(minimum: 52), spacing: 8)]
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                LazyVGrid(columns: columns, spacing: 8) {
-                    ForEach(Self.commonKeys, id: \.self) { label in
-                        Button {
-                            var e = event
-                            if let resolved = HIDKeycode.resolve(label) {
-                                e.keycode = resolved.keycode
-                                e.modifiers = resolved.modifier
-                                e.label = label
-                            }
-                            onPick(e)
-                            dismiss()
-                        } label: {
-                            Text(label)
-                                .font(.caption)
-                                .frame(maxWidth: .infinity, minHeight: 36)
-                        }
-                        .buttonStyle(.bordered)
-                    }
+        LazyVGrid(columns: columns, spacing: 8) {
+            ForEach(Self.commonKeys, id: \.self) { label in
+                Button { onPick(label) } label: {
+                    Text(label)
+                        .font(.caption)
+                        .frame(maxWidth: .infinity, minHeight: 36)
                 }
-                .padding()
-            }
-            .navigationTitle("替换键位")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("取消") { dismiss() }
-                }
+                .buttonStyle(.bordered)
             }
         }
+        .padding(.vertical, 4)
     }
 }

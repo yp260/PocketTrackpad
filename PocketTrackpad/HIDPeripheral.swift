@@ -289,9 +289,13 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
             }
         }
     }
-    /// 本轮广播要避开的设备 ID（开启选择模式时取 lastCentralID）。空 = 不避开。
+    /// 「断开重连」后限时避开的设备 ID（取断开前的 lastCentralID）。空 = 不避开。
+    /// 与历史的常驻「选择新设备模式」不同：这里只在点按钮后的一小段窗口内生效，
+    /// 超时或次数用尽即放行，绝不会把用户想连回的设备永久拒之门外。
     private var avoidCentralID: String?
-    /// 因避开旧设备而主动拆链的次数，防止死循环。
+    /// 避开窗口截止时间；到点后无论是否成功都清除避开状态。
+    private var avoidUntil: Date?
+    /// 窗口内因避开旧设备而主动拆链的次数，防止死循环。
     private var avoidRejectCount = 0
 
     // MARK: - 生命周期
@@ -308,6 +312,7 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
             UserDefaults.standard.set(true, forKey: Self.avoidanceClearedKey)
             selectNewDeviceMode = false
             avoidCentralID = nil
+            avoidUntil = nil
             avoidRejectCount = 0
             note("连接修复：已永久关闭「避开上次设备」——此模式会导致 iPad 连不上，任何设备现在都能正常连接")
         }
@@ -430,13 +435,9 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         mark("7 运行中（已主动断开）")
     }
 
-    /// 「选择新设备」：断开后开始广播，但本轮避开上次连接的设备。
-    /// 若它自动回连，App 会立刻拆链重播，给其他设备留出连接窗口。
-    /// 这是尽力而为——iOS 无 API 阻止已配对主机发起连接，根治须在旧设备忽略本设备
-    /// （iPad 走「辅助触控 → 设备」，不在蓝牙列表）。
-    func selectNewDevice() {
-        bridge.disconnect()
-        note("选择新设备：本轮将避开上次设备" + (lastCentralID.map { "（\($0.prefix(8))）" } ?? ""))
+    /// 拆掉 GATT 数据库并释放 manager。iOS 没有公开的 disconnect(central:) 接口，
+    /// 这是让当前主机真正掉线的唯一办法；随后 start() 会重建服务并重新广播。
+    private func tearDownGATT() {
         manager?.stopAdvertising()
         manager?.removeAllServices()
         manager?.delegate = nil
@@ -465,13 +466,39 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         readyToUpdate = true
         cancelHoming()
         refreshKeyboardReady()
+    }
 
-        // 不再避开任何设备：iOS 无法拒绝指定 central，任何设备都能正常连接。
-        // 换设备请在旧设备的忽略入口解绑（iPad 走辅助触控），本按钮只做断开 + 重建 + 重播。
-        avoidCentralID = nil
+    /// 「断开并重新广播」（主界面右上角按钮）：拆掉当前 GATT 并重建重播。
+    /// 与旧版"永久避开上次设备"不同，这里只开一个 8 秒的限时窗口：
+    /// 窗口内旧设备自动回连会立刻被拆链重播，给新设备留出搜到/配对的机会；
+    /// 窗口一到（或已拒绝 8 次）立即放行任何设备，绝不会让 iPad 永久连不上。
+    /// 桥接模式下改为断开 UDP 并重新握手。
+    func selectNewDevice() {
+        if bridgeMode {
+            bridge.disconnect()
+            statusText = "正在重连桥接端"
+            note("已断开 ESP32 硬件桥，正在重新握手")
+            mark("7 运行中（重连桥接端）")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+                self?.startBridge()
+            }
+            return
+        }
+
+        let oldID = lastCentralID
+        bridge.disconnect()
+        note("断开并重新广播" + (oldID.map { "（8 秒内暂缓旧设备 \($0.prefix(8)) 抢连）" } ?? ""))
+        tearDownGATT()
+
+        // 限时避开窗口：只针对断开前那一台，8 秒或 8 次拒绝后自动放行。
+        avoidCentralID = oldID
+        avoidUntil = oldID == nil ? nil : Date().addingTimeInterval(8)
         avoidRejectCount = 0
-        statusText = "等待设备配对"
-        note("已重新广播：任何设备都能连接；若旧 iPad 自动回连，请按「\(HIDSpec.ipadIgnorePath)」忽略")
+
+        statusText = oldID == nil ? "等待设备配对" : "已断开旧设备 · 等待新设备"
+        note("已拆链重播；8 秒内旧 iPad 抢连会被暂缓，请在新设备上尽快配对")
+        note("根治仍须在旧 iPad「\(HIDSpec.ipadIgnorePath)」忽略本设备")
+        mark("7 运行中（断开并重新广播）")
         start()
     }
 
@@ -788,23 +815,42 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
                            central: CBCentral,
                            didSubscribeTo characteristic: CBCharacteristic) {
         let id = HIDSpec.short(characteristic.uuid)
+        let thisID = central.identifier.uuidString
+
+        // 「断开并重新广播」的 8 秒限时窗口：旧设备自动回连时拆链重播，
+        // 给新设备留出连接机会；窗口过期 / 拒绝满 8 次即彻底放行，
+        // 避免历史常驻避开模式"把用户想连回的 iPad 拒之门外"的问题。
+        if let avoid = avoidCentralID,
+           thisID == avoid,
+           let until = avoidUntil,
+           Date() < until,
+           avoidRejectCount < 8 {
+            avoidRejectCount += 1
+            note("切换设备：旧设备抢连，暂缓第 \(avoidRejectCount)/8 次（8 秒窗口内）")
+            statusText = "已断开旧设备 · 等待新设备"
+            tearDownGATT()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
+                guard let self = self else { return }
+                self.start()
+                self.note("已重新广播，等待新设备连接")
+            }
+            return
+        }
+        // 窗口结束（过期或次数用尽）：清除避开，任何设备都能正常连接。
+        if avoidCentralID != nil {
+            avoidCentralID = nil
+            avoidUntil = nil
+            avoidRejectCount = 0
+            note("切换设备窗口已结束：任何设备均可正常连接")
+        }
+
         if characteristic === inputReport { inputSubscribed = true }
         if characteristic === bootReport { bootSubscribed = true }
         subscribers += 1
         refreshKeyboardReady()
 
         // 记住这次连上来的主机身份（仅用于展示设备名，绝不用于拒绝连接）。
-        let thisID = central.identifier.uuidString
         lastCentralID = thisID
-
-        // 关键修复：iOS 无 API 拒绝指定 central，"连上就拆"的唯一实际效果是
-        // 把用户想连回的 iPad 拒之门外（订阅永远 0、连不上）。因此无论 avoidCentralID
-        // 因任何历史原因残留为何值，这里都不再拆链——任何设备连上都正常提供服务。
-        if avoidCentralID != nil || avoidRejectCount != 0 {
-            avoidCentralID = nil
-            avoidRejectCount = 0
-            note("已清除残留的避开状态：任何设备均可正常连接")
-        }
 
         statusText = "已连接 · 可以移动指针"
         note("主机订阅 \(id)（配对完成）")
