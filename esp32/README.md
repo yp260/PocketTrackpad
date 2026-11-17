@@ -37,12 +37,12 @@ pio device monitor -b 115200
 esptool.py --chip esp32s3 --port COMx write_flash 0x0 PT-Bridge-ESP32S3-merged.bin
 ```
 
-- 分开的三个文件（`bootloader.bin` / `partition-table.bin` / `firmware.bin`）：需要按各自地址烧录，
+- 分开的文件（`bootloader.bin` / `partitions.bin` / `firmware.bin`）：需要按各自地址烧录，
   不要只把 `firmware.bin` 烧到 0x0（那样缺引导程序，板子起不来）：
 
 ```bash
 esptool.py --chip esp32s3 --port COMx write_flash \
-  0x0 bootloader.bin 0x8000 partition-table.bin 0x10000 firmware.bin
+  0x0 bootloader.bin 0x8000 partitions.bin 0x10000 firmware.bin
 ```
 
 `COMx` 换成实际串口号（设备管理器里看，或用 `pio device list`）。烧完按 EN 复位。

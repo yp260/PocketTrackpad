@@ -42,7 +42,7 @@ tree = gh("POST", "/git/trees", {
 })
 print("tree =", tree["sha"])
 
-msg = "fix: ESP32 固件产物增加一键烧录合并镜像\n\n上一轮只上传 firmware.bin，直接用 esptool 烧到 0x0 缺 bootloader / 分区表，板子起不来。\nesp32-build.yml：装 esptool，用 merge_bin 把 bootloader(0x0) + partition-table(0x8000) + firmware(0x10000) 合成\nPT-Bridge-ESP32S3-merged.bin，artifact 同时上传合并镜像与三个原始文件。\nesp32/README.md：烧录说明改为合并镜像一条命令（write_flash 0x0 merged.bin），并给出三段式备选与串口号说明。"
+msg = "fix: 修正 ESP32 合并镜像的文件名与 esptool 命令\n\n上一轮 CI 失败：PlatformIO 生成的分区表文件名是 partitions.bin 而非 partition-table.bin；\nesptool 新版命令 merge_bin 已弃用，改 merge-bin。\nesp32-build.yml 与 esp32/README.md 同步修正两处文件名、一处命令名。"
 
 commit = gh("POST", "/git/commits", {
     "message": msg, "tree": tree["sha"], "parents": [BASE]

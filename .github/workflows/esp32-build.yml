@@ -36,10 +36,10 @@ jobs:
 
       - name: Merge single flash image
         run: |
-          python -m esptool --chip esp32s3 merge_bin \
+          python -m esptool --chip esp32s3 merge-bin \
             -o esp32/.pio/build/esp32-s3-devkitc-1/PT-Bridge-ESP32S3-merged.bin \
             0x0 esp32/.pio/build/esp32-s3-devkitc-1/bootloader.bin \
-            0x8000 esp32/.pio/build/esp32-s3-devkitc-1/partition-table.bin \
+            0x8000 esp32/.pio/build/esp32-s3-devkitc-1/partitions.bin \
             0x10000 esp32/.pio/build/esp32-s3-devkitc-1/firmware.bin
 
       - name: Upload firmware artifact
@@ -50,4 +50,4 @@ jobs:
             esp32/.pio/build/esp32-s3-devkitc-1/PT-Bridge-ESP32S3-merged.bin
             esp32/.pio/build/esp32-s3-devkitc-1/firmware.bin
             esp32/.pio/build/esp32-s3-devkitc-1/bootloader.bin
-            esp32/.pio/build/esp32-s3-devkitc-1/partition-table.bin
+            esp32/.pio/build/esp32-s3-devkitc-1/partitions.bin
