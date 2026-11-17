@@ -1310,23 +1310,24 @@ CoreBluetooth 既没有「断开指定中央」的公开接口，也不提供删
 结论：**要切到别的设备，必须先在 iPad「设置 → 辅助功能 → 触控 → 辅助触控 → 设备」里忽略本设备**（不在蓝牙列表里），这是 iOS 限制，不是 App bug。
 本 App 侧能做的只是「断开后保持停止广播、让用户决定何时重新广播」，避免 iPad 立刻自动回连。
 
-### 连接 Windows：电脑端接收器（零硬件、零安装）
+### 连接 Windows / Android：ESP32 硬件桥（电脑端零安装）
 
 经多轮真机验证，iOS 的 CoreBluetooth 外设无法在广播里设置 GAP Appearance（设备类别），
 Windows 11（尤其 24H2）的发现列表按类别过滤，原生 BLE 直连始终不稳定，**该方案已移除**。
-目前连接 Windows 的**唯一方式**是桥接：iPhone 不再广播，改为经 WiFi 把输入发给电脑上的接收器脚本，
-由脚本用 `SendInput` 注入真实鼠标键盘。仓库提供 `windows/pt_receiver.ps1`
-（系统自带 PowerShell，零安装；旧版 Python 版已移除）。
+目前连接 Windows / Android 的**唯一方式**是 **ESP32 硬件桥**：iPhone 不再广播，改为经 WiFi
+把输入发给 ESP32，由 ESP32 以标准 BLE HID 键鼠身份（Appearance `0x03C1`）连接电脑。
+**电脑端不需要安装任何软件**，只要系统自带蓝牙、配对一次 `PT-Pad`，以后上电自动连接。
+早期的电脑端 PowerShell / Python 软件接收器方案已彻底移除（`windows/` 目录已删除）。
 
 步骤：
 
-1. 电脑上用 PowerShell 运行 `windows/pt_receiver.ps1`（或双击 `start_receiver.bat`）；
-2. App 设置里打开「桥接（WiFi 转发）」，把桥接端地址填成电脑的局域网 IP（`ipconfig` 查看，
-   形如 `192.168.1.100`），端口 `5000`，点「保存地址」；
-3. 回主页面点「连接桥接」，即可用 iPhone 的触控板和键盘控制电脑。
+1. ESP32 上电，手机连上它发出的 `PT-Bridge` 热点（无密码）；
+2. App 设置里打开「桥接（ESP32 硬件桥）」，地址保持默认 `192.168.4.1`、端口 `5000`，点「保存地址」；
+3. 回主页面点「连接桥接」；
+4. 电脑 / 平板打开系统蓝牙，搜索并配对 **`PT-Pad`**，即可用 iPhone 的触控板和键盘控制。
 
-手机与电脑须在同一局域网。首次运行 Windows 防火墙会询问是否允许访问网络，选「允许」。
-完整步骤与故障排查见 `windows/README.md`。
+电脑端唯一的硬件要求是自带蓝牙；配对一次后，以后 ESP32 一上电就自动连上，无需再开任何程序。
+固件与烧录见 `esp32/README.md`。
 
 ### 改动
 
@@ -1542,111 +1543,3 @@ Windows / Android / iPad（标准蓝牙键盘 + 鼠标）
 | `project.yml` | 资源改为在 `sources` 里用 `buildPhase: resources` 声明（target 级 `resources:` 键无效） |
 | `preview/ui-preview.html` | 键盘页喇叭按钮、设置页按键音分组、音量交互同步 |
 
-## 三十四、电脑端软件接收器（桥接 · 零硬件，本轮新增）
-
-### 问题回顾：为什么 Windows 搜不到本机虚拟键鼠
-
-上一轮结论是「iOS 无法设置 GAP Appearance，Windows 搜不到」，这对 ESP32 路线成立，
-但**不是唯一出路**。这一轮把问题重新拆开，找到了一条**不需要任何硬件**的解法。
-
-Windows 11 搜不到的原因有两层：
-
-1. **iOS 的限制（无法绕过）**：CoreBluetooth 的 `startAdvertising` 只允许设置
-   `CBAdvertisementDataLocalNameKey` 和 `CBAdvertisementDataServiceUUIDsKey` 两项，
-   App 无法写广播包里的 **GAP Appearance（设备类别）**。Windows 的蓝牙发现列表按
-   类别过滤设备，没有标准类别标识的外设会被直接屏蔽——所以「蓝牙设备」里根本
-   看不到「PT-Pad」。
-2. **Windows 侧还有一把钥匙**（微软官方文档明确）：`设置 → 蓝牙和设备 → 设备 →
-   设备设置 → 蓝牙设备发现`，默认是「**默认值（仅显示常见蓝牙设备）**」，
-   改成「**高级（显示所有类型的蓝牙设备）**」才会显示全部外设。这可以救回一部分
-   场景，但**无法解决第 1 层**——iOS 依然给不出类别标识。
-
-### 新方案：把「蓝牙」这一环整个去掉
-
-既然卡点是「蓝牙外设无法被 Windows 认出来」，那就**不用蓝牙**：
-
-```
-iPhone 采集输入
-   │  WiFi / UDP（同一个局域网）
-   ▼
-Windows 上的 pt_receiver.py
-   │  Win32 SendInput 注入
-   ▼
-Windows 看到的就是一个真实的鼠标 + 键盘
-```
-
-**关键点：UDP 协议与 ESP32 固件完全一致**（12 字节复合 HID 报告 + `PT`/`TP` 握手），
-两种桥接端可以随时互换，App 端的手势 / 键盘 / 三指上滑逻辑一行都不用改。
-
-这解决了三个问题：
-
-- 不需要 ESP32、不需要电池、不需要烧录固件，只要一台 Windows 电脑；
-- Windows 的蓝牙发现、配对、驱动问题全部绕开，**100% 可用**；
-- App 里原本写死指向 ESP32 的 `192.168.4.1`，现在改成**可配置的桥接端地址**。
-
-### 用法
-
-**电脑上**（只需 Python 3.8+，无第三方依赖）：
-
-```powershell
-cd windows
-py -3 pt_receiver.py          # 或双击 start_receiver.bat
-```
-
-**手机上**：
-
-1. 设置 → 打开「**桥接（WiFi 转发）**」
-2. 桥接端地址填电脑的局域网 IP（Windows 上跑 `ipconfig` 查看，形如 `192.168.1.100`），
-   端口 `5000`
-3. 点「保存地址」→ 回主页面点「**连接桥接**」
-
-首次运行 Windows 防火墙会询问是否允许 Python 访问网络，**必须选「允许」**。
-
-### 实现要点
-
-`windows/pt_receiver.py`（约 570 行，纯标准库）：
-
-| 部分 | 做法 |
-| --- | --- |
-| 注入 | `ctypes` 直接调 `user32.SendInput`，无需 pywin32 / pyautogui 等第三方库 |
-| 键码 | USB HID Usage → Windows VK 映射表，覆盖 App 键盘页发出的**全部 53 个键码**（已用脚本对拍校验） |
-| 修饰键 | HID 修饰位图 → VK（含左右区分：LCtrl/LShift/LAlt/LGui 及右侧四个） |
-| 报告语义 | 报告是**状态快照**不是事件流：接收器逐帧与上一帧做差分，产生按下 / 抬起沿，与真实 HID 驱动一致 |
-| 鼠标 | 默认**绝对定位**：接收器自维护光标位置并用 `MOUSEEVENTF_ABSOLUTE` 下发，手指与指针 1:1，**不受 Windows 指针加速曲线干扰**；`--rel` 可切回相对模式 |
-| 多屏 | 用虚拟桌面度量（`SM_XVIRTUALSCREEN` 等）+ `MOUSEEVENTF_VIRTUALDESK`，跨屏拖拽正确 |
-| 起点 | 启动时读 `GetCursorPos`，让虚拟光标从真实光标位置起步，首帧不会跳 |
-| 握手 | 收到 `PT` 回 `TP`；App 侧新增「重新握手」按钮，处理「手机先连、电脑后启动」的时序 |
-| 收尾 | `Ctrl+C` 退出时释放所有仍按住的键 / 按钮，避免卡键 |
-
-### 本轮实测结果（在本机 Windows 上完成）
-
-| 测试项 | 结果 |
-| --- | --- |
-| UDP 握手 `PT` → `TP` | 通过 |
-| App 53 个键码的 HID→VK 映射覆盖 | 全部覆盖，无遗漏 |
-| 映射正确性抽样（a/1/Enter/Space/;/方向键/F1/F12/Menu + 四个修饰键） | 15 项全对 |
-| `SendInput` 调用链 | 返回 1（注入成功），`last_error` = 0 |
-| 结构体尺寸（INPUT 40 / MOUSEINPUT 32 / KEYBDINPUT 24 / ULONG_PTR 8） | 与 x64 规范一致 |
-| **真实指针位移** | 注入 (+30, −20) → 实际位移 **(30, −20)**，1:1 精确 |
-| 滚轮 / 修饰键注入 | 无异常 |
-
-### 两种桥接端怎么选
-
-| 目标主机 | 方案 | 需要硬件 |
-| --- | --- | --- |
-| **Windows 电脑** | `windows/pt_receiver.py`（本节） | **不需要** |
-| iPad / iPhone（另一台 Apple 设备） | ESP32 固件（`esp32/`） | 需要 ESP32-C3 |
-| Android 平板 | ESP32 固件（Android 的 BLE HID 支持比 Windows 宽，但仍需标准外设） | 需要 ESP32-C3 |
-| iPad 直连（不想要任何中转） | 本机 BLE 广播（v0.0.21 的键盘优先描述符） | 不需要 |
-
-### 本轮改动文件
-
-| 文件 | 改动 |
-| --- | --- |
-| `windows/pt_receiver.py` | 新增：Windows 端软件接收器（SendInput 注入、HID→VK 映射、绝对定位鼠标） |
-| `windows/start_receiver.bat` | 新增：一键启动脚本（自动探测 py -3 / python） |
-| `windows/README.md` | 新增：Windows 端使用说明与排障 |
-| `PocketTrackpad/BridgeTransport.swift` | 桥接端地址可配置并持久化；新增 `resendHello()`；文案改为「桥接端」 |
-| `PocketTrackpad/HIDPeripheral.swift` | 新增 `setBridgeTarget` / `resendBridgeHello`；桥接模式支持两种桥接端 |
-| `PocketTrackpad/ContentView.swift` | 设置页新增「桥接（WiFi 转发）」分组（开关 + 地址 + 端口 + 保存 + 重新握手）；引导页与断开弹窗同步 |
-| `PocketTrackpad/Info.plist` | 本地网络用途说明文案更新 |

@@ -42,7 +42,7 @@ tree = gh("POST", "/git/trees", {
 })
 print("tree =", tree["sha"])
 
-msg = "docs: 纠正硬件说明——模组为 ESP32-S3-WROOM-1-N16R8（16MB Flash + 8MB PSRAM）\n\n用户看商品页纠正：模组实为 N16R8，非此前误判的「无 PSRAM」版。\nesp32/README.md：硬件说明改为 N16R8，并补充 PSRAM 兼容结论——本固件不启用 PSRAM\n（按 4MB/DIO 编译，16MB Flash 向下兼容、DIO 最保守），直接烧录正常；列出将来启用 PSRAM\n所需的 qio_opi/16MB 分区表配置，但说明本项目无收益不建议开。\n固件二进制内容不变，仅文档纠正。"
+msg = "refactor: 彻底删除电脑端软件接收器（ps1/Python），连电脑统一走 ESP32 硬件桥\n\n用户要求任何新电脑零安装直接连接，明确选择彻底删掉 ps1 那条路。\n- 删除 windows/ 整个目录：pt_receiver.ps1、start_receiver.bat、ble_scan.ps1、README.md。\n- ContentView / HIDPeripheral / BridgeTransport / Info.plist：所有引导文案、注释、日志改为\n  ESP32 硬件桥单一方案——手机连 PT-Bridge 热点、地址 192.168.4.1、电脑系统蓝牙配对 PT-Pad，\n  电脑端零安装（只需自带蓝牙）。\n- README.md：当前连接章节改 ESP32；删除整节历史「电脑端软件接收器」开发日志（33 节末尾）。\n- preview/ui-preview.html：设置页、元素清单、交互日志同步。\n保留 scripts/ 下的 make_installable_ipa.ps1 / sideload_one_click.ps1（那是给 IPA 签名装手机的，\n与电脑连接键鼠无关）。bridge UDP 协议、12 字节报告格式、宏录制回放全部不变。"
 
 commit = gh("POST", "/git/commits", {
     "message": msg, "tree": tree["sha"], "parents": [BASE]

@@ -420,7 +420,7 @@ body.shot .phone { margin:0; }
             <tr><td>29</td><td>全键盘页极简选词提示（单行、次级色）：以「下方小触控区移动指针点 iPad 顶部候选条」为主路径（BLE 复合键鼠外设的数字/空格选词在系统输入法下常不触发），备选 ←/→ + 空格/回车；键帽按住时长 90ms → 120ms 以兼容中文输入法组合态</td><td>KeyboardView.swift:241-252<br>HIDPeripheral.swift:579</td></tr>
             <tr><td>30</td><td>断开后弹「切换设备」指引 + 设置「切换设备」分组：连 Windows / Android 须先在 iPad「辅助触控 → 设备」里忽略本设备防自动抢连；并写明 Windows 时序要点（先开电脑添加窗口再点开始广播、发现窗口短）与局限（Windows / 部分 Android 与 iOS HID 外设配对不完全兼容，可能需 ESP32 硬件桥）</td><td>ContentView.swift:76<br>ContentView.swift:513-525<br>ContentView.swift:262-272</td></tr>
             <tr><td>31</td><td>按键音：全键盘每次按键响一声机械键盘 click 音（打包的 keyclick.wav），底部左键 / 右键 / 滚轮键与触控区轻点同样有反馈音；设置页「按键音」分组可开关 + 调音量（0 静音）+ 试听；键盘页工具条加喇叭按钮，在 静音 / 25% / 50% / 100% 之间循环</td><td>KeyClickPlayer.swift<br>KeyboardView.swift:294-305,366<br>ContentView.swift:270-289</td></tr>
-            <tr><td>32</td><td>桥接（连 Windows / Android）：开关 + 桥接端地址与端口输入 + 「保存地址」+「重新握手」；Windows 零硬件方案（电脑运行 windows/pt_receiver.py，地址填电脑局域网 IP）与 ESP32 方案（手机连 PT-Bridge 热点，地址 192.168.4.1）并列说明；地址持久化，心跳自动重连</td><td>ContentView.swift:334-363<br>BridgeTransport.swift:34-99<br>HIDPeripheral.swift:233-243</td></tr>
+            <tr><td>32</td><td>桥接（ESP32 硬件桥 · 电脑零安装）：开关 + 桥接端地址与端口输入 + 「保存地址」+「重新握手」；手机连 PT-Bridge 热点、地址默认 192.168.4.1，电脑系统蓝牙配对 PT-Pad 即可，无需安装任何软件；地址持久化，心跳自动重连。早期电脑端软件接收器方案已删除</td><td>ContentView.swift:334-363<br>BridgeTransport.swift:34-99<br>HIDPeripheral.swift:233-243</td></tr>
             <tr><td>33</td><td>主键位 ↓ / ⌫ / ↑ 三键循环换位：下键移到控制行原退格键位，退格键移到 M 行末尾原上键位，上键移到导航行原下键位</td><td>KeyboardView.swift:148-176</td></tr>
             <tr><td>34</td><td>修复宏回放点击位置整体偏移：flush 时位移超 1 字节范围不再丢弃，余数留到下一帧续发（30ms 合并的大位移回放时不再被截断）</td><td>HIDPeripheral.swift:1418-1432</td></tr>
           </tbody>
@@ -836,7 +836,7 @@ body.shot .phone { margin:0; }
         row("输入报告", s.compositeDevice ? "12 字节（键盘 8 + 鼠标 4）" : "4 字节（纯鼠标）") +
       "</div>" +
       "<div class=\"form-footer\" data-code=\"ContentView.swift:250-252\">开启后本设备同时声明为鼠标和键盘，全键盘、三指手势都依赖这个开关。三指上滑回桌面（Command+H），三指左右滑切换 App（右滑 Cmd+Tab 下一个 / 左滑 Cmd+Shift+Tab 上一个）——iPadOS 原生多指手势只对妙控板 2 私有协议开放，本 App 是把三指手势转成键盘快捷键的模拟实现。切换开关会自动断开并移除 GATT 服务：请按「iPad 设置 → 辅助功能 → 触控 → 辅助触控 → 设备 → 点键盘 → 忽略此设备」忽略，回到主页面点「开始广播」，再重新配对。若指针或点击失效，关掉本开关、同样忽略设备重新配对即可回到纯鼠标，不需要重装 App。Command 快捷键只对 iPadOS 有效。</div>" +
-      "<div class=\"sec-head\" data-code=\"ContentView.swift:334\">桥接（连 Windows / Android）</div>" +
+      "<div class=\"sec-head\" data-code=\"ContentView.swift:334\">桥接（ESP32 硬件桥 · 电脑零安装）</div>" +
       "<div class=\"group\" data-code=\"ContentView.swift:335-362\">" +
         "<div class=\"form-row line\" data-code=\"ContentView.swift:337\"><span>启用桥接（WiFi 转发）</span><span class=\"spacer\"></span>" +
           "<button class=\"toggle" + (s.bridgeMode ? " on" : "") + "\" data-act=\"bridge\" aria-label=\"启用桥接\"></button></div>" +
@@ -848,10 +848,9 @@ body.shot .phone { margin:0; }
             "<button class=\"mini-btn\" data-act=\"rehello\">重新握手</button></div>" +
         "</div>" +
         row("当前状态", s.bridgeStatus) +
-        row("电脑端程序", "windows/pt_receiver.py") +
         row("ESP32 热点", "PT-Bridge（无密码）") +
       "</div>" +
-      "<div class=\"form-footer\" data-code=\"ContentView.swift:363\">iOS 的蓝牙外设无法设置 GAP Appearance，Windows 因此搜不到本机虚拟键鼠。开启桥接后本机不再广播，改为把输入通过 WiFi 发给「桥接端」。<br><br>【连 Windows，不需要任何硬件】在电脑上装 Python 3.8+，运行 windows\\pt_receiver.py，然后把上面地址填成电脑的局域网 IP（Windows 用 ipconfig 查看，格式如 192.168.1.100），点「保存地址」再点右上角「连接桥接」。<br><br>【连 Android / 也想无线】用 ESP32：手机先连 PT-Bridge 热点，地址填默认的 192.168.4.1。<br><br>手机与电脑必须连同一个 WiFi。Windows 防火墙首次会询问是否允许 Python 访问网络，选「允许」。</div>" +
+      "<div class=\"form-footer\" data-code=\"ContentView.swift:363\">iOS 的蓝牙外设无法设置 GAP Appearance，Windows 因此搜不到本机虚拟键鼠。开启桥接后本机不再广播，改为把输入通过 WiFi 发给 ESP32 硬件桥，由 ESP32 以标准蓝牙键鼠身份连接电脑，电脑端不用装任何软件。<br><br>【步骤】① ESP32 上电，手机连上它的 PT-Bridge 热点；② 上面地址保持默认 192.168.4.1，点「保存地址」再点右上角「连接桥接」；③ 电脑 / 平板打开系统蓝牙，搜索并配对 PT-Pad，配对一次以后自动连接。<br><br>电脑端唯一的硬件要求是自带蓝牙；配对一次后，以后 ESP32 一上电就会自动连上。</div>" +
       "<div class=\"sec-head\" data-code=\"ContentView.swift:255\">切换设备</div>" +
       "<div class=\"group\" data-code=\"ContentView.swift:255-264\">" +
         row("iPad 自动重连", "已配对会主动回连") +
@@ -1061,7 +1060,7 @@ body.shot .phone { margin:0; }
       s.bridgeStatus = s.bridgeMode ? "桥接端未连接" : "桥接端未连接";
       log("桥接模式 → " + (s.bridgeMode ? "开（本机不再广播，改走 WiFi UDP）" : "关（恢复本机 BLE 广播）"));
       if (s.bridgeMode) {
-        log("Windows：电脑上运行 windows\\pt_receiver.py，地址填电脑局域网 IP");
+        log("手机连 ESP32 的 PT-Bridge 热点，地址保持 192.168.4.1，再到电脑蓝牙配对 PT-Pad");
       }
       render();
     }
@@ -1076,7 +1075,7 @@ body.shot .phone { margin:0; }
     }
     else if (act === "rehello") {
       s.bridgeStatus = "已连接桥接端 " + s.bridgeHost + ":" + s.bridgePort;
-      log("已重新发送握手包（电脑端接收器稍后启动时会自动连上）");
+      log("已重新发送握手包（ESP32 上电连上热点后会自动握手）");
       render();
     }
     else if (act === "open-keyboard") {

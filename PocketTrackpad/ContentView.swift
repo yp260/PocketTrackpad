@@ -12,7 +12,7 @@ struct ContentView: View {
     /// 断开后弹出「切换设备」指引（配对信息在主机侧，iPad 会自动回连）。
     @State private var showSwitchHelp = false
 
-    /// 主机订阅了 Input Report（BLE），或桥接端已连上（ESP32 / Windows 电脑接收器），都算真正连上。
+    /// 主机订阅了 Input Report（BLE），或 ESP32 硬件桥已连上，都算真正连上。
     private var connected: Bool { hid.isLinkActive }
 
     var body: some View {
@@ -135,7 +135,7 @@ struct ContentView: View {
                 }
                 Button("取消", role: .cancel) {}
             } message: {
-                Text("两种方式都会重新广播，任何设备都能连接。\n\n【换设备说明】iOS 无法清除主机侧的配对，已配对设备会由系统自动回连。要彻底不被它抢连，必须在旧设备上忽略本设备。iPad 的正确入口是：\(HIDSpec.ipadIgnorePath)。\n\n连 Windows：用「桥接（WiFi 转发）」方案——电脑上用系统自带 PowerShell 运行 windows\\pt_receiver.ps1（零安装），设置里把地址填成电脑的局域网 IP，再点右上角「连接桥接」即可。")
+                Text("两种方式都会重新广播，任何设备都能连接。\n\n【换设备说明】iOS 无法清除主机侧的配对，已配对设备会由系统自动回连。要彻底不被它抢连，必须在旧设备上忽略本设备。iPad 的正确入口是：\(HIDSpec.ipadIgnorePath)。\n\n连 Windows / Android：用 ESP32 硬件桥——手机连上 ESP32 的 PT-Bridge 热点，设置里开「桥接」、填 192.168.4.1，点「连接桥接」，再到电脑系统蓝牙里配对 PT-Pad 即可，电脑端无需安装任何软件。")
             }
         }
     }
@@ -177,12 +177,11 @@ struct ContentView: View {
                             .foregroundStyle(.secondary)
                     }
                     if hid.bridgeMode {
-                        Text("桥接模式：iPhone 只采集输入，经 WiFi 发给桥接端。")
+                        Text("桥接模式：iPhone 只采集输入，经 WiFi 发给 ESP32 硬件桥。")
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                        Text("连 Windows：电脑上用系统自带 PowerShell 运行 windows\\pt_receiver.ps1（零安装），"
-                         + "再到设置里把地址填成电脑的局域网 IP；"
-                         + "连 Android / 无线方案：手机连 ESP32 的 PT-Bridge 热点，地址用 192.168.4.1。")
+                        Text("手机连上 ESP32 的 PT-Bridge 热点，地址填 192.168.4.1，点「连接桥接」；"
+                         + "再到电脑 / 平板的系统蓝牙里配对 PT-Pad，电脑端无需安装任何软件。")
                             .font(.caption2)
                             .foregroundStyle(.tertiary)
                     } else {
@@ -422,12 +421,11 @@ struct SettingsView: View {
                 }
 
                 LabeledRow(title: "当前状态", detail: hid.bridge.statusText)
-                LabeledRow(title: "电脑端程序", detail: "windows/pt_receiver.ps1")
                 LabeledRow(title: "ESP32 热点", detail: "PT-Bridge（无密码）")
             } header: {
-                Text("桥接（连 Windows / Android）")
+                Text("桥接（ESP32 硬件桥 · 电脑零安装）")
             } footer: {
-                Text("iOS 的蓝牙外设无法设置 GAP Appearance，Windows 因此很难直接搜到本机虚拟键鼠。开启桥接后本机不再广播，改为把输入通过 WiFi 发给「桥接端」。\n\n【连 Windows，零安装】用系统自带 PowerShell 运行 windows\\pt_receiver.ps1（双击 start_receiver.bat 即可），把上面地址填成电脑的局域网 IP（Windows 用 ipconfig 查看，格式如 192.168.1.100），点「保存地址」再点右上角「连接桥接」。\n\n【连 Android / 也想无线】用 ESP32：手机先连 PT-Bridge 热点，地址填默认的 192.168.4.1。\n\n手机与电脑必须连同一个 WiFi。Windows 防火墙首次会询问是否允许访问网络，选「允许」。")
+                Text("iOS 的蓝牙外设无法设置 GAP Appearance，Windows 因此很难直接搜到本机虚拟键鼠。开启桥接后本机不再广播，改为把输入通过 WiFi 发给 ESP32，由 ESP32 以标准蓝牙键鼠身份连接电脑，电脑端不用装任何软件。\n\n【步骤】① ESP32 上电，手机连上它的 PT-Bridge 热点；② 上面地址保持默认 192.168.4.1，点「保存地址」再点右上角「连接桥接」；③ 电脑 / 平板打开系统蓝牙，搜索并配对 PT-Pad，配对一次以后自动连接。\n\n电脑端唯一的硬件要求是自带蓝牙；配对一次后，以后 ESP32 一上电就会自动连上。")
                     .font(.caption)
             }
 
@@ -440,7 +438,7 @@ struct SettingsView: View {
             } header: {
                 Text("切换设备")
             } footer: {
-                Text("点「断开并重新广播」会断开当前连接、重建蓝牙服务并重新广播，任何设备都能连接。\n\n【换设备说明】蓝牙 HID 的配对信息存在主机侧，iOS 外设无法远程解除、也无法拒绝指定设备连接——已配对设备（如旧 iPad）会由系统自动回连。要彻底不被它抢连，必须在旧设备上忽略本设备。iPad 的正确入口是：\(HIDSpec.ipadIgnorePath)。\n\n连 Windows 请用「桥接（WiFi 转发）」：电脑上运行 windows\\pt_receiver.ps1（零安装），设置里填电脑局域网 IP，再点「连接桥接」。")
+                Text("点「断开并重新广播」会断开当前连接、重建蓝牙服务并重新广播，任何设备都能连接。\n\n【换设备说明】蓝牙 HID 的配对信息存在主机侧，iOS 外设无法远程解除、也无法拒绝指定设备连接——已配对设备（如旧 iPad）会由系统自动回连。要彻底不被它抢连，必须在旧设备上忽略本设备。iPad 的正确入口是：\(HIDSpec.ipadIgnorePath)。\n\n连 Windows / Android 请用「桥接（ESP32 硬件桥）」：手机连 ESP32 的 PT-Bridge 热点，设置里开桥接并保持地址 192.168.4.1，点「连接桥接」后到电脑系统蓝牙配对 PT-Pad，电脑端无需安装任何软件。")
                     .font(.caption)
             }
 

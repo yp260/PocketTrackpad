@@ -127,15 +127,12 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
             }
         }
 
-    // MARK: - 桥接模式（ESP32 或 Windows 电脑软件接收器）
+    // MARK: - 桥接模式（ESP32 硬件桥）
     //
     // 开启后，本 App 不再作为 BLE HID 外设广播，而是把采集到的输入通过 WiFi UDP
-    // 发给「桥接端」。原因：iOS 的 CoreBluetooth 外设无法设置 GAP Appearance，
-    // 导致 Windows 搜不到 / 配对失败。
-    //
-    // 桥接端有两种，UDP 协议完全一致：
-    //   - ESP32：把报告以标准 BLE HID 转发给 Windows / Android（需要硬件）。
-    //   - Windows 电脑：直接用 SendInput 注入鼠标键盘（零硬件，见 windows/ 目录）。
+    // 发给 ESP32 硬件桥。原因：iOS 的 CoreBluetooth 外设无法设置 GAP Appearance，
+    // 导致 Windows 搜不到 / 配对失败。ESP32 收到报告后以标准 BLE HID 键鼠身份
+    // 连接电脑 / 平板，主机端无需安装任何软件，只需系统蓝牙配对 PT-Pad。
     private static let bridgeKey = "PocketTrackpad.bridgeMode.v1"
 
     @Published var bridgeMode: Bool =
@@ -145,9 +142,9 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
                 if bridgeMode {
                     // 启用桥模式时先关掉本地 BLE 广播，避免两个发射源冲突、互相抢连接。
                     disconnect()
-                    note("已启用桥接模式：iPhone 只采集输入，经 WiFi 发给桥接端")
-                    note("Windows 电脑：用系统自带 PowerShell 运行 windows/pt_receiver.ps1（零安装），无需任何硬件")
-                    note("ESP32：手机先连 PT-Bridge 热点，再用默认地址 192.168.4.1")
+                    note("已启用桥接模式：iPhone 只采集输入，经 WiFi 发给 ESP32 硬件桥")
+                    note("手机先连 ESP32 的 PT-Bridge 热点，地址保持默认 192.168.4.1")
+                    note("再到电脑系统蓝牙配对 PT-Pad，电脑端无需安装任何软件")
                 } else {
                     note("已关闭桥接模式：恢复本机直接广播（iPad 直连）")
                 }
@@ -363,10 +360,10 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
             l.add(to: .main, forMode: .common)
             link = l
         }
-        statusText = "正在连接桥接端"
-        note("桥接模式：iPhone 采集输入 → WiFi UDP → 桥接端 → Windows 鼠标键盘")
+        statusText = "正在连接 ESP32 硬件桥"
+        note("桥接模式：iPhone 采集输入 → WiFi UDP → ESP32 → 电脑 / 平板蓝牙键鼠")
         note("当前桥接端地址：\(bridge.currentHost):\(bridge.currentPort)")
-        note("Windows 电脑请先运行 windows/pt_receiver.ps1（零安装），并把地址设成电脑的局域网 IP")
+        note("手机需先连 ESP32 的 PT-Bridge 热点，再到电脑系统蓝牙配对 PT-Pad")
         bridge.connect()
     }
 
@@ -380,17 +377,17 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         refreshKeyboardReady()
     }
 
-    /// 设置桥接端地址（Windows 电脑 IP / ESP32 IP）。
+    /// 设置 ESP32 硬件桥的地址（默认 192.168.4.1:5000）。
     func setBridgeTarget(host: String, port: String) {
         let p = UInt16(port.trimmingCharacters(in: .whitespaces)) ?? 5000
         bridge.updateTarget(host: host, port: p)
         note("桥接端地址设为 \(bridge.currentHost):\(bridge.currentPort)")
     }
 
-    /// 重新发送握手包：PC 上的接收器若在 App 之后才启动，用它立刻建立链路。
+    /// 重新发送握手包：ESP32 若在 App 之后才上电，用它立刻建立链路。
     func resendBridgeHello() {
         bridge.resendHello()
-        note("已重新发送握手包；若电脑端接收器正在运行，应立刻显示「已连接」")
+        note("已重新发送握手包；若 ESP32 已连上同一热点，应立刻显示「已连接」")
     }
 
     /// 一键切到「纯鼠标 4 字节」模式：历史上 iPad 上最稳定、验证过能用的配置。
@@ -731,7 +728,7 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
             note("服务 \(id) 注册失败: \(error.localizedDescription)")
             if id == "1812" {
                 statusText = "HID 服务被系统拒绝"
-                note("当前 iOS 版本可能已封堵 128 位 UUID 绕过，请改用桥接模式（Windows 电脑接收器 / ESP32）")
+                note("当前 iOS 版本可能已封堵 128 位 UUID 绕过，请改用「桥接（ESP32 硬件桥）」模式")
             }
         } else {
             note("服务 \(id) 注册成功")
@@ -757,7 +754,7 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
             mark("7 运行中（广播正常）")
             if advertisingFallbackUsed {
                 note("当前 iOS 版本禁止广播 16 位 SIG UUID，主机大概率不会显示本设备")
-                note("这是系统限制，请改用桥接模式（Windows 电脑接收器 / ESP32）")
+                note("这是系统限制，请改用「桥接（ESP32 硬件桥）」模式")
             } else {
                 note("请在 iPad：设置 > 蓝牙 > 其他设备 > 选择 PT-Pad")
                 note("若仍不显示，请用 nRF Connect 扫描 PT-Pad 确认广播内容")
@@ -1356,7 +1353,7 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         if x != 0 || y != 0 { recordEvent(kind: .move, dx: Int(x), dy: Int(y)) }
         if w != 0 { recordEvent(kind: .wheel, wheel: Int(w)) }
 
-        // 桥接模式：直接把 12 字节复合报告发给桥接端（ESP32 或 Windows 电脑接收器）。
+        // 桥接模式：把 12 字节复合报告发给 ESP32 硬件桥，由它转成蓝牙 HID。
         // 布局与 HIDSpec.compositeReportMap 逐字节对应，App 这侧的手势 / 键盘逻辑完全不变。
         if bridgeMode {
             let packet = HIDSpec.makeReport(buttons: buttonBits, x: x, y: y, wheel: w,
