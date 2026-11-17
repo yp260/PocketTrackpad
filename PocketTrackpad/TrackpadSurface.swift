@@ -80,8 +80,7 @@ struct TrackpadSurface: UIViewRepresentable {
         view.addGestureRecognizer(appSwipe)
 
         let hint = UILabel()
-        hint.text = Self.hintText(composite: hid.compositeDevice || hid.bridgeMode,
-                                  trackpad: hid.trackpadMode)
+        hint.text = Self.hintText(composite: hid.compositeDevice || hid.bridgeMode)
         // 键盘页的小触控区不显示任何提示文字；全屏触控板保留手势说明。
         hint.isHidden = compact
         hint.numberOfLines = 0
@@ -103,19 +102,14 @@ struct TrackpadSurface: UIViewRepresentable {
 
     func updateUIView(_ uiView: UIView, context: Context) {
         context.coordinator.hid = hid
-        context.coordinator.hint?.text = Self.hintText(composite: hid.compositeDevice || hid.bridgeMode,
-                                                       trackpad: hid.trackpadMode)
+        context.coordinator.hint?.text = Self.hintText(composite: hid.compositeDevice || hid.bridgeMode)
         context.coordinator.hint?.isHidden = compact
         Self.applyStyle(uiView, edgeToEdge: edgeToEdge, compact: compact)
     }
 
-    private static func hintText(composite: Bool, trackpad: Bool) -> String {
+    private static func hintText(composite: Bool) -> String {
         let base = "单指移动指针  ·  轻点左键  ·  双击左键\n双指滚动  ·  长按右键"
-        guard composite else { return base }
-        if trackpad {
-            return base + "\n三指上滑回桌面  ·  三指左右滑切 App"
-        }
-        return base + "\n三指上滑回桌面（Command+H）"
+        return composite ? base + "\n三指上滑回桌面  ·  三指左右滑切 App" : base
     }
 
     private static func applyStyle(_ view: UIView, edgeToEdge: Bool, compact: Bool) {

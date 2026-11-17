@@ -404,24 +404,14 @@ struct SettingsView: View {
             Section {
                 Toggle("键鼠复合模式", isOn: $hid.compositeDevice)
                 LabeledRow(title: "三指上滑", detail: "回桌面（Command + H）")
+                LabeledRow(title: "三指左右滑", detail: "切换 App（Cmd+Tab / Cmd+Shift+Tab）")
                 LabeledRow(title: "全键盘", detail: "两页键位 + 下方小触控区（可移动指针）")
                 LabeledRow(title: "输入报告",
                            detail: hid.compositeDevice ? "12 字节（键盘 8 + 鼠标 4）" : "4 字节（纯鼠标）")
             } header: {
-                Text("实验功能 · 全键盘与回桌面")
+                Text("实验功能 · 全键盘与手势")
             } footer: {
-                Text("开启后本设备同时声明为鼠标和键盘，全键盘与三指上滑都依赖这个开关。iPad 可能弹出键盘配对验证，也可能拒绝接管整个设备导致鼠标失效。切换开关会自动断开并移除 GATT 服务：请按「\(HIDSpec.ipadIgnorePath)」忽略，回到主页面点「开始广播」，再重新配对。若指针或点击失效，关掉本开关、同样忽略设备重新配对即可回到纯鼠标，不需要重装 App。Command + H 只对 iPadOS 有效；Windows 显示桌面是 Win + D，macOS 是 F11。")
-                    .font(.caption)
-            }
-
-            Section {
-                Toggle("识别为触控板", isOn: $hid.trackpadMode)
-                LabeledRow(title: "设备类型", detail: hid.trackpadMode ? "Touchpad（触控板）" : "Mouse（鼠标）")
-                LabeledRow(title: "三指左右滑", detail: "切换 App（Cmd+Tab / Cmd+Shift+Tab）")
-            } header: {
-                Text("触控板模式（实验）")
-            } footer: {
-                Text("开启后把设备的 GAP 外观从「鼠标」改成标准的「触控板」(0x03C9)，iPad 有机会把本设备当触控板，并在 设置 → 通用 里出现独立的「触控板」菜单（跟踪速度 / 轻点来点按 / 双指辅助点按）。开启时会自动打开键鼠复合模式，三指左右滑即可用 Cmd+Tab 切换 App。\n\n重要限制：iPadOS 系统原生的三指切应用、四指捏合等手势只对 Magic Trackpad 2 / 妙控键盘的私有协议开放，第三方蓝牙设备拿不到；本 App 的三指左右滑是 App 侧识别手势后转成键盘快捷键的模拟实现，不是系统原生手势。\n\n切换会自动断开并重建蓝牙服务：请按「\(HIDSpec.ipadIgnorePath)」忽略设备，回到主页面点「开始广播」再重新配对，iPad 才会重读新的设备类型。若出现「连上但指针不动」，关掉本开关、同样忽略重配即可回到鼠标模式。")
+                Text("开启后本设备同时声明为鼠标和键盘，全键盘、三指手势都依赖这个开关。三指上滑回桌面（Command+H），三指左右滑切换 App（右滑 Cmd+Tab 下一个 / 左滑 Cmd+Shift+Tab 上一个）——iPadOS 原生多指手势只对妙控板 2 私有协议开放，本 App 是把三指手势转成键盘快捷键的模拟实现。切换开关会自动断开并移除 GATT 服务：请按「\(HIDSpec.ipadIgnorePath)」忽略，回到主页面点「开始广播」，再重新配对。若指针或点击失效，关掉本开关、同样忽略设备重新配对即可回到纯鼠标，不需要重装 App。Command 快捷键只对 iPadOS 有效。")
                     .font(.caption)
             }
 
@@ -558,7 +548,7 @@ private struct TrackpadTopBar: View {
             Image(systemName: "hand.tap")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            Text("触控板模式")
+            Text("触控区")
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Spacer(minLength: 0)

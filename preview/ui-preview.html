@@ -395,7 +395,7 @@ body.shot .phone { margin:0; }
             <tr><td>4</td><td>右上角「开始广播／停止广播」小按钮</td><td>ContentView.swift:61-69</td></tr>
             <tr><td>5</td><td>状态卡片：状态文字、订阅数、两行引导（已删「重新广播」按钮）</td><td>ContentView.swift:100-125</td></tr>
             <tr><td>6</td><td>引导页「指针与滚动」卡片：指针速度 / 滚动速度（连接前可调）</td><td>ContentView.swift:126-156</td></tr>
-            <tr><td>7</td><td>触控区中央提示：单指移动 · 轻点左键 · 双击左键 · 双指滚动 · 长按右键；复合模式下多一行「三指上滑回桌面」（仅全屏触控板，键盘页小触控区已隐藏提示）</td><td>TrackpadSurface.swift:72-88</td></tr>
+            <tr><td>7</td><td>触控区中央提示：单指移动 · 轻点左键 · 双击左键 · 双指滚动 · 长按右键；复合模式下多一行「三指上滑回桌面 · 三指左右滑切 App」（仅全屏触控区，键盘页小触控区已隐藏提示）</td><td>TrackpadSurface.swift:72-88</td></tr>
             <tr><td>8</td><td>连接日志卡片（108pt，等宽字体，通栏与其他卡片左右对齐）</td><td>ContentView.swift:158-180</td></tr>
             <tr><td>9</td><td>底部按键条高度 76pt（从 116pt 降低）、宽度比 左键:滚轮:右键 = 3:2:3、间距 10pt</td><td>ContentView.swift:334-378</td></tr>
             <tr><td>10</td><td>左键／右键：按住变蓝，松手复原</td><td>ContentView.swift:381-410</td></tr>
@@ -405,8 +405,8 @@ body.shot .phone { margin:0; }
             <tr><td>14</td><td>设置：按键说明五行（新增全键盘、组合键两行）</td><td>ContentView.swift:234-240</td></tr>
             <tr><td>15</td><td>设置：切换设备分组（iPad 自动重连 / 切 Windows / 切 Android / 本 App）+ 关于四行（不再回显整机名）+ 底部三步改名说明</td><td>ContentView.swift:255-278</td></tr>
             <tr><td>16</td><td>顶部「断开」按钮（仅已连接显示）：移除 GATT 服务并停止广播；断开后弹出「切换设备」指引（配对信息在主机侧，iPad 会自动回连）</td><td>ContentView.swift:513-525</td></tr>
-            <tr><td>17</td><td>设置：「实验功能 · 全键盘与回桌面」分组（键鼠复合开关、三指上滑、全键盘、输入报告字节数、风险与回退说明）</td><td>ContentView.swift:242-252</td></tr>
-            <tr><td>18</td><td>已连接触控区顶部切换栏：「触控板模式」+ 蓝色主按钮「全键盘」；键盘未就绪时多一行橙色提示</td><td>ContentView.swift:292-331</td></tr>
+            <tr><td>17</td><td>设置：「实验功能 · 全键盘与手势」分组（键鼠复合开关、三指上滑、三指左右滑、全键盘、输入报告字节数、风险与回退说明）</td><td>ContentView.swift:242-252</td></tr>
+            <tr><td>18</td><td>已连接触控区顶部切换栏：「触控区」+ 蓝色主按钮「全键盘」；键盘未就绪时多一行橙色提示</td><td>ContentView.swift:292-331</td></tr>
             <tr><td>19</td><td>全键盘顶部工具条：「‹ 触控板」返回按钮 + 主键位 / 符号 两页分段控件（功能页已并入主键位）+ 粘滞生效时右侧的极短徽标</td><td>KeyboardView.swift:242-282</td></tr>
             <tr><td>20</td><td>粘滞状态改为工具条内短徽标（⌃ ⇧ ⌥ ⌘ + 清除），不再单独占一行；默认完全不显示，Ctrl / Opt / Cmd / Shift 仍为一次性粘滞</td><td>KeyboardView.swift:262-276<br>KeyboardView.swift:287-303</td></tr>
             <tr><td>21</td><td>键帽区：主键位 7 行（F1~F12 + 数字 + QWERTY 三行 + 导航/方向键 + 控制行）、符号页 5 行，两页统一 42pt 键帽</td><td>KeyboardView.swift:127-190</td></tr>
@@ -463,10 +463,8 @@ body.shot .phone { margin:0; }
         <br><b>键盘限制</b>：按键走 USB HID 键码（0x00~0x65），中文、emoji 和输入法切换由主机决定，不能直接写入字符；
         多媒体键（音量、亮度）属于 Consumer Page，本描述符未声明，无法发送。全键盘与三指上滑共用 12 字节键鼠复合报告，
         必须保持「键鼠复合模式」开启并在 iPad 忽略设备后重新配对。
-        <br><b>触控板模式</b>：设置里新增「识别为触控板」开关，把 GAP Appearance 从 Mouse(0x03C2) 改成标准
-        Touchpad(0x03C9)，让 iPad「设置 → 通用」有机会出现独立的「触控板」菜单；开启时自动打开键鼠复合模式。
-        三指左右滑 = Cmd+Tab / Cmd+Shift+Tab 切换 App（App 侧识别手势转成键盘快捷键的模拟实现，不是系统原生手势——
-        原生三指/四指手势只对 Magic Trackpad 2 私有协议开放）。切换需忽略设备重配，出问题关掉开关重配即可回退鼠标。
+        <br><b>三指切 App</b>：三指左右滑 = Cmd+Tab / Cmd+Shift+Tab 切换 App（App 侧识别手势转成键盘快捷键的模拟实现，不是系统原生手势）。依赖「键鼠复合模式」开启，共用 12 字节复合报告，在 iPad 忽略设备后重新配对即可生效。
+        <br><b>触控板模式（已撤销）</b>：曾经尝试把 GAP Appearance 从 Mouse 改成标准 Touchpad(0x03C9) 让 iPad 出现「触控板」菜单，实测无效——iOS 不允许第三方 App 注册系统强制管理的 GAP 服务(0x1800)，App 写的外观值主机根本读不到；且 iPad「触控板」菜单与原生手势只对妙控板私有协议开放。此开关已移除，三指切 App 改为直接挂在键鼠复合模式上。
       </div>
     </div>
   </div>
@@ -482,7 +480,6 @@ body.shot .phone { margin:0; }
     sensitivity: 1.4, scrollSensitivity: 1.0, naturalScrolling: false,
     keyClickEnabled: true, keyClickVolume: 0.6,
     compositeDevice: true,
-    trackpadMode: false,
     bridgeMode: false, bridgeHost: "192.168.1.100", bridgePort: "5000",
     bridgeStatus: "桥接端未连接",
     keyboardPage: "letters", sticky: 0,
@@ -591,9 +588,7 @@ body.shot .phone { margin:0; }
   function padHint() {
     var base = "单指移动指针  ·  轻点左键  ·  双击左键<br>双指滚动  ·  长按右键";
     if (!s.compositeDevice) return base;
-    return s.trackpadMode
-      ? base + "<br>三指上滑回桌面  ·  三指左右滑切 App"
-      : base + "<br>三指上滑回桌面（Command+H）";
+    return base + "<br>三指上滑回桌面  ·  三指左右滑切 App";
   }
   function padInner(cls, mini) {
     return "<div class=\"" + cls + "\" data-act=\"pad\" data-code=\"TrackpadSurface.swift:72-88\">" +
@@ -655,7 +650,7 @@ body.shot .phone { margin:0; }
   function topbarHTML() {
     var warn = kbReady() ? "" : "<span class=\"tb-warn\">键盘未就绪</span>";
     return "<div class=\"topbar\" data-code=\"ContentView.swift:292-331\">" +
-      "<span class=\"tb-title\">触控板模式</span>" + warn +
+      "<span class=\"tb-title\">触控区</span>" + warn +
       "<button type=\"button\" class=\"tb-primary\" data-act=\"open-keyboard\" data-code=\"ContentView.swift:292-331\">全键盘</button>" +
       "</div>";
   }
@@ -831,23 +826,16 @@ body.shot .phone { margin:0; }
         row("全键盘", "触控区顶部「全键盘」一键切换") +
         row("组合键", "Ctrl / Opt / Cmd / ⇧ 为一次性粘滞键") +
       "</div>" +
-      "<div class=\"sec-head\" data-code=\"ContentView.swift:242\">实验功能 · 全键盘与回桌面</div>" +
+      "<div class=\"sec-head\" data-code=\"ContentView.swift:242\">实验功能 · 全键盘与手势</div>" +
       "<div class=\"group\" data-code=\"ContentView.swift:242-252\">" +
         "<div class=\"form-row line\" data-code=\"ContentView.swift:243\"><span>键鼠复合模式</span><span class=\"spacer\"></span>" +
           "<button class=\"toggle" + (s.compositeDevice ? " on" : "") + "\" data-act=\"composite\" aria-label=\"键鼠复合模式\"></button></div>" +
         row("三指上滑", "回桌面（Command + H）") +
+        row("三指左右滑", "切换 App（Cmd+Tab / Cmd+Shift+Tab）") +
         row("全键盘", "两页键位 + 下方小触控区（可移动指针）") +
         row("输入报告", s.compositeDevice ? "12 字节（键盘 8 + 鼠标 4）" : "4 字节（纯鼠标）") +
       "</div>" +
-      "<div class=\"form-footer\" data-code=\"ContentView.swift:250-252\">开启后本设备同时声明为鼠标和键盘，全键盘与三指上滑都依赖这个开关。iPad 可能弹出键盘配对验证，也可能拒绝接管整个设备导致鼠标失效。切换开关会自动断开并移除 GATT 服务：请按「iPad 设置 → 辅助功能 → 触控 → 辅助触控 → 设备 → 点键盘 → 忽略此设备」忽略，回到主页面点「开始广播」，再重新配对。若指针或点击失效，关掉本开关、同样忽略设备重新配对即可回到纯鼠标，不需要重装 App。Command + H 只对 iPadOS 有效；Windows 显示桌面是 Win + D，macOS 是 F11。</div>" +
-      "<div class=\"sec-head\" data-code=\"ContentView.swift:417\">触控板模式（实验）</div>" +
-      "<div class=\"group\" data-code=\"ContentView.swift:418-422\">" +
-        "<div class=\"form-row line\" data-code=\"ContentView.swift:418\"><span>识别为触控板</span><span class=\"spacer\"></span>" +
-          "<button class=\"toggle" + (s.trackpadMode ? " on" : "") + "\" data-act=\"trackpad\" aria-label=\"识别为触控板\"></button></div>" +
-        row("设备类型", s.trackpadMode ? "Touchpad（触控板）" : "Mouse（鼠标）") +
-        row("三指左右滑", "切换 App（Cmd+Tab / Cmd+Shift+Tab）") +
-      "</div>" +
-      "<div class=\"form-footer\" data-code=\"ContentView.swift:423-425\">开启后把设备的 GAP 外观从「鼠标」改成标准「触控板」(0x03C9)，iPad 有机会把本设备当触控板，并在 设置 → 通用 出现独立的「触控板」菜单（跟踪速度 / 轻点来点按 / 双指辅助点按）。开启时会自动打开键鼠复合模式，三指左右滑即可用 Cmd+Tab 切换 App。重要限制：iPadOS 原生三指切应用、四指捏合只对 Magic Trackpad 2 / 妙控键盘私有协议开放，第三方蓝牙拿不到；本 App 三指左右滑是转成键盘快捷键的模拟实现，不是系统原生手势。切换会断开重建蓝牙服务：请按「iPad 设置 → 辅助功能 → 触控 → 辅助触控 → 设备 → 点键盘 → 忽略此设备」忽略，回主页面点「开始广播」再重新配对。若「连上但指针不动」，关掉本开关同样忽略重配即可回退鼠标模式。</div>" +
+      "<div class=\"form-footer\" data-code=\"ContentView.swift:250-252\">开启后本设备同时声明为鼠标和键盘，全键盘、三指手势都依赖这个开关。三指上滑回桌面（Command+H），三指左右滑切换 App（右滑 Cmd+Tab 下一个 / 左滑 Cmd+Shift+Tab 上一个）——iPadOS 原生多指手势只对妙控板 2 私有协议开放，本 App 是把三指手势转成键盘快捷键的模拟实现。切换开关会自动断开并移除 GATT 服务：请按「iPad 设置 → 辅助功能 → 触控 → 辅助触控 → 设备 → 点键盘 → 忽略此设备」忽略，回到主页面点「开始广播」，再重新配对。若指针或点击失效，关掉本开关、同样忽略设备重新配对即可回到纯鼠标，不需要重装 App。Command 快捷键只对 iPadOS 有效。</div>" +
       "<div class=\"sec-head\" data-code=\"ContentView.swift:334\">桥接（连 Windows / Android）</div>" +
       "<div class=\"group\" data-code=\"ContentView.swift:335-362\">" +
         "<div class=\"form-row line\" data-code=\"ContentView.swift:337\"><span>启用桥接（WiFi 转发）</span><span class=\"spacer\"></span>" +
@@ -915,8 +903,7 @@ body.shot .phone { margin:0; }
       : (s.screen === "keyboard" ? "已连接 · 全键盘"
       : (s.connected ? "已连接 · 全屏触控" : "引导页"));
     return kv("当前页面", screenName) +
-      kv("输入模式", s.screen === "keyboard" ? "全键盘" : (s.connected ? "触控板" : "未连接")) +
-      kv("设备类型", s.trackpadMode ? "Touchpad（触控板 0x03C9）" : "Mouse（鼠标 0x03C2）") +
+      kv("输入模式", s.screen === "keyboard" ? "全键盘" : (s.connected ? "触控区" : "未连接")) +
       kv("键盘页", pageName) +
       kv("粘滞修饰键", stickyNames()) +
       kv("键盘可用", kbReady() ? "可用（12 字节复合报告）" : "不可用") +
@@ -1066,14 +1053,6 @@ body.shot .phone { margin:0; }
       el.classList.toggle("on", s.compositeDevice);
       log("键鼠复合模式 → " + (s.compositeDevice ? "开（报告 12 字节）" : "关（报告 4 字节纯鼠标）"));
       log("真机切换会移除 GATT 服务：需在 iPad 辅助触控 → 设备里忽略后重新广播配对");
-      render();
-    }
-    else if (act === "trackpad") {
-      s.trackpadMode = !s.trackpadMode;
-      el.classList.toggle("on", s.trackpadMode);
-      if (s.trackpadMode && !s.compositeDevice) s.compositeDevice = true;
-      log("触控板模式 → " + (s.trackpadMode ? "开（Appearance=Touchpad 0x03C9，自动开复合）" : "关（Appearance=Mouse）"));
-      log("真机需按 iPad 辅助触控 → 设备里忽略后重新广播配对，iPad 才会重读设备类型");
       render();
     }
     else if (act === "bridge") {

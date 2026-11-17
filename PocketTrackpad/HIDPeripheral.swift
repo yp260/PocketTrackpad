@@ -30,8 +30,7 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         let report = windowsMode ? "Windows 双报告"
                     : (protocolMode == 0 && bootSubscribed ? "Boot 鼠标 3 字节"
                        : (compositeDevice ? "复合 12 字节" : "纯鼠标 4 字节"))
-        let role = trackpadMode ? " · 角色 触控板" : ""
-        return "协议 \(proto) · 鼠标订阅\(inputSubscribed ? "✓" : "✗") · 键盘订阅\(keyboardSubscribed ? "✓" : "✗") · Boot订阅\(bootSubscribed ? "✓" : "✗") · 发送\(readyToUpdate ? "就绪" : "阻塞") · 已发\(sentFrames)帧 · 报告 \(report)\(role)"
+        return "协议 \(proto) · 鼠标订阅\(inputSubscribed ? "✓" : "✗") · 键盘订阅\(keyboardSubscribed ? "✓" : "✗") · Boot订阅\(bootSubscribed ? "✓" : "✗") · 发送\(readyToUpdate ? "就绪" : "阻塞") · 已发\(sentFrames)帧 · 报告 \(report)"
     }
 
     /// 连接是否存在明显问题，供界面用红色/橙色高亮诊断条。
@@ -138,51 +137,6 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
             }
         }
 
-    // MARK: - 触控板模式（把 GAP Appearance 声明为 Touchpad）
-    //
-    // iPad「设置 → 通用」里「触控板」与「鼠标」是两个独立菜单，系统按设备的
-    // GAP Appearance 归类。默认 Mouse(0x03C2)；开启本开关后声明 Touchpad(0x03C9)，
-    // 让 iPad 有机会把它当触控板、出现触控板专属设置。
-    // 注意：iPadOS 原生三指切应用 / 四指手势只对 Magic Trackpad 2 私有协议开放，
-    // 第三方 BLE 拿不到；App 的三指左右滑是识别手势后转 Cmd+Tab 模拟的。
-    // Appearance 与 Report Map 一样被主机在配对时缓存，切换必须重建 GATT +
-    // 用户忽略设备重配。与 Windows / 桥接模式互斥（那两者是另一套设备身份）。
-    private static let trackpadKey = "PocketTrackpad.trackpadMode.v1"
-
-    @Published var trackpadMode: Bool =
-        (UserDefaults.standard.object(forKey: HIDPeripheral.trackpadKey) as? Bool) ?? false {
-        didSet {
-            UserDefaults.standard.set(trackpadMode, forKey: HIDPeripheral.trackpadKey)
-            if trackpadMode {
-                // 触控板是 iPad 身份，与 Windows 直连 / 桥接互斥，先关掉它们。
-                if windowsMode { windowsMode = false }
-                if bridgeMode { bridgeMode = false }
-            }
-            applyTrackpadModeChange()
-        }
-    }
-
-    private func applyTrackpadModeChange() {
-        // 只改 Appearance（2A01 读取时按模式返回），不动 Report Map 拓扑，
-        // 但主机在配对时缓存了旧 Appearance，必须断开 + 重建 GATT 才会重读。
-        if trackpadMode {
-            // 三指切应用要走 Cmd+Tab，必须有键盘报告通道；触控板模式强制复合报告。
-            if !compositeDevice { compositeDevice = true }
-        }
-        disconnect()
-        if trackpadMode {
-            statusText = "已启用触控板模式，请忽略设备后重新配对"
-            note("已启用触控板模式：Appearance 声明为 Touchpad(0x03C9)")
-            note("已自动开启键鼠复合模式，三指左右滑可用 Cmd+Tab 切换 App")
-            note("要到 iPad 出现「触控板」设置菜单，请按「\(HIDSpec.ipadIgnorePath)」忽略后重新广播配对")
-            note("注意：原生三指/四指手势仅 Magic Trackpad 2 支持，本 App 是模拟手势")
-        } else {
-            statusText = "已回退鼠标模式，请忽略设备后重新配对"
-            note("已关闭触控板模式：Appearance 恢复 Mouse，重新配对后生效")
-        }
-        refreshKeyboardReady()
-    }
-
     // MARK: - 桥接模式（ESP32 或 Windows 电脑软件接收器）
     //
     // 开启后，本 App 不再作为 BLE HID 外设广播，而是把采集到的输入通过 WiFi UDP
@@ -201,7 +155,6 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
                 if bridgeMode {
                     // 启用桥模式时先关掉本地 BLE 广播，避免两个发射源冲突、互相抢连接。
                     windowsMode = false
-                    if trackpadMode { trackpadMode = false }
                     disconnect()
                     note("已启用桥接模式：iPhone 只采集输入，经 WiFi 发给桥接端")
                     note("Windows 电脑：用系统自带 PowerShell 运行 windows/pt_receiver.ps1（零安装），无需任何硬件")
@@ -234,7 +187,6 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
             UserDefaults.standard.set(windowsMode, forKey: HIDPeripheral.windowsKey)
             if windowsMode {
                 bridgeMode = false
-                if trackpadMode { trackpadMode = false }
                 // 切换 GATT 拓扑必须彻底重建：移除服务、释放 manager、重新广播。
                 disconnect()
                 note("已启用 Windows 直连模式：iPhone 以 BLE HID 键鼠组合设备身份广播")
@@ -1079,8 +1031,6 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         case "2A19": return Data([100])
         case "2A01":
             if windowsMode { return HIDSpec.appearanceCombo }
-            // 触控板模式优先：声明 Touchpad(0x03C9)，让 iPad 出现「触控板」设置菜单。
-            if trackpadMode { return HIDSpec.appearanceTouchpad }
             // 纯鼠标声明 Mouse，复合模式声明 Keyboard（needs 全键盘/选词）。
             // 纯鼠标若声明 Keyboard，iPadOS 会按键盘接管并忽略鼠标位移 → 指针不动。
             return compositeDevice ? HIDSpec.appearanceValue : HIDSpec.appearanceMouse
@@ -1229,8 +1179,9 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
     }
 
     /// 三指左右滑：切换 App。iPadOS 外接键盘支持 Command + Tab（下一个）与
-    /// Command + Shift + Tab（上一个）切换应用，触控板模式的系统原生手势拿不到，
-    /// 因此在 App 侧识别手势后转成这两个快捷键发出（属于模拟手势）。
+    /// Command + Shift + Tab（上一个）切换应用。iPadOS 原生多指手势只对 Magic
+    /// Trackpad 2 私有协议开放，第三方 BLE 拿不到，因此 App 侧识别手势后转成
+    /// 这两个快捷键发出（属于模拟手势），需保持「键鼠复合模式」开启。
     /// - Parameter forward: true=下一个(Cmd+Tab)，false=上一个(Cmd+Shift+Tab)
     func switchApp(forward: Bool) {
         let mods = HIDSpec.commandModifier | (forward ? 0 : HIDSpec.modLeftShift)
@@ -1239,7 +1190,7 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         sendKey(HIDSpec.tabKeycode,
                 modifiers: mods,
                 label: forward ? "三指切换 · Command + Tab" : "三指切换 · Command + Shift + Tab",
-                reason: "切换 App 未生效（需开启键鼠复合模式或 Windows/桥接模式）")
+                reason: "切换 App 未生效（需开启键鼠复合模式）")
     }
 
     // MARK: - 全键盘输入
