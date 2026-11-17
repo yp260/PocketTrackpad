@@ -108,6 +108,10 @@ h1 { font-size:21px; margin:0 0 6px; letter-spacing:.2px; }
   font-size:11px; background:var(--ios-card);
 }
 .nav-btn:active { opacity:.55; }
+.nav-btn.btbadge {
+  background:#007aff; border-radius:50%; width:24px; height:24px; padding:0;
+  justify-content:center; color:#fff;
+}
 .dotgreen { width:6px; height:6px; border-radius:50%; background:var(--ios-green); }
 .nav-sub { font-size:10px; color:var(--ios-2); }
 .content { flex:1 1 auto; min-height:0; overflow:hidden; position:relative; }
@@ -401,7 +405,7 @@ body.shot .phone { margin:0; }
             <tr><td>1</td><td>顶部标题：未连接「口袋触控板」／已连接「PT-Pad」</td><td>ContentView.swift:38</td></tr>
             <tr><td>2</td><td>左上角设置齿轮</td><td>ContentView.swift:41-50</td></tr>
             <tr><td>3</td><td>连接状态：绿点 +「已连接」</td><td>ContentView.swift:52-60</td></tr>
-            <tr><td>4</td><td>右上角按钮：未连接显示「开始广播」（桥接模式为「连接桥接」）；已连接显示绿点 + 已连接 +「断开连接」（干净断开、不自动重播）。两种状态都常驻蓝牙图标按钮，点它跳系统蓝牙设置</td><td>ContentView.swift:91-142</td></tr>
+            <tr><td>4</td><td>右上角按钮：未连接显示「开始广播」（桥接模式为「连接桥接」）；已连接显示绿点 + 已连接 +「断开连接」（干净断开、不自动重播）。两种状态都常驻醒目的蓝色圆形蓝牙图标按钮，点它依次尝试跳系统「设置 > 蓝牙」页（新版 App-Prefs:Bluetooth / 旧版 App-Prefs:root=Bluetooth / 保底本 App 设置页）</td><td>ContentView.swift:35-66,107-166</td></tr>
             <tr><td>5</td><td>状态卡片：状态文字、订阅数、两行引导（已删「重新广播」按钮）</td><td>ContentView.swift:100-125</td></tr>
             <tr><td>6</td><td>引导页「指针与滚动」卡片：指针速度 / 滚动速度（连接前可调）</td><td>ContentView.swift:126-156</td></tr>
             <tr><td>7</td><td>触控区中央提示：单指移动 · 轻点左键 · 双击左键 · 双指按住拖动=拖拽 · 长按右键 · 右侧滚轮条 / 底部滚轮键 = 滚动；复合模式下多一行「三指上滑回桌面 · 三指左右滑切 App」（仅全屏触控区，键盘页小触控区已隐藏提示）</td><td>TrackpadSurface.swift:143-146</td></tr>
@@ -427,7 +431,7 @@ body.shot .phone { margin:0; }
             <tr><td>27</td><td>键区再往上挪一点点：删掉工具条下方 24pt 空状态条，键区顶部间距 8pt → 2pt，小触控区顶部 6pt → 4pt；省下约 30pt 全部给小触控区，键盘页切页／粘滞时不再有垂直跳动</td><td>KeyboardView.swift:205-228<br>KeyboardView.swift:242-282<br>KeyboardView.swift:232-238</td></tr>
             <tr><td>28</td><td>引导页三张卡片统一显式通栏：状态卡片 / 指针与滚动 / 连接日志各加 maxWidth 无限宽约束；日志内层 VStack、ScrollView 也撑满。初始只有一行短日志时不再缩成窄卡片并居中</td><td>ContentView.swift:120-121<br>ContentView.swift:153<br>ContentView.swift:172-177</td></tr>
             <tr><td>29</td><td>全键盘页极简选词提示（单行、次级色）：以「下方小触控区移动指针点 iPad 顶部候选条」为主路径（BLE 复合键鼠外设的数字/空格选词在系统输入法下常不触发），备选 ←/→ + 空格/回车；键帽按住时长 90ms → 120ms 以兼容中文输入法组合态</td><td>KeyboardView.swift:241-252<br>HIDPeripheral.swift:579</td></tr>
-            <tr><td>30</td><td>换设备引导（设置说明）：「断开连接」在主界面右上角，点后拆 GATT + 停广播、不自动重播，点「开始广播」才重建；已移除拆链避让（会造成闪一下又断开）。连 Windows / Android 须先在 iPad「辅助触控 → 设备」里忽略本设备；Windows / Android 一律走 ESP32 硬件桥（PT-Bridge 热点、开桥接填 192.168.4.1、电脑蓝牙配对 PT-Pad，零安装）</td><td>ContentView.swift:454</td></tr>
+            <tr><td>30</td><td>换设备引导（设置说明）：「断开连接」在主界面右上角，点后拆 GATT + 停广播、不自动重播；v0.0.63 进一步删除「主机断开后自动 stop→start 重播」机制（断联重播不断的元凶），断开后状态完全由用户点「开始广播」掌控。连 Windows / Android 须先在 iPad「辅助触控 → 设备」里忽略本设备；连电脑走 ESP32 硬件桥（PT-Bridge 热点、开桥接填 192.168.4.1、电脑蓝牙配对 PT-Pad，零安装）</td><td>ContentView.swift:454<br>HIDPeripheral.swift:654-670</td></tr>
             <tr><td>31</td><td>按键音：全键盘每次按键响一声机械键盘 click 音（打包的 keyclick.wav），底部左键 / 右键 / 滚轮键与触控区轻点同样有反馈音；设置页「按键音」分组可开关 + 调音量（0 静音）+ 试听；键盘页工具条加喇叭按钮，在 静音 / 25% / 50% / 100% 之间循环</td><td>KeyClickPlayer.swift<br>KeyboardView.swift:294-305,366<br>ContentView.swift:270-289</td></tr>
             <tr><td>32</td><td>桥接（ESP32 硬件桥 · 电脑零安装）分组已移到设置页最顶部：开关 + 地址与端口输入 +「保存地址」+「重新握手」；手机连 PT-Bridge 热点、地址默认 192.168.4.1，电脑系统蓝牙配对 PT-Pad 即可，无需安装任何软件；地址持久化，心跳自动重连。早期电脑端软件接收器方案已删除</td><td>ContentView.swift:317-361<br>BridgeTransport.swift:34-99<br>HIDPeripheral.swift:233-243</td></tr>
             <tr><td>33</td><td>主键位 ↓ / ⌫ / ↑ 三键循环换位：下键移到控制行原退格键位，退格键移到 M 行末尾原上键位，上键移到导航行原下键位</td><td>KeyboardView.swift:148-176</td></tr>
@@ -455,6 +459,7 @@ body.shot .phone { margin:0; }
         右上角随即变成「开始广播」，点它才重建并广播，任何设备都能连。两种状态都常驻蓝牙图标，点它跳系统「设置 > 蓝牙」。
         连接日志卡片标题行加「复制全部」，一键把全部日志写入剪贴板。设置页桥接（ESP32）分组移到最顶部。
         要彻底换设备仍须在旧设备上忽略本设备（iPad：设置 → 辅助功能 → 触控 → 辅助触控 → 设备 → 点键盘 → 忽略此设备，不在蓝牙列表里）。
+        <br><b>v0.0.63 断联重播修复</b>：删除了「主机断开后自动 stopAdvertising → 0.6 秒 → startAdvertising」的自动重播循环——iPad HID 连接频繁瞬断瞬连时，每次订阅归零都会触发一轮重播，界面在「已连接 / 等待配对」间反复闪跳，延时闭包还会和手动点「开始广播」打架。现在断开只更新状态、绝不自动重播，要重连必须显式点「开始广播」。蓝牙图标改为固定尺寸蓝色圆徽标（原来 .footnote 在小工具栏里被压成不可见），跳转改用 App-Prefs:Bluetooth 新版 scheme，失败再回退旧版、最后才回本 App 设置页。
         <br><b>三指上滑</b>：复合模式下发送键盘报告 Command+M 让 iPadOS 最小化当前程序 / 回桌面（App 保留后台不关闭），真机需三指同时
         上滑 80pt 以上。这是实验功能，iPad 可能把设备识别为键盘而拒绝接管整个设备；此时关掉设置里的
         「键鼠复合模式」、忽略设备重新配对即可回退到纯鼠标，不需要重装 App。
@@ -581,7 +586,7 @@ body.shot .phone { margin:0; }
 
   function btSVG() {
     var d = "M17.71 7.71 12 13.41 6.29 7.71 4.88 9.12 12 16.24l7.12-7.12-1.41-1.41zM12 3 6.29 8.71l1.41 1.41L12 5.83l4.29 4.29 1.41-1.41L12 3zm0 16.17-4.29-4.29-1.41 1.41L12 21.24l5.71-5.71-1.41-1.41L12 19.17z";
-    return "<svg viewBox=\"0 0 24 24\" width=\"14\" height=\"14\" fill=\"currentColor\"><path d=\"" + d + "\"/></svg>";
+    return "<svg viewBox=\"0 0 24 24\" width=\"15\" height=\"15\" fill=\"currentColor\"><path d=\"" + d + "\"/></svg>";
   }
 
   function navHTML() {
@@ -598,7 +603,7 @@ body.shot .phone { margin:0; }
           "<button class=\"nav-btn border\" data-act=\"reconnect\" data-code=\"ContentView.swift:110-116\">断开连接</button>"
         : "<button class=\"nav-btn border\" data-act=\"advertise\" data-code=\"ContentView.swift:120-133\">" +
           (s.bridgeMode ? "连接桥接" : "开始广播") + "</button>") +
-        "<button class=\"nav-btn border\" data-act=\"openbt\" data-code=\"ContentView.swift:135-141\" aria-label=\"打开系统蓝牙设置\">" + btSVG() + "</button>";
+        "<button class=\"nav-btn btbadge\" data-act=\"openbt\" data-code=\"ContentView.swift:36-66\" aria-label=\"打开系统蓝牙设置\">" + btSVG() + "</button>";
     }
     var title = isSettings ? "设置" : (conn ? "PT-Pad" : "口袋触控板");
     return "<div class=\"nav-left\">" + left + "</div>" +
@@ -1045,7 +1050,10 @@ body.shot .phone { margin:0; }
     else if (act === "back") { setScreen(s.prevScreen); log("从设置返回 " + s.prevScreen); }
     else if (act === "advertise") { toggleAdvertise(); }
     else if (act === "reconnect") { reconnect(); }
-    else if (act === "openbt") { log("打开系统「设置 > 蓝牙」"); }
+    else if (act === "openbt") {
+      log("蓝牙图标：依次尝试 App-Prefs:Bluetooth（新版）→ App-Prefs:root=Bluetooth（旧版）→ 本 App 设置页");
+      log("目的：直接打开系统「设置 > 蓝牙」页，而不是本 App 设置页");
+    }
     else if (act === "copylogs") { copyLogs(); }
     else if (act === "vol") {
       var lv = [0, 0.25, 0.5, 1.0];

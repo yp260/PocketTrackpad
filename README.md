@@ -124,7 +124,7 @@ open PocketTrackpad.xcodeproj
 2. iPad 打开 **设置 → 蓝牙**，保持蓝牙开启。
 3. 在「其他设备」里选择 **PT-Pad**，按提示完成配对。
 4. iPad 屏幕出现圆形指针即成功；iPhone 上会**自动出现全屏触控区**，顶部显示「已连接」。
-5. 已连接时右上角有「断开连接」按钮（原「断开」位置）：点它干净地拆掉当前 GATT 并停广播，**不自动重播**；右上角随即变成「开始广播」，点它才重建并广播，任何设备都能连接。旁边的蓝牙图标一键跳到系统「设置 > 蓝牙」。未连接时只有「开始广播」入口，重复点可重启广播。要彻底换设备须在旧设备上忽略本设备 —— iPad 的正确入口是「设置 → 辅助功能 → 触控 → 辅助触控 → 设备 → 点键盘 → 忽略此设备」（不在蓝牙列表里）。
+5. 已连接时右上角有「断开连接」按钮（原「断开」位置）：点它干净地拆掉当前 GATT 并停广播，**不自动重播**；右上角随即变成「开始广播」，点它才重建并广播，任何设备都能连接。主机断开后 App 也只更新状态、绝不自动重播，要重连必须显式点「开始广播」。旁边的蓝色圆形蓝牙图标一键跳到系统「设置 > 蓝牙」页（依次尝试 App-Prefs:Bluetooth / App-Prefs:root=Bluetooth / 本 App 设置页）。未连接时只有「开始广播」入口，重复点可重启广播。要彻底换设备须在旧设备上忽略本设备 —— iPad 的正确入口是「设置 → 辅助功能 → 触控 → 辅助触控 → 设备 → 点键盘 → 忽略此设备」（不在蓝牙列表里）。
 6. 指针速度、滚动速度、自然滚动在**左上角齿轮 → 设置**里调（桥接 ESP32 已移到设置最顶部），设置会自动保存。引导页「连接日志」标题行右侧有「复制全部」按钮，一键把全部日志写入剪贴板，方便粘贴发回排障。
 7. 键鼠宏面板占屏幕 90%，顶边盖住「触控区 / 全键盘」切换栏，顶部导航条仍可见，仍可下拉关闭面板。编辑页可改每个动作的类型、时间、坐标 / 按键 / 点击参数，并能在中间插入新动作。
 
@@ -1698,3 +1698,38 @@ v0.0.58 的「单指起点落在触摸板左 / 右边缘窄条 → 先把光标�
 | `PocketTrackpad/HIDPeripheral.swift` | 删避让字段/迁移/订阅拆链分支；`selectNewDevice()` 改为干净断开不重播；更新恢复广播注释 |
 | `PocketTrackpad/ContentView.swift` | 工具栏「断开重连」→「断开连接」+ 蓝牙图标按钮；日志「复制全部」；桥接 Section 置顶；关于/实验页脚文案 |
 | `preview/ui-preview.html` | 导航栏断开/蓝牙图标、日志复制按钮、reconnect 事件、设置桥接置顶、切换设备说明、元素清单（JS 语法校验通过） |
+
+
+## 三十九、彻底移除断联自动重播 + 蓝牙图标修复（v0.0.63）
+
+用户实测反馈：断联和重播还是老问题不断；蓝牙设置入口图标没显示，点了只进到本 App 设置页，要的是系统蓝牙页面。
+
+### 断联重播不断的根因与修复
+- 根因：`HIDPeripheral.ensureAdvertisingAfterDisconnect()` 在 `didUnsubscribeFrom`（订阅归零）和
+  `didDisconnect` 里被调用，做 `stopAdvertising()` → 0.6 秒后 `startAdvertising()` 的自动重播。
+  本意是 iPad 忽略设备后能重新搜到，但 iPad 作为 BLE HID 主机会频繁发生
+  「连接 → 订阅 → 瞬断 → 重连」抖动，每次订阅归零都触发一轮 stop→start，界面在
+  「已连接 / 等待配对」间反复闪跳；延时闭包还会与手动点「开始广播」打架，
+  造成上一版「点了闪一下就无效」的残留。
+- 修复：
+  - 删除 `ensureAdvertisingAfterDisconnect()` 整个函数与 `advertisingResumeScheduled` 字段
+    （含 disconnect / tearDownGATT 里的复位）。
+  - 新增 `handleHostDisconnected()`：只把状态改成「已断开 · 点「开始广播」重连」并记日志，
+    **不触碰广播**。断开就是断开，重连完全由用户显式点「开始广播」掌控。
+  - 两处调用点（`didUnsubscribeFrom` 归零、`didDisconnect`）改调新函数。
+- 效果：状态机不再有自动重播循环，断联 / 重播闪跳消失。系统层面已配对主机仍可能主动回连
+  （iOS 无法拒绝，属系统行为），根治须在主机侧忽略本设备（iPad 走辅助触控 → 设备）。
+
+### 蓝牙设置入口修复
+- 图标：`Image(systemName: "bluetooth").font(.footnote)` 在拥挤工具栏里被压成不可见。
+  改为固定 24×24 的蓝色圆徽标（白字 + `.buttonStyle(.plain)`），稳定可见。
+- 跳转：`App-Prefs:root=Bluetooth` 在新版 iOS 已失效，会回退到本 App 设置页。
+  改为按序尝试 `App-Prefs:Bluetooth`（iOS 16+ 有效写法，无 root=）→
+  `App-Prefs:root=Bluetooth`（旧版）→ `UIApplication.openSettingsURLString`（保底），
+  用 `open` 的 completion.success 判断是否真的跳走，成功即停。侧载 App 不受 App Store 对私有 scheme 的限制。
+
+| 文件 | 改动 |
+| --- | --- |
+| `PocketTrackpad/HIDPeripheral.swift` | 删自动重播函数 + 字段 + 复位；新增纯状态版 `handleHostDisconnected()`；改两处调用点 |
+| `PocketTrackpad/ContentView.swift` | 蓝牙图标改蓝色圆徽标；跳转改三级 scheme 链式尝试 |
+| `preview/ui-preview.html` | 蓝牙徽标 CSS/SVG、openbt 日志、元素清单 4/30 项与说明（JS 语法校验通过） |

@@ -192,8 +192,6 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
     private var bootReport: CBMutableCharacteristic?
     private var servicesToAdd: [CBMutableService] = []
     private var databaseBuilt = false
-    /// 防止「订阅断开」和「连接断开」两个回调重复触发广播恢复。
-    private var advertisingResumeScheduled = false
     private var serviceFailed = false
     /// 某些 iOS 版本可能拒绝在广播中放 16 位 SIG UUID，此时自动回退到 128 位。
     private var advertisingFallbackUsed = false
@@ -404,7 +402,6 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         bootReport = nil
         servicesToAdd.removeAll()
         databaseBuilt = false
-        advertisingResumeScheduled = false
         serviceFailed = false
         advertisingFallbackUsed = false
         buttonBits = 0
@@ -440,7 +437,6 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         bootReport = nil
         servicesToAdd.removeAll()
         databaseBuilt = false
-        advertisingResumeScheduled = false
         serviceFailed = false
         advertisingFallbackUsed = false
         buttonBits = 0
@@ -651,38 +647,21 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         note("要显示 PT-Pad：改 iPhone 名称后按「\(HIDSpec.ipadIgnorePath)」忽略并重新配对")
     }
 
-    /// 主机断开后自动恢复广播。
+    /// 主机断开后只更新界面状态，绝不自动重新广播。
     ///
-    /// iOS 有一个坑：外设被中央设备（iPad）连接后，系统会停止广播，但**不会**
-    /// 通过任何 delegate 回调告知 App，导致 isAdvertising 一直是 true、界面按钮
-    /// 停在「停止广播」。用户若在 iPad 上「忽略此设备」，iPhone 这边不会自己
-    /// 重新广播，iPad 就再也搜不到了——这正是「又搜不到」的高频原因。
-    /// 因此在确认订阅清零后强制 stop→start 重新发起广播。
-    private func ensureAdvertisingAfterDisconnect() {
-        // 桥接模式下本来就不广播；manager 已被 disconnect 释放时也不处理。
-        // v0.0.61 已无任何避让 / 拒绝逻辑，这里只负责「主机断开后恢复广播」这一件事，
-        // 与手动 start() 的冲突交给 advertisingResumeScheduled + advertiser 幂等处理。
-        guard !bridgeMode,
-              !advertisingResumeScheduled,
-              let manager = manager,
-              manager.state == .poweredOn,
-              databaseBuilt,
-              subscribers == 0 else { return }
-        advertisingResumeScheduled = true
-        manager.stopAdvertising()
-        isAdvertising = false
-        // 稍等，确保系统已彻底释放旧连接，否则 startAdvertising 会被拒。
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
-            guard let self = self else { return }
-            self.advertisingResumeScheduled = false
-            guard !self.bridgeMode,
-                  self.subscribers == 0,
-                  self.manager?.state == .poweredOn,
-                  !self.isAdvertising else { return }
-            self.startAdvertising(with: HIDSpec.advertisedServiceUUIDs, fallback: false)
-            self.statusText = self.pairingStatusText
-            self.note("检测到主机断开，已自动恢复广播；现在可重新搜索 \(self.pairingStatusText)")
-        }
+    /// v0.0.63 关键修复：旧版在这里做 stopAdvertising → 0.6s 后 startAdvertising 的
+    /// 「自动恢复广播」，本意是 iPad 忽略设备后能重新搜到。但实测它正是「断联 / 重播
+    /// 不断」的元凶：iPad 作为 HID 主机会频繁发生「连接 → 订阅 → 瞬断 → 重连」抖动，
+    /// 每次 subscribers 归零都触发一轮 stop→start，界面在「已连接 / 等待配对」之间反复
+    /// 闪跳；并且延时闭包会和手动点「开始广播」打架，造成「点了闪一下就无效」。
+    ///
+    /// 现在：断开就是断开，广播停就停着；要重新连接由用户显式点右上角「开始广播」。
+    /// 这样状态完全由用户掌控，不再有自动重播循环。系统层面已配对的主机仍可能主动
+    /// 回连（iOS 无法拒绝），那是系统行为；根治只能在主机侧忽略本设备。
+    private func handleHostDisconnected() {
+        guard !bridgeMode else { return }
+        statusText = "已断开 · 点「开始广播」重连"
+        note("主机已断开；广播不会被自动重启，需要重连请点右上角「开始广播」")
     }
 
     // MARK: - CBPeripheralManagerDelegate
@@ -826,8 +805,8 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         refreshKeyboardReady()
         statusText = isAdvertising ? pairingStatusText : "广播已停止"
         note("主机取消订阅 \(id)")
-        // 最后一个订阅也断开：自动恢复广播，保证 iPad 忽略设备后能重新搜到。
-        if subscribers == 0 { ensureAdvertisingAfterDisconnect() }
+        // v0.0.63：只更新状态，绝不自动重播（自动 stop→start 正是断联重播不断的元凶）。
+        if subscribers == 0 { handleHostDisconnected() }
     }
 
     /// 中央设备彻底断开连接（iOS 13+）。覆盖「连上但没订阅就断开」的情况，
@@ -841,7 +820,7 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         bootSubscribed = false
         subscribers = 0
         refreshKeyboardReady()
-        ensureAdvertisingAfterDisconnect()
+        handleHostDisconnected()
     }
 
     func peripheralManagerIsReady(toUpdateSubscribers peripheral: CBPeripheralManager) {

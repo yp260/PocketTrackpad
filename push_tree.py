@@ -43,13 +43,12 @@ tree = gh("POST", "/git/trees", {
 print("tree =", tree["sha"])
 
 msg = json.dumps(
-    "fix: 修复断开后开始广播闪一下 + 蓝牙设置入口 + 复制日志 + 桥接置顶（v0.0.61）\n\n"
-    "用户实测反馈：点断开连接后再点开始广播闪一下没用；要在开始广播右边加蓝牙图标跳系统蓝牙设置；连接日志加复制全部按钮；设置里桥接 ESP32 移到顶部。\n"
-    "- 根因是 v0.0.60 的 8 秒避开窗口：断开后自动重播，旧 iPad 一回连就在 didSubscribeTo 里被拆链重播，反复重建 GATT 导致界面闪一下又断开、谁都连不上。\n"
-    "- 彻底移除避让机制：删 avoidCentralID/avoidUntil/avoidRejectCount 字段、迁移清零、订阅拆链分支；selectNewDevice 改为只干净断开（拆 GATT+停广播、桥接断 UDP），不自动 start()；断开后右上角变「开始广播」，点它才重建广播。\n"
-    "- ContentView 工具栏加蓝牙图标按钮（已连接/未连接常驻），点它跳 App-Prefs:root=Bluetooth，失败回退系统设置页。\n"
-    "- 连接日志卡片标题行加「复制全部」，把 hid.logLines 拼成整段写入剪贴板，短暂显示「已复制」。\n"
-    "- 设置页桥接（ESP32）Section 从实验功能之后移到 Form 最顶部。\n"
+    "fix: 彻底移除断联自动重播 + 蓝牙图标与跳转修复（v0.0.63）\n\n"
+    "用户实测反馈：断联和重播还是老问题不断；蓝牙设置入口图标没显示，点了只进本 App 设置页，要的是系统蓝牙页。\n"
+    "- 根因：ensureAdvertisingAfterDisconnect 在订阅归零/连接断开时做 stopAdvertising → 0.6s → startAdvertising 自动重播；iPad HID 主机频繁瞬断瞬连，每次都触发一轮重播，界面反复闪跳，延时闭包还和手动开始广播打架。\n"
+    "- 删除 ensureAdvertisingAfterDisconnect 与 advertisingResumeScheduled 字段及复位；新增 handleHostDisconnected 只更新状态、绝不自动重播；重连必须显式点「开始广播」。\n"
+    "- 蓝牙图标：.footnote Image 在拥挤工具栏被压成不可见，改固定 24x24 蓝色圆徽标。\n"
+    "- 跳转：App-Prefs:root=Bluetooth 新版 iOS 失效，改链式尝试 App-Prefs:Bluetooth → App-Prefs:root=Bluetooth → openSettingsURLString，用 open completion.success 判断。\n"
     "- HIDPeripheral/ContentView + preview/README 同步（JS 语法已校验）。",
     ensure_ascii=False
 )
