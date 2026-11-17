@@ -135,7 +135,7 @@ struct ContentView: View {
                 }
                 Button("取消", role: .cancel) {}
             } message: {
-                Text("两种方式都会重新广播，任何设备都能连接。\n\n【换设备说明】iOS 无法清除主机侧的配对，已配对设备会由系统自动回连。要彻底不被它抢连，必须在旧设备上忽略本设备。iPad 的正确入口是：\(HIDSpec.ipadIgnorePath)。\n\nWindows（推荐 · 零安装）：设置里开「Windows 直连」，打开 Windows 的 设置 → 蓝牙 → 添加设备 → 其他设备 窗口，再重新广播，列表出现 iPhone 后配对。搜不到就在 Windows 蓝牙高级设置把发现改为「高级」或点「显示所有设备」。若仍不兼容，改用「桥接（WiFi 转发）」+ 电脑端 windows\\pt_receiver.ps1（零安装）。")
+                Text("两种方式都会重新广播，任何设备都能连接。\n\n【换设备说明】iOS 无法清除主机侧的配对，已配对设备会由系统自动回连。要彻底不被它抢连，必须在旧设备上忽略本设备。iPad 的正确入口是：\(HIDSpec.ipadIgnorePath)。\n\n连 Windows：用「桥接（WiFi 转发）」方案——电脑上用系统自带 PowerShell 运行 windows\\pt_receiver.ps1（零安装），设置里把地址填成电脑的局域网 IP，再点右上角「连接桥接」即可。")
             }
         }
     }
@@ -183,37 +183,6 @@ struct ContentView: View {
                         Text("连 Windows：电脑上用系统自带 PowerShell 运行 windows\\pt_receiver.ps1（零安装），"
                          + "再到设置里把地址填成电脑的局域网 IP；"
                          + "连 Android / 无线方案：手机连 ESP32 的 PT-Bridge 热点，地址用 192.168.4.1。")
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
-                    } else if hid.windowsMode {
-                        // 醒目提醒：Windows 直连用双报告拓扑，iPad 连不上。给一键切回入口。
-                        VStack(alignment: .leading, spacing: 8) {
-                            HStack(spacing: 6) {
-                                Image(systemName: "exclamationmark.triangle.fill")
-                                Text("当前是 Windows 直连模式，iPad 会连不上")
-                                    .font(.caption.weight(.semibold))
-                            }
-                            .foregroundStyle(.orange)
-                            Text("Windows 模式用专用双报告格式，iPad 读不懂、订阅为 0。要连 iPad 请先切回，本按钮会自动重建 GATT 并重新广播。")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                            Button {
-                                hid.switchToiPadMode()
-                            } label: {
-                                Text("一键切回 iPad 模式")
-                                    .font(.caption.weight(.semibold))
-                                    .frame(maxWidth: .infinity)
-                            }
-                            .buttonStyle(.borderedProminent)
-                            .controlSize(.small)
-                        }
-                        .padding(10)
-                        .background(Color.orange.opacity(0.12),
-                                    in: RoundedRectangle(cornerRadius: 10))
-                        Text("Windows 打开 设置 → 蓝牙和其他设备 → 添加设备 → 其他设备，保持窗口开着。")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Text("本 App 点「开始广播」后，Windows 列表会出现你的 iPhone，点它直接配对，电脑端零安装。")
                             .font(.caption2)
                             .foregroundStyle(.tertiary)
                     } else {
@@ -416,18 +385,6 @@ struct SettingsView: View {
             }
 
             Section {
-                Toggle("Windows 直连（电脑零安装）", isOn: $hid.windowsMode)
-                LabeledRow(title: "电脑端要求", detail: "不装任何软件")
-                LabeledRow(title: "设备显示", detail: "iPhone 整机名")
-                LabeledRow(title: "当前状态", detail: hid.windowsMode ? "广播中（等 Windows 添加）" : "未启用")
-            } header: {
-                Text("连接 Windows（推荐 · 零安装）")
-            } footer: {
-                Text("开启后 iPhone 以标准 BLE 键鼠组合设备身份广播，Windows 在 设置 → 蓝牙和其他设备 → 添加设备 → 其他设备 里直接配对，电脑端不装任何驱动或程序。\n\n步骤：① 本 App 先断开 iPad（iOS 外设被连接后会停止广播，Windows 搜不到）；② 在 Windows 打开添加设备窗口并保持；③ 本 App 点「开始广播」，过几秒 Windows 列表出现你的 iPhone，点它配对。\n\n注意：Windows 11 24H2 的发现列表会按设备类别（Appearance）过滤，iOS 无法在广播里设置该字段。若列表不显示，先在 Windows 蓝牙高级设置里打开「蓝牙设备发现：高级」，或在添加设备页点击「显示所有设备」。配对成功后在 Windows 里即可用 iPhone 当触控板 + 键盘。若仍连不上，关掉本开关改用下方「桥接」方案。")
-                    .font(.caption)
-            }
-
-            Section {
                 Toggle("启用桥接（WiFi 转发）", isOn: $hid.bridgeMode)
 
                 VStack(alignment: .leading, spacing: 6) {
@@ -470,7 +427,7 @@ struct SettingsView: View {
             } header: {
                 Text("桥接（连 Windows / Android）")
             } footer: {
-                Text("iOS 的蓝牙外设无法设置 GAP Appearance，Windows 因此搜不到本机虚拟键鼠。开启桥接后本机不再广播，改为把输入通过 WiFi 发给「桥接端」。\n\n【连 Windows，零安装】用系统自带 PowerShell 运行 windows\\pt_receiver.ps1（双击 start_receiver.bat 即可），把上面地址填成电脑的局域网 IP（Windows 用 ipconfig 查看，格式如 192.168.1.100），点「保存地址」再点右上角「连接桥接」。\n\n【连 Android / 也想无线】用 ESP32：手机先连 PT-Bridge 热点，地址填默认的 192.168.4.1。\n\n手机与电脑必须连同一个 WiFi。Windows 防火墙首次会询问是否允许访问网络，选「允许」。\n\n提示：若你的 Windows 版本能直接搜到 iPhone，请优先用「Windows 直连（电脑零安装）」开关，连软件都不用开。")
+                Text("iOS 的蓝牙外设无法设置 GAP Appearance，Windows 因此很难直接搜到本机虚拟键鼠。开启桥接后本机不再广播，改为把输入通过 WiFi 发给「桥接端」。\n\n【连 Windows，零安装】用系统自带 PowerShell 运行 windows\\pt_receiver.ps1（双击 start_receiver.bat 即可），把上面地址填成电脑的局域网 IP（Windows 用 ipconfig 查看，格式如 192.168.1.100），点「保存地址」再点右上角「连接桥接」。\n\n【连 Android / 也想无线】用 ESP32：手机先连 PT-Bridge 热点，地址填默认的 192.168.4.1。\n\n手机与电脑必须连同一个 WiFi。Windows 防火墙首次会询问是否允许访问网络，选「允许」。")
                     .font(.caption)
             }
 
@@ -483,7 +440,7 @@ struct SettingsView: View {
             } header: {
                 Text("切换设备")
             } footer: {
-                Text("点「断开并重新广播」会断开当前连接、重建蓝牙服务并重新广播，任何设备都能连接。\n\n【换设备说明】蓝牙 HID 的配对信息存在主机侧，iOS 外设无法远程解除、也无法拒绝指定设备连接——已配对设备（如旧 iPad）会由系统自动回连。要彻底不被它抢连，必须在旧设备上忽略本设备。iPad 的正确入口是：\(HIDSpec.ipadIgnorePath)。\n\nWindows（推荐 · 零安装）：打开「Windows 直连」，保持 Windows 的 设置 → 蓝牙 → 添加设备 → 其他设备 窗口，再重新广播，列表出现 iPhone 后配对。Windows 11（24H2）发现列表按类别过滤、iOS 无法设置该字段，若列表不显示，开「蓝牙设备发现：高级」或点「显示所有设备」。仍不兼容就改用「桥接（WiFi 转发）」+ 电脑端 windows\\pt_receiver.ps1（零安装）。")
+                Text("点「断开并重新广播」会断开当前连接、重建蓝牙服务并重新广播，任何设备都能连接。\n\n【换设备说明】蓝牙 HID 的配对信息存在主机侧，iOS 外设无法远程解除、也无法拒绝指定设备连接——已配对设备（如旧 iPad）会由系统自动回连。要彻底不被它抢连，必须在旧设备上忽略本设备。iPad 的正确入口是：\(HIDSpec.ipadIgnorePath)。\n\n连 Windows 请用「桥接（WiFi 转发）」：电脑上运行 windows\\pt_receiver.ps1（零安装），设置里填电脑局域网 IP，再点「连接桥接」。")
                     .font(.caption)
             }
 
@@ -583,7 +540,7 @@ private struct DiagnosticStrip: View {
 
     private var hasProblem: Bool { hid.hasConnectionProblem }
     /// 复合报告在部分 iPadOS 上会被当键盘接管、忽略鼠标位移。给一键切纯鼠标入口。
-    private var canOfferPlainMouse: Bool { hid.compositeDevice && !hid.windowsMode && !hid.bridgeMode }
+    private var canOfferPlainMouse: Bool { hid.compositeDevice && !hid.bridgeMode }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {

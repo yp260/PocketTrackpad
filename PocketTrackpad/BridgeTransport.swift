@@ -10,7 +10,7 @@ import Network
 ///      收到后直接用 Win32 SendInput 注入鼠标键盘，不需要任何额外硬件。
 ///
 /// 为什么需要这一层：iOS 的 CoreBluetooth 外设无法设置 GAP Appearance，
-/// 导致 Windows 等主机搜不到 / 配对失败（详见 README「Windows 直连」一节）。
+/// 导致 Windows 等主机搜不到 / 配对失败（详见 README 的 Windows 连接一节）。
 /// 把「被主机发现」这一步交给桥接端，iPhone 只负责采集输入。
 ///
 /// 协议（见 ESP32 端 `main.cpp` 与 PC 端 `pt_receiver.ps1`）：

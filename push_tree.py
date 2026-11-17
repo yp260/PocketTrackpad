@@ -42,7 +42,7 @@ tree = gh("POST", "/git/trees", {
 })
 print("tree =", tree["sha"])
 
-msg = "feat: 双指手势改为拖拽（按住左键+移动）——滚动移到底部滚轮键\n\n用户要求把双指滑动改成「在 iPad 上双指按住并拖动」；确认目标是拖拽对象（拖 App 图标 / 选中文字），\n并确认滚动只保留底部滚轮键。\n实现：\n- TrackpadSurface：2 指 pan 由 handleScroll(wheel) 改为 handleDrag——began 按下左键(setButton 0x01)、\n  changed 发指针位移（用 pointer sensitivity、跟手方向，与自然滚动无关）、抬手/取消松开左键；\n  移除双指滚动的 lastScroll/residualWheel 状态。\n- 底部滚轮键的 SwiftUI DragGesture 保持独立，继续发 wheel，滚动速度/自然滚动只作用于它。\n- 宏录制：buttonDown / 逐帧 move / buttonUp 走既有 recordEvent 链路，回放可复现拖拽。\n- 触控区提示、滚动设置说明、设置页手势列表、preview/ui-preview.html 同步。\n报告格式与配对不变。注意：翻页/滚网页现在要用底部滚轮键，双指改为拖拽。"
+msg = "feat: 删除 Windows 直连功能——连 Windows 统一走桥接方案\n\n用户反馈 Windows 直连（原生 BLE HID 双报告拓扑）没法用，要求直接删除。\n彻底移除 windowsMode 及其全部支撑代码，保留桥接（WiFi 转发）作为连 Windows 的唯一方式。\n实现：\n- HIDDescriptor：删除 win* 双报告描述符、Report ID 常量、winMouseReport/winKeyboardReport 组装函数、appearanceCombo。\n- HIDPeripheral：删除 windowsMode 持久化开关、inputReport2/keyboardSubscribed/databaseWindowsMode 字段、\n  GATT 双报告拓扑与模式迁移检查、switchToiPadMode、sendKey/flush/readValue/didReceiveRead/订阅回调的 windows 分支。\n- ContentView：删除设置页「Windows 直连」开关、未连接页 windowsMode 分支与一键切回按钮、各处引导文案，\n  改为引导桥接方案。\n- 文档：README.md、windows/README.md、BridgeTransport 注释同步，windows/README 重写为桥接单一方案。\n报告格式与 iPad 配对不变；纯鼠标 / 键鼠复合 / 桥接三种模式不受影响。"
 
 commit = gh("POST", "/git/commits", {
     "message": msg, "tree": tree["sha"], "parents": [BASE]
