@@ -401,18 +401,18 @@ body.shot .phone { margin:0; }
             <tr><td>1</td><td>顶部标题：未连接「口袋触控板」／已连接「PT-Pad」</td><td>ContentView.swift:38</td></tr>
             <tr><td>2</td><td>左上角设置齿轮</td><td>ContentView.swift:41-50</td></tr>
             <tr><td>3</td><td>连接状态：绿点 +「已连接」</td><td>ContentView.swift:52-60</td></tr>
-            <tr><td>4</td><td>右上角按钮：未连接显示「开始广播」（桥接模式为「连接桥接」）；已连接显示绿点 + 已连接 +「断开重连」（从设置页移回原「断开」位置，8 秒限时暂缓旧设备抢连）</td><td>ContentView.swift:67-110</td></tr>
+            <tr><td>4</td><td>右上角按钮：未连接显示「开始广播」（桥接模式为「连接桥接」）；已连接显示绿点 + 已连接 +「断开连接」（干净断开、不自动重播）。两种状态都常驻蓝牙图标按钮，点它跳系统蓝牙设置</td><td>ContentView.swift:91-142</td></tr>
             <tr><td>5</td><td>状态卡片：状态文字、订阅数、两行引导（已删「重新广播」按钮）</td><td>ContentView.swift:100-125</td></tr>
             <tr><td>6</td><td>引导页「指针与滚动」卡片：指针速度 / 滚动速度（连接前可调）</td><td>ContentView.swift:126-156</td></tr>
             <tr><td>7</td><td>触控区中央提示：单指移动 · 轻点左键 · 双击左键 · 双指按住拖动=拖拽 · 长按右键 · 右侧滚轮条 / 底部滚轮键 = 滚动；复合模式下多一行「三指上滑回桌面 · 三指左右滑切 App」（仅全屏触控区，键盘页小触控区已隐藏提示）</td><td>TrackpadSurface.swift:143-146</td></tr>
-            <tr><td>8</td><td>连接日志卡片（108pt，等宽字体，通栏与其他卡片左右对齐）</td><td>ContentView.swift:158-180</td></tr>
+            <tr><td>8</td><td>连接日志卡片（等宽字体，通栏）；标题行右侧「复制全部」按钮，点后把全部日志写入剪贴板并短暂显示「已复制」</td><td>ContentView.swift:238-266</td></tr>
             <tr><td>9</td><td>底部按键条高度 76pt（从 116pt 降低）、宽度比 左键:滚轮:右键 = 3:2:3、间距 10pt</td><td>ContentView.swift:334-378</td></tr>
             <tr><td>10</td><td>左键／右键：按住变蓝，松手复原</td><td>ContentView.swift:381-410</td></tr>
             <tr><td>11</td><td>滚轮键：上下拖动滚动（默认上滑 = 滚轮下滑）、双击按下中键、单击无动作</td><td>ContentView.swift:414-487</td></tr>
             <tr><td>12</td><td>设置：指针速度 0.4~3.5，默认 1.8×（连接后从这里调）</td><td>ContentView.swift:201-215</td></tr>
             <tr><td>13</td><td>设置：滚动速度 0.3~3.0，默认 1.0× / 自然滚动开关（默认关 = 上滑滚轮下滑，连接后从这里调）</td><td>ContentView.swift:217-232</td></tr>
             <tr><td>14</td><td>设置：按键说明五行（新增全键盘、组合键两行）</td><td>ContentView.swift:234-240</td></tr>
-            <tr><td>15</td><td>设置：切换设备分组入口已移到主界面「断开重连」，设置页只留说明 + 关于四行（不再回显整机名）+ 底部三步改名说明</td><td>ContentView.swift:415-424</td></tr>
+            <tr><td>15</td><td>设置：桥接（ESP32）分组移到最顶部；切换设备分组入口在主界面「断开连接」，设置页只留说明 + 关于四行 + 底部三步改名说明</td><td>ContentView.swift:317-361,446-454</td></tr>
             <tr><td>16</td><td>右侧可见滚轮条：触摸板右边一条竖直细长条（宽 13pt、compact 10pt，圆角 6 + 上下箭头），手指按住上下滑动即发 wheel；轻点/长按在条上不触发点击。边缘触发滚动已删除</td><td>TrackpadSurface.swift:102-131,198-240</td></tr>
             <tr><td>17</td><td>设置：「实验功能 · 全键盘与手势」分组（键鼠复合开关、三指上滑、三指左右滑、全键盘、输入报告字节数、风险与回退说明）</td><td>ContentView.swift:242-252</td></tr>
             <tr><td>18</td><td>已连接触控区顶部切换栏：「触控区」+ 蓝色主按钮「全键盘」；键盘未就绪时多一行橙色提示</td><td>ContentView.swift:292-331</td></tr>
@@ -427,9 +427,9 @@ body.shot .phone { margin:0; }
             <tr><td>27</td><td>键区再往上挪一点点：删掉工具条下方 24pt 空状态条，键区顶部间距 8pt → 2pt，小触控区顶部 6pt → 4pt；省下约 30pt 全部给小触控区，键盘页切页／粘滞时不再有垂直跳动</td><td>KeyboardView.swift:205-228<br>KeyboardView.swift:242-282<br>KeyboardView.swift:232-238</td></tr>
             <tr><td>28</td><td>引导页三张卡片统一显式通栏：状态卡片 / 指针与滚动 / 连接日志各加 maxWidth 无限宽约束；日志内层 VStack、ScrollView 也撑满。初始只有一行短日志时不再缩成窄卡片并居中</td><td>ContentView.swift:120-121<br>ContentView.swift:153<br>ContentView.swift:172-177</td></tr>
             <tr><td>29</td><td>全键盘页极简选词提示（单行、次级色）：以「下方小触控区移动指针点 iPad 顶部候选条」为主路径（BLE 复合键鼠外设的数字/空格选词在系统输入法下常不触发），备选 ←/→ + 空格/回车；键帽按住时长 90ms → 120ms 以兼容中文输入法组合态</td><td>KeyboardView.swift:241-252<br>HIDPeripheral.swift:579</td></tr>
-            <tr><td>30</td><td>换设备引导（设置说明）：「断开重连」在主界面右上角，点后拆 GATT 重播、8 秒暂缓旧设备抢连；连 Windows / Android 须先在 iPad「辅助触控 → 设备」里忽略本设备防自动抢连；Windows / Android 一律走 ESP32 硬件桥（手机连 PT-Bridge 热点、开桥接填 192.168.4.1、电脑蓝牙配对 PT-Pad，零安装）</td><td>ContentView.swift:424</td></tr>
+            <tr><td>30</td><td>换设备引导（设置说明）：「断开连接」在主界面右上角，点后拆 GATT + 停广播、不自动重播，点「开始广播」才重建；已移除拆链避让（会造成闪一下又断开）。连 Windows / Android 须先在 iPad「辅助触控 → 设备」里忽略本设备；Windows / Android 一律走 ESP32 硬件桥（PT-Bridge 热点、开桥接填 192.168.4.1、电脑蓝牙配对 PT-Pad，零安装）</td><td>ContentView.swift:454</td></tr>
             <tr><td>31</td><td>按键音：全键盘每次按键响一声机械键盘 click 音（打包的 keyclick.wav），底部左键 / 右键 / 滚轮键与触控区轻点同样有反馈音；设置页「按键音」分组可开关 + 调音量（0 静音）+ 试听；键盘页工具条加喇叭按钮，在 静音 / 25% / 50% / 100% 之间循环</td><td>KeyClickPlayer.swift<br>KeyboardView.swift:294-305,366<br>ContentView.swift:270-289</td></tr>
-            <tr><td>32</td><td>桥接（ESP32 硬件桥 · 电脑零安装）：开关 + 桥接端地址与端口输入 + 「保存地址」+「重新握手」；手机连 PT-Bridge 热点、地址默认 192.168.4.1，电脑系统蓝牙配对 PT-Pad 即可，无需安装任何软件；地址持久化，心跳自动重连。早期电脑端软件接收器方案已删除</td><td>ContentView.swift:334-363<br>BridgeTransport.swift:34-99<br>HIDPeripheral.swift:233-243</td></tr>
+            <tr><td>32</td><td>桥接（ESP32 硬件桥 · 电脑零安装）分组已移到设置页最顶部：开关 + 地址与端口输入 +「保存地址」+「重新握手」；手机连 PT-Bridge 热点、地址默认 192.168.4.1，电脑系统蓝牙配对 PT-Pad 即可，无需安装任何软件；地址持久化，心跳自动重连。早期电脑端软件接收器方案已删除</td><td>ContentView.swift:317-361<br>BridgeTransport.swift:34-99<br>HIDPeripheral.swift:233-243</td></tr>
             <tr><td>33</td><td>主键位 ↓ / ⌫ / ↑ 三键循环换位：下键移到控制行原退格键位，退格键移到 M 行末尾原上键位，上键移到导航行原下键位</td><td>KeyboardView.swift:148-176</td></tr>
             <tr><td>34</td><td>修复宏回放点击位置整体偏移：flush 时位移超 1 字节范围不再丢弃，余数留到下一帧续发（30ms 合并的大位移回放时不再被截断）</td><td>HIDPeripheral.swift:1418-1432</td></tr>
             <tr><td>35</td><td>宏面板上移到占屏幕 90%（presentationDetents fraction 0.90），顶边盖住「触控区 / 全键盘」切换栏，顶部导航条仍可见；仍可下拉关闭</td><td>ContentView.swift:106-114</td></tr>
@@ -450,9 +450,10 @@ body.shot .phone { margin:0; }
         <br><b>引导页卡片宽度</b>：SwiftUI 的 VStack 默认按最宽子视图定宽；连接日志初始只有一行短日志时
         会缩成窄卡片并居中，与上方两张卡片不对齐。现在三张卡片都显式撑满父宽度（预览里对应
         `.card` / `.diag` / `.logbox` 的 `width:100%`），日志内容区也铺满卡片；高度仍为 108pt。
-        <br><b>断开重连回到主界面</b>：从设置页移到右上角原「断开」位置。实测旧版「断开」会被系统立即自动回连、
-        「停止广播」也不起作用；现在点「断开重连」会拆掉当前 GATT 并重建重播，8 秒内暂缓旧设备抢连
-        （最多拒绝 8 次后放行），给新设备留出连接窗口。未连接时仍只保留「开始广播」（桥接模式为「连接桥接」）入口。
+        <br><b>断开连接回到主界面</b>：从设置页移到右上角原「断开」位置。v0.0.60 的「断开重连 + 8 秒避开」会反复拆 GATT，
+        界面闪一下又断开、谁都连不上；v0.0.61 改为点「断开连接」后干净断开（拆 GATT、停广播）、不自动重播，
+        右上角随即变成「开始广播」，点它才重建并广播，任何设备都能连。两种状态都常驻蓝牙图标，点它跳系统「设置 > 蓝牙」。
+        连接日志卡片标题行加「复制全部」，一键把全部日志写入剪贴板。设置页桥接（ESP32）分组移到最顶部。
         要彻底换设备仍须在旧设备上忽略本设备（iPad：设置 → 辅助功能 → 触控 → 辅助触控 → 设备 → 点键盘 → 忽略此设备，不在蓝牙列表里）。
         <br><b>三指上滑</b>：复合模式下发送键盘报告 Command+M 让 iPadOS 最小化当前程序 / 回桌面（App 保留后台不关闭），真机需三指同时
         上滑 80pt 以上。这是实验功能，iPad 可能把设备识别为键盘而拒绝接管整个设备；此时关掉设置里的
@@ -496,7 +497,7 @@ body.shot .phone { margin:0; }
     bridgeStatus: "桥接端未连接",
     keyboardPage: "letters", sticky: 0,
     displayName: "跟随 iPhone 整机名",
-    showDiag: false, annotate: false, dark: false
+    showDiag: false, annotate: false, dark: false, logsCopied: false
   };
   var s = Object.assign({}, DEFAULTS);
   // 支持 ?state=adv|connected|keyboard|settings|setup、?page=symbols 与 ?dark=1，
@@ -578,6 +579,11 @@ body.shot .phone { margin:0; }
     return "<svg viewBox=\"0 0 24 24\" width=\"14\" height=\"14\" fill=\"currentColor\"><path d=\"" + paths[idx] + "\"/></svg>";
   }
 
+  function btSVG() {
+    var d = "M17.71 7.71 12 13.41 6.29 7.71 4.88 9.12 12 16.24l7.12-7.12-1.41-1.41zM12 3 6.29 8.71l1.41 1.41L12 5.83l4.29 4.29 1.41-1.41L12 3zm0 16.17-4.29-4.29-1.41 1.41L12 21.24l5.71-5.71-1.41-1.41L12 19.17z";
+    return "<svg viewBox=\"0 0 24 24\" width=\"14\" height=\"14\" fill=\"currentColor\"><path d=\"" + d + "\"/></svg>";
+  }
+
   function navHTML() {
     var isSettings = s.screen === "settings";
     var conn = s.connected;
@@ -586,12 +592,13 @@ body.shot .phone { margin:0; }
       : "<button class=\"nav-btn\" data-act=\"settings\" data-code=\"ContentView.swift:41-50\" aria-label=\"设置\">" + gearSVG() + "</button>";
     var right = "";
     if (!isSettings) {
-      // 「断开重连」已从设置移回主界面原「断开」按钮位置；未连接只留开始入口。
+      // 「断开连接」干净断开、不自动重播；断开后出现「开始广播」。蓝牙图标一键跳系统蓝牙设置。
       right = (conn
-        ? "<span class=\"dotgreen\" data-code=\"ContentView.swift:69-91\"></span><span class=\"nav-sub\" data-code=\"ContentView.swift:69-91\">已连接</span>" +
-          "<button class=\"nav-btn border\" data-act=\"reconnect\" data-code=\"ContentView.swift:85-91\">断开重连</button>"
-        : "<button class=\"nav-btn border\" data-act=\"advertise\" data-code=\"ContentView.swift:95-108\">" +
-          (s.bridgeMode ? "连接桥接" : "开始广播") + "</button>");
+        ? "<span class=\"dotgreen\" data-code=\"ContentView.swift:92-106\"></span><span class=\"nav-sub\" data-code=\"ContentView.swift:92-106\">已连接</span>" +
+          "<button class=\"nav-btn border\" data-act=\"reconnect\" data-code=\"ContentView.swift:110-116\">断开连接</button>"
+        : "<button class=\"nav-btn border\" data-act=\"advertise\" data-code=\"ContentView.swift:120-133\">" +
+          (s.bridgeMode ? "连接桥接" : "开始广播") + "</button>") +
+        "<button class=\"nav-btn border\" data-act=\"openbt\" data-code=\"ContentView.swift:135-141\" aria-label=\"打开系统蓝牙设置\">" + btSVG() + "</button>";
     }
     var title = isSettings ? "设置" : (conn ? "PT-Pad" : "口袋触控板");
     return "<div class=\"nav-left\">" + left + "</div>" +
@@ -647,8 +654,10 @@ body.shot .phone { margin:0; }
         "<div class=\"slider-label\" style=\"margin-top:8px\"><span>滚动速度</span><span class=\"spacer\"></span><span class=\"slider-val\" id=\"valScroll\">" + s.scrollSensitivity.toFixed(1) + "×</span></div>" +
         "<input type=\"range\" id=\"scroll\" min=\"0.3\" max=\"3.0\" step=\"0.1\" value=\"" + s.scrollSensitivity + "\">" +
       "</div>" +
-      "<div class=\"card\" data-code=\"ContentView.swift:158-180\">" +
-        "<div class=\"sub\" style=\"font-weight:600;margin:0 0 6px\">连接日志</div>" +
+      "<div class=\"card\" data-code=\"ContentView.swift:238-266\">" +
+        "<div class=\"sub\" style=\"font-weight:600;margin:0 0 6px;display:flex;align-items:center\">连接日志" +
+          "<span style=\"flex:1\"></span>" +
+          "<button class=\"mini-btn\" data-act=\"copylogs\" data-code=\"ContentView.swift:32-37,252-263\">" + (s.logsCopied ? "已复制" : "复制全部") + "</button></div>" +
         "<div class=\"logbox\">" + logs.map(function (l) { return "<div>" + esc(l) + "</div>"; }).join("") + "</div>" +
       "</div>" +
       "<div class=\"footnote\" data-code=\"ContentView.swift:182-185\">请保持本 App 在前台、屏幕常亮。锁屏或切到后台后 iOS 会停止 BLE 广播。</div>" +
@@ -804,6 +813,21 @@ body.shot .phone { margin:0; }
 
   function settingsHTML() {
     return "<div class=\"scroll\"><div class=\"form\">" +
+      "<div class=\"sec-head\" data-code=\"ContentView.swift:334\">桥接（ESP32 硬件桥 · 电脑零安装）</div>" +
+      "<div class=\"group\" data-code=\"ContentView.swift:335-362\">" +
+        "<div class=\"form-row line\" data-code=\"ContentView.swift:337\"><span>启用桥接（WiFi 转发）</span><span class=\"spacer\"></span>" +
+          "<button class=\"toggle" + (s.bridgeMode ? " on" : "") + "\" data-act=\"bridge\" aria-label=\"启用桥接\"></button></div>" +
+        "<div class=\"form-row\" data-code=\"ContentView.swift:339-360\">" +
+          "<div class=\"slider-label\"><span>桥接端地址</span><span class=\"spacer\"></span>" +
+            "<input class=\"ip-input\" id=\"bridgeHost\" value=\"" + s.bridgeHost + "\" inputmode=\"decimal\" spellcheck=\"false\">" +
+            "<input class=\"ip-input port\" id=\"bridgePort\" value=\"" + s.bridgePort + "\" inputmode=\"numeric\" spellcheck=\"false\"></div>" +
+          "<div class=\"btn-row\" data-code=\"ContentView.swift:352-356\"><button class=\"mini-btn\" data-act=\"save-bridge\">保存地址</button>" +
+            "<button class=\"mini-btn\" data-act=\"rehello\">重新握手</button></div>" +
+        "</div>" +
+        row("当前状态", s.bridgeStatus) +
+        row("ESP32 热点", "PT-Bridge（无密码）") +
+      "</div>" +
+      "<div class=\"form-footer\" data-code=\"ContentView.swift:363\">iOS 的蓝牙外设无法设置 GAP Appearance，Windows 因此搜不到本机虚拟键鼠。开启桥接后本机不再广播，改为把输入通过 WiFi 发给 ESP32 硬件桥，由 ESP32 以标准蓝牙键鼠身份连接电脑，电脑端不用装任何软件。<br><br>【步骤】① ESP32 上电，手机连上它的 PT-Bridge 热点；② 上面地址保持默认 192.168.4.1，点「保存地址」再点右上角「连接桥接」；③ 电脑 / 平板打开系统蓝牙，搜索并配对 PT-Pad，配对一次以后自动连接。<br><br>电脑端唯一的硬件要求是自带蓝牙；配对一次后，以后 ESP32 一上电就会自动连上。</div>" +
       "<div class=\"sec-head\" data-code=\"ContentView.swift:201\">指针</div>" +
       "<div class=\"group\">" +
         "<div class=\"form-row\" data-code=\"ContentView.swift:202-210\">" +
@@ -851,29 +875,14 @@ body.shot .phone { margin:0; }
         row("输入报告", s.compositeDevice ? "12 字节（键盘 8 + 鼠标 4）" : "4 字节（纯鼠标）") +
       "</div>" +
       "<div class=\"form-footer\" data-code=\"ContentView.swift:250-252\">开启后本设备同时声明为鼠标和键盘，全键盘、三指手势都依赖这个开关。三指上滑最小化当前程序 / 回桌面（Command+M，App 保留后台不关闭），三指左右滑切换 App（右滑 Cmd+Tab 下一个 / 左滑 Cmd+Shift+Tab 上一个）——iPadOS 原生多指手势只对妙控板 2 私有协议开放，本 App 是把三指手势转成键盘快捷键的模拟实现。切换开关会自动断开并移除 GATT 服务：请按「iPad 设置 → 辅助功能 → 触控 → 辅助触控 → 设备 → 点键盘 → 忽略此设备」忽略，回到主页面点「开始广播」，再重新配对。若指针或点击失效，关掉本开关、同样忽略设备重新配对即可回到纯鼠标，不需要重装 App。Command 快捷键只对 iPadOS 有效。</div>" +
-      "<div class=\"sec-head\" data-code=\"ContentView.swift:334\">桥接（ESP32 硬件桥 · 电脑零安装）</div>" +
-      "<div class=\"group\" data-code=\"ContentView.swift:335-362\">" +
-        "<div class=\"form-row line\" data-code=\"ContentView.swift:337\"><span>启用桥接（WiFi 转发）</span><span class=\"spacer\"></span>" +
-          "<button class=\"toggle" + (s.bridgeMode ? " on" : "") + "\" data-act=\"bridge\" aria-label=\"启用桥接\"></button></div>" +
-        "<div class=\"form-row\" data-code=\"ContentView.swift:339-360\">" +
-          "<div class=\"slider-label\"><span>桥接端地址</span><span class=\"spacer\"></span>" +
-            "<input class=\"ip-input\" id=\"bridgeHost\" value=\"" + s.bridgeHost + "\" inputmode=\"decimal\" spellcheck=\"false\">" +
-            "<input class=\"ip-input port\" id=\"bridgePort\" value=\"" + s.bridgePort + "\" inputmode=\"numeric\" spellcheck=\"false\"></div>" +
-          "<div class=\"btn-row\" data-code=\"ContentView.swift:352-356\"><button class=\"mini-btn\" data-act=\"save-bridge\">保存地址</button>" +
-            "<button class=\"mini-btn\" data-act=\"rehello\">重新握手</button></div>" +
-        "</div>" +
-        row("当前状态", s.bridgeStatus) +
-        row("ESP32 热点", "PT-Bridge（无密码）") +
-      "</div>" +
-      "<div class=\"form-footer\" data-code=\"ContentView.swift:363\">iOS 的蓝牙外设无法设置 GAP Appearance，Windows 因此搜不到本机虚拟键鼠。开启桥接后本机不再广播，改为把输入通过 WiFi 发给 ESP32 硬件桥，由 ESP32 以标准蓝牙键鼠身份连接电脑，电脑端不用装任何软件。<br><br>【步骤】① ESP32 上电，手机连上它的 PT-Bridge 热点；② 上面地址保持默认 192.168.4.1，点「保存地址」再点右上角「连接桥接」；③ 电脑 / 平板打开系统蓝牙，搜索并配对 PT-Pad，配对一次以后自动连接。<br><br>电脑端唯一的硬件要求是自带蓝牙；配对一次后，以后 ESP32 一上电就会自动连上。</div>" +
-      "<div class=\"sec-head\" data-code=\"ContentView.swift:415\">切换设备</div>" +
-      "<div class=\"group\" data-code=\"ContentView.swift:415-424\">" +
-        row("断开重连入口", "主界面右上角（原「断开」位置）") +
-        row("iPad 自动重连", "8 秒窗口内暂缓旧设备抢连") +
+      "<div class=\"sec-head\" data-code=\"ContentView.swift:446\">切换设备</div>" +
+      "<div class=\"group\" data-code=\"ContentView.swift:446-454\">" +
+        row("断开连接入口", "主界面右上角（原「断开」位置）") +
+        row("断开行为", "拆 GATT + 停广播，不自动重播") +
         row("切到 Windows", "iPad 忽略本设备 → 配对 PT-Pad") +
         row("切到 Android", "同样先忽略本设备再配对") +
       "</div>" +
-      "<div class=\"form-footer\" data-code=\"ContentView.swift:424\">「断开并重新广播」已移到主界面右上角。点它会拆掉当前 GATT 并重新广播，8 秒内暂缓旧设备抢连，给新设备留出配对窗口；超时或拒绝 8 次后放行任何设备。\n\n蓝牙 HID 的配对信息存在主机侧：本 App 作为外设无法远程解除 iPad 的配对。切到 Windows / Android 前，请先按「iPad 设置 → 辅助功能 → 触控 → 辅助触控 → 设备 → 点键盘 → 忽略此设备」忽略，否则它会因已配对自动抢连。连电脑走 ESP32 硬件桥：手机连 PT-Bridge 热点，开桥接填 192.168.4.1，点「连接桥接」后到电脑系统蓝牙配对 PT-Pad，电脑端零安装。</div>" +
+      "<div class=\"form-footer\" data-code=\"ContentView.swift:454\">「断开连接」在主界面右上角，点它干净断开（拆 GATT、停广播），右上角随即变成「开始广播」，点它才重新广播；旁边的蓝牙图标一键跳系统蓝牙设置。已彻底移除「避开上次设备 / 拆链避让」——它会导致界面闪一下又断开、谁都连不上。\n\n蓝牙 HID 的配对信息存在主机侧：本 App 作为外设无法远程解除 iPad 的配对。切到 Windows / Android 前，请先按「iPad 设置 → 辅助功能 → 触控 → 辅助触控 → 设备 → 点键盘 → 忽略此设备」忽略，否则它会因已配对自动抢连。连电脑走 ESP32 硬件桥：手机连 PT-Bridge 热点，开桥接填 192.168.4.1，点「连接桥接」后到电脑系统蓝牙配对 PT-Pad，电脑端零安装。</div>" +
       "<div class=\"sec-head\" data-code=\"ContentView.swift:266\">关于</div>" +
       "<div class=\"group\" data-code=\"ContentView.swift:254-261\">" +
         row("广播名称", "PT-Pad") +
@@ -961,14 +970,19 @@ body.shot .phone { margin:0; }
     render();
   }
   function reconnect() {
-    // 主界面「断开重连」：拆掉当前 GATT 重播，8 秒内暂缓旧设备抢连。
-    s.connected = false; s.subscribers = 0; s.advertising = true;
-    s.statusText = "已断开旧设备 · 等待新设备";
+    // 主界面「断开连接」：干净断开，不自动重播、无避让；点「开始广播」才重建。
+    s.connected = false; s.subscribers = 0; s.advertising = false;
+    s.statusText = "已断开连接";
     if (s.screen === "connected" || s.screen === "keyboard") s.screen = "setup";
     s.sticky = 0;
-    log("断开并重新广播：拆除 GATT 服务 → 重建 → 重新广播");
-    log("8 秒内旧 iPad 抢连会被暂缓，给新设备留出连接窗口；超时后任何设备均可连接");
+    log("已断开：拆除 GATT 服务 → 停止广播（不自动重播）");
+    log("点右上角「开始广播」即可重新广播，任何设备都能连接");
     render();
+  }
+  function copyLogs() {
+    s.logsCopied = true; render();
+    log("已复制全部连接日志到剪贴板");
+    setTimeout(function () { s.logsCopied = false; render(); }, 1500);
   }
   function togglePair() {
     if (s.connected) {
@@ -1031,6 +1045,8 @@ body.shot .phone { margin:0; }
     else if (act === "back") { setScreen(s.prevScreen); log("从设置返回 " + s.prevScreen); }
     else if (act === "advertise") { toggleAdvertise(); }
     else if (act === "reconnect") { reconnect(); }
+    else if (act === "openbt") { log("打开系统「设置 > 蓝牙」"); }
+    else if (act === "copylogs") { copyLogs(); }
     else if (act === "vol") {
       var lv = [0, 0.25, 0.5, 1.0];
       var cur = s.keyClickEnabled ? s.keyClickVolume : 0;

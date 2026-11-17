@@ -43,13 +43,14 @@ tree = gh("POST", "/git/trees", {
 print("tree =", tree["sha"])
 
 msg = json.dumps(
-    "feat: 竖条收窄 + 宏面板上移 + 宏编辑全面可改 + 断开重连回主界面（v0.0.60）\n\n"
-    "用户实测反馈：右侧竖条还是太宽、宏面板太靠下、宏编辑页要能改坐标/替换/插入动作、断开并重新广播要移回主界面原断开位置、断开好像不起作用。\n"
-    "- 右侧滚轮竖条宽度减半：26pt→13pt（compact 20→10），圆角 13→6、箭头图标同步缩小；命中范围仍外扩 10pt。\n"
-    "- 宏面板 presentationDetents fraction 0.80→0.90，顶边盖住「触控区/全键盘」切换栏，导航条仍露出。\n"
-    "- 重写 MacroView 宏编辑器：每个动作可改类型（移动/滚轮/按键/按下/抬起/点击）与参数（dx/dy、绝对到达坐标换算、滚轮量、键位+修饰键、鼠标键+连击次数），「插」在中间插入、「改」编辑、左滑删除；本地副本点完成才回写。\n"
-    "- 「断开并重新广播」从设置页移回右上角原断开位置（按钮名「断开重连」）；selectNewDevice 拆 GATT 重建重播（桥接模式断 UDP 重握手），新增 8 秒限时避开窗口（旧设备抢连则拆链重播、最多 8 次，超时放行），解决断开被自动回连抵消的问题；applyStartupMigration 清 avoidUntil。\n"
-    "- TrackpadSurface/ContentView/HIDPeripheral/MacroView + preview/README 同步（JS 语法已校验）。",
+    "fix: 修复断开后开始广播闪一下 + 蓝牙设置入口 + 复制日志 + 桥接置顶（v0.0.61）\n\n"
+    "用户实测反馈：点断开连接后再点开始广播闪一下没用；要在开始广播右边加蓝牙图标跳系统蓝牙设置；连接日志加复制全部按钮；设置里桥接 ESP32 移到顶部。\n"
+    "- 根因是 v0.0.60 的 8 秒避开窗口：断开后自动重播，旧 iPad 一回连就在 didSubscribeTo 里被拆链重播，反复重建 GATT 导致界面闪一下又断开、谁都连不上。\n"
+    "- 彻底移除避让机制：删 avoidCentralID/avoidUntil/avoidRejectCount 字段、迁移清零、订阅拆链分支；selectNewDevice 改为只干净断开（拆 GATT+停广播、桥接断 UDP），不自动 start()；断开后右上角变「开始广播」，点它才重建广播。\n"
+    "- ContentView 工具栏加蓝牙图标按钮（已连接/未连接常驻），点它跳 App-Prefs:root=Bluetooth，失败回退系统设置页。\n"
+    "- 连接日志卡片标题行加「复制全部」，把 hid.logLines 拼成整段写入剪贴板，短暂显示「已复制」。\n"
+    "- 设置页桥接（ESP32）Section 从实验功能之后移到 Form 最顶部。\n"
+    "- HIDPeripheral/ContentView + preview/README 同步（JS 语法已校验）。",
     ensure_ascii=False
 )
 

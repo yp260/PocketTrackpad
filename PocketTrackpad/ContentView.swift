@@ -9,9 +9,33 @@ struct ContentView: View {
     @State private var showMacros = false
     /// true = 全键盘，false = 触控板。只在已连接时生效，断开自动回到触控板。
     @State private var showKeyboard = false
+    /// 连接日志「复制全部」后的短暂反馈。
+    @State private var logsCopied = false
 
     /// 主机订阅了 Input Report（BLE），或 ESP32 硬件桥已连上，都算真正连上。
     private var connected: Bool { hid.isLinkActive }
+
+    /// 跳到系统「设置 > 蓝牙」。App-Prefs 是私有 scheme，App Store 审核会拒，
+    /// 但本 App 为侧载不上架，可直接用；iOS 版本不支持时回退到本 App 的系统设置页。
+    private func openBluetoothSettings() {
+        if let url = URL(string: "App-Prefs:root=Bluetooth") {
+            UIApplication.shared.open(url, options: [:]) { success in
+                if !success, let fallback = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(fallback, options: [:], completionHandler: nil)
+                }
+            }
+        }
+    }
+
+    /// 把全部连接日志（内存里最多 80 行）复制到剪贴板，供用户粘贴发回排障。
+    private func copyAllLogs() {
+        let text = hid.logLines.joined(separator: "\n")
+        UIPasteboard.general.string = text
+        logsCopied = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+            self?.logsCopied = false
+        }
+    }
 
     var body: some View {
         NavigationStack {
@@ -80,15 +104,16 @@ struct ContentView: View {
                                 .foregroundStyle(.secondary)
                                 .lineLimit(1)
                         }
-                        // 「断开并重新广播」从设置页移回主界面，占据原「断开」按钮位置。
-                        // 拆掉当前 GATT 后重播，并在短时间内暂缓旧设备抢连，给新设备留窗口。
-                        Button("断开重连") {
+                        // 「断开连接」从设置页移回主界面，占据原「断开」按钮位置。
+                        // 只干净地断开（拆 GATT、停广播），不再自动重播，也不再拆链避让；
+                        // 断开后右上角变成「开始广播」，用户明确点它才重建并广播。
+                        Button("断开连接") {
                             hid.selectNewDevice()
                         }
                         .font(.caption2)
                         .buttonStyle(.bordered)
                         .controlSize(.mini)
-                        .accessibilityLabel("断开并重新广播")
+                        .accessibilityLabel("断开当前连接")
                     } else {
                         // 只保留「开始 / 连接」入口。断开与停止广播实测会被系统自动回连 /
                         // 自动恢复广播抵消，没有实际意义，故从工具栏移除。
@@ -107,6 +132,13 @@ struct ContentView: View {
                             .controlSize(.mini)
                         }
                     }
+                    // 蓝牙图标：一键跳系统「设置 > 蓝牙」，方便直接配对 / 忽略设备。
+                    Button { openBluetoothSettings() } label: {
+                        Image(systemName: "bluetooth")
+                            .font(.footnote)
+                    }
+                    .controlSize(.mini)
+                    .accessibilityLabel("打开系统蓝牙设置")
                 }
             }
             .navigationDestination(isPresented: $showSettings) {
@@ -217,9 +249,20 @@ struct ContentView: View {
 
                 // 连接日志：顶部放实时诊断行，方便一眼看出「连上却动不了」卡在哪。
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("连接日志 · 连接诊断")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
+                    HStack {
+                        Text("连接日志 · 连接诊断")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Button { copyAllLogs() } label: {
+                            Label(logsCopied ? "已复制" : "复制全部",
+                                  systemImage: logsCopied ? "checkmark" : "doc.on.doc")
+                                .font(.caption2)
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.mini)
+                        .accessibilityLabel("复制全部连接日志")
+                    }
                     Text(hid.diagnosticText)
                         .font(.system(size: 10, design: .monospaced))
                         .foregroundStyle(.primary)
@@ -271,6 +314,52 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
+            Section {
+                Toggle("启用桥接（WiFi 转发）", isOn: $hid.bridgeMode)
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("桥接端地址")
+                        .font(.subheadline)
+                    HStack(spacing: 8) {
+                        TextField("192.168.1.100", text: $bridgeHost)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .keyboardType(.numbersAndPunctuation)
+                            .multilineTextAlignment(.trailing)
+                            .frame(maxWidth: .infinity)
+                            .onSubmit { applyBridgeTarget() }
+                        TextField("5000", text: $bridgePort)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .keyboardType(.numberPad)
+                            .multilineTextAlignment(.trailing)
+                            .frame(width: 68)
+                            .onSubmit { applyBridgeTarget() }
+                    }
+                    Button("保存地址", action: applyBridgeTarget)
+                        .font(.caption)
+                        .buttonStyle(.bordered)
+                        .controlSize(.mini)
+
+                    Button {
+                        hid.resendBridgeHello()
+                    } label: {
+                        Label("重新握手", systemImage: "arrow.triangle.2.circlepath")
+                    }
+                    .font(.caption)
+                    .buttonStyle(.bordered)
+                    .controlSize(.mini)
+                }
+
+                LabeledRow(title: "当前状态", detail: hid.bridge.statusText)
+                LabeledRow(title: "ESP32 热点", detail: "PT-Bridge（无密码）")
+            } header: {
+                Text("桥接（ESP32 硬件桥 · 电脑零安装）")
+            } footer: {
+                Text("iOS 的蓝牙外设无法设置 GAP Appearance，Windows 因此很难直接搜到本机虚拟键鼠。开启桥接后本机不再广播，改为把输入通过 WiFi 发给 ESP32，由 ESP32 以标准蓝牙键鼠身份连接电脑，电脑端不用装任何软件。\n\n【步骤】① ESP32 上电，手机连上它的 PT-Bridge 热点；② 上面地址保持默认 192.168.4.1，点「保存地址」再点右上角「连接桥接」；③ 电脑 / 平板打开系统蓝牙，搜索并配对 PT-Pad，配对一次以后自动连接。\n\n电脑端唯一的硬件要求是自带蓝牙；配对一次后，以后 ESP32 一上电就会自动连上。")
+                    .font(.caption)
+            }
+
             Section("指针") {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {
@@ -368,52 +457,6 @@ struct SettingsView: View {
             }
 
             Section {
-                Toggle("启用桥接（WiFi 转发）", isOn: $hid.bridgeMode)
-
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("桥接端地址")
-                        .font(.subheadline)
-                    HStack(spacing: 8) {
-                        TextField("192.168.1.100", text: $bridgeHost)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
-                            .keyboardType(.numbersAndPunctuation)
-                            .multilineTextAlignment(.trailing)
-                            .frame(maxWidth: .infinity)
-                            .onSubmit { applyBridgeTarget() }
-                        TextField("5000", text: $bridgePort)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
-                            .keyboardType(.numberPad)
-                            .multilineTextAlignment(.trailing)
-                            .frame(width: 68)
-                            .onSubmit { applyBridgeTarget() }
-                    }
-                    Button("保存地址", action: applyBridgeTarget)
-                        .font(.caption)
-                        .buttonStyle(.bordered)
-                        .controlSize(.mini)
-
-                    Button {
-                        hid.resendBridgeHello()
-                    } label: {
-                        Label("重新握手", systemImage: "arrow.triangle.2.circlepath")
-                    }
-                    .font(.caption)
-                    .buttonStyle(.bordered)
-                    .controlSize(.mini)
-                }
-
-                LabeledRow(title: "当前状态", detail: hid.bridge.statusText)
-                LabeledRow(title: "ESP32 热点", detail: "PT-Bridge（无密码）")
-            } header: {
-                Text("桥接（ESP32 硬件桥 · 电脑零安装）")
-            } footer: {
-                Text("iOS 的蓝牙外设无法设置 GAP Appearance，Windows 因此很难直接搜到本机虚拟键鼠。开启桥接后本机不再广播，改为把输入通过 WiFi 发给 ESP32，由 ESP32 以标准蓝牙键鼠身份连接电脑，电脑端不用装任何软件。\n\n【步骤】① ESP32 上电，手机连上它的 PT-Bridge 热点；② 上面地址保持默认 192.168.4.1，点「保存地址」再点右上角「连接桥接」；③ 电脑 / 平板打开系统蓝牙，搜索并配对 PT-Pad，配对一次以后自动连接。\n\n电脑端唯一的硬件要求是自带蓝牙；配对一次后，以后 ESP32 一上电就会自动连上。")
-                    .font(.caption)
-            }
-
-            Section {
                 LabeledRow(title: "广播名称", detail: "PT-Pad")
                 LabeledRow(title: "iPad 显示名称", detail: "跟随 iPhone 整机名")
                 LabeledRow(title: "连接方式", detail: "蓝牙 HID over GATT")
@@ -421,7 +464,7 @@ struct SettingsView: View {
             } header: {
                 Text("关于")
             } footer: {
-                Text("【为什么 iPad 蓝牙列表里找不到本设备？】本 App 让 iPhone 以「蓝牙 HID 键鼠」身份连接 iPad。iPadOS 把 HID 键鼠当系统输入设备，归到「辅助触控」框架管理，不列在「设置 → 蓝牙 → 我的设备」里——这是系统行为，不是没连上。能正常使用恰好证明连接是好的。\n\n【怎么断开 / 忽略？】① 最快：点主界面右上角「断开重连」（原「断开」按钮位置）——拆掉当前连接并重新广播，8 秒内暂缓旧设备抢连，给新设备留出配对窗口。② 彻底忽略 / 换设备 / 刷新配对缓存：\(HIDSpec.ipadIgnorePath)。注意不在蓝牙列表里，那里找不到。③ 若还想清得更干净：最后再去做 iPad 设置 → 通用 → 传输或还原 iPad → 还原 → 还原网络设置（会同时清掉 WiFi 密码，需重输）。\n\n【为什么显示 iPhone 名而不是 PT-Pad？】iPad 读的是对端 GAP 整机名，App 无权改写；广播名 PT-Pad 只在搜索时短暂出现。要让它好认，可把 iPhone 名称改成「按键精灵」，再到「辅助触控 → 设备」里忽略旧配对重连一次。")
+                Text("【为什么 iPad 蓝牙列表里找不到本设备？】本 App 让 iPhone 以「蓝牙 HID 键鼠」身份连接 iPad。iPadOS 把 HID 键鼠当系统输入设备，归到「辅助触控」框架管理，不列在「设置 → 蓝牙 → 我的设备」里——这是系统行为，不是没连上。能正常使用恰好证明连接是好的。\n\n【怎么断开 / 忽略？】① 最快：点主界面右上角「断开连接」——干净地拆掉当前连接并停广播，右上角随即变成「开始广播」，点它才重新广播；旁边的蓝牙图标可一键跳系统蓝牙设置。② 彻底忽略 / 换设备 / 刷新配对缓存：\(HIDSpec.ipadIgnorePath)。注意不在蓝牙列表里，那里找不到。③ 若还想清得更干净：最后再去做 iPad 设置 → 通用 → 传输或还原 iPad → 还原 → 还原网络设置（会同时清掉 WiFi 密码，需重输）。\n\n【为什么显示 iPhone 名而不是 PT-Pad？】iPad 读的是对端 GAP 整机名，App 无权改写；广播名 PT-Pad 只在搜索时短暂出现。要让它好认，可把 iPhone 名称改成「按键精灵」，再到「辅助触控 → 设备」里忽略旧配对重连一次。")
                     .font(.caption)
             }
         }
