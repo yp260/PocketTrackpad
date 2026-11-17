@@ -32,8 +32,8 @@ struct ContentView: View {
         let text = hid.logLines.joined(separator: "\n")
         UIPasteboard.general.string = text
         logsCopied = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
-            self?.logsCopied = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            self.logsCopied = false
         }
     }
 
