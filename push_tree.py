@@ -42,7 +42,7 @@ tree = gh("POST", "/git/trees", {
 })
 print("tree =", tree["sha"])
 
-msg = "fix: 修正 ESP32 合并镜像的文件名与 esptool 命令\n\n上一轮 CI 失败：PlatformIO 生成的分区表文件名是 partitions.bin 而非 partition-table.bin；\nesptool 新版命令 merge_bin 已弃用，改 merge-bin。\nesp32-build.yml 与 esp32/README.md 同步修正两处文件名、一处命令名。"
+msg = "docs: 纠正硬件说明——模组为 ESP32-S3-WROOM-1-N16R8（16MB Flash + 8MB PSRAM）\n\n用户看商品页纠正：模组实为 N16R8，非此前误判的「无 PSRAM」版。\nesp32/README.md：硬件说明改为 N16R8，并补充 PSRAM 兼容结论——本固件不启用 PSRAM\n（按 4MB/DIO 编译，16MB Flash 向下兼容、DIO 最保守），直接烧录正常；列出将来启用 PSRAM\n所需的 qio_opi/16MB 分区表配置，但说明本项目无收益不建议开。\n固件二进制内容不变，仅文档纠正。"
 
 commit = gh("POST", "/git/commits", {
     "message": msg, "tree": tree["sha"], "parents": [BASE]

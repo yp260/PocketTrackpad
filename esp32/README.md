@@ -9,8 +9,12 @@ Windows / Android / iPad。解决两个 iOS 蓝牙外设的硬限制：
 
 ## 硬件
 
-- **ESP32-S3-DevKitC-1**（原厂，ESP32-S3-WROOM-1 模组，512KB SRAM，无 PSRAM，双 USB 口）。
+- **ESP32-S3-DevKitC-1**（原厂，模组为 ESP32-S3-WROOM-1-N16R8：16MB Flash + 8MB 八线 PSRAM，双 USB 口）。
   其他带 WiFi + BLE 的 ESP32（C3 / 普通 ESP32）也能用，换板只需改 `platformio.ini` 的 `board`。
+  本固件不启用 PSRAM（RAM 占用仅 16%，用不到），按默认 4MB/DIO 编译；16MB Flash 向下兼容，
+  直接烧录即可正常启动。若将来要用到 PSRAM，需在 `platformio.ini` 配 `board_build.arduino.memory_type=qio_opi`
+  + `board_upload.flash_size=16MB` + `board_build.partitions=default_16MB.csv` + `-DBOARD_HAS_PSRAM`，
+  但本项目没有收益，不建议开启（PSRAM 模式配错反而会导致启动失败）。
 - 一根 USB 数据线：接板子**底部左边那个 USB-UART 口**（串口日志走 UART0，TX=GPIO43 / RX=GPIO44）。
   右边那个是原生 USB-OTG，本固件不用。
 
