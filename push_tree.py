@@ -42,7 +42,7 @@ tree = gh("POST", "/git/trees", {
 })
 print("tree =", tree["sha"])
 
-msg = "feat: ESP32 硬件桥固件适配 ESP32-S3-DevKitC-1\n\n用户买了原厂 ESP32-S3-DevKitC-1（ESP32-S3-WROOM-1 模组，512KB SRAM 无 PSRAM，双 USB 口），把硬件桥固件从 ESP32-C3 迁到 S3。\n- platformio.ini：default_env / env 改为 esp32-s3-devkitc-1，board=esp32-s3-devkitc-1；串口走 UART0（TX=GPIO43/RX=GPIO44），不加 USB CDC flag；NimBLE-Arduino 锁 1.4.3（1.4.0 起支持 S3）。\n- esp32-build.yml：artifact 路径 esp32-c3 -> esp32-s3-devkitc-1。\n- main.cpp：头部注释去 C3 字样，代码逻辑通用无需改。\n- esp32/README.md：硬件说明、esptool --chip esp32s3、双 USB 口注意（用左边 USB-UART 口）、App 开关名统一为「桥接（WiFi 转发）」。\nApp 端无需改动，UDP 协议与 12 字节报告布局不变。"
+msg = "fix: ESP32 固件产物增加一键烧录合并镜像\n\n上一轮只上传 firmware.bin，直接用 esptool 烧到 0x0 缺 bootloader / 分区表，板子起不来。\nesp32-build.yml：装 esptool，用 merge_bin 把 bootloader(0x0) + partition-table(0x8000) + firmware(0x10000) 合成\nPT-Bridge-ESP32S3-merged.bin，artifact 同时上传合并镜像与三个原始文件。\nesp32/README.md：烧录说明改为合并镜像一条命令（write_flash 0x0 merged.bin），并给出三段式备选与串口号说明。"
 
 commit = gh("POST", "/git/commits", {
     "message": msg, "tree": tree["sha"], "parents": [BASE]
