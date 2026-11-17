@@ -110,8 +110,8 @@ struct TrackpadSurface: UIViewRepresentable {
     }
 
     private static func hintText(composite: Bool) -> String {
-        let base = "单指移动指针  ·  轻点左键  ·  双击左键\n双指按住拖动 = 拖拽（图标/选中文字）\n单指长按右键  ·  滚动用底部滚轮键"
-        return composite ? base + "\n三指上滑回桌面  ·  三指左右滑切 App" : base
+        let base = "单指移动指针  ·  轻点左键  ·  双击左键\n双指按住拖动 = 拖拽（图标/选中文字）\n单指长按右键  ·  底部滚轮键 / 左右边缘上下滑 = 滚动"
+        return composite ? base + "\n三指上滑最小化 / 回桌面  ·  三指左右滑切 App" : base
     }
 
     private static func applyStyle(_ view: UIView, edgeToEdge: Bool, compact: Bool) {
@@ -131,10 +131,17 @@ struct TrackpadSurface: UIViewRepresentable {
         private var lastMove: CGPoint = .zero
         private var residualX: CGFloat = 0
         private var residualY: CGFloat = 0
+        /// 边缘滚动：-1=手势起点在左边缘（滚屏幕左侧），1=右边缘，0=普通指针移动。
+        private var edgeScrollSide = 0
+        private var edgeScrollResidual: CGFloat = 0
         private var lastDrag: CGPoint = .zero
         private var residualDragX: CGFloat = 0
         private var residualDragY: CGFloat = 0
-        private var dragActive = false
+        /// 双指是否已越过位移阈值、真正按下左键进入拖动。轻点/微动保持 false，
+        /// 避免在 iPad 主屏 app 图标上轻点就被按住拖动。
+        private var dragArmed = false
+        /// 双指拖动触发阈值（pt）：累计位移超过它才 setButton 按下左键。
+        private static let dragThreshold: CGFloat = 8
         private var didHideHint = false
         private var homeStartY: CGFloat = 0
         private var homeFired = false
@@ -156,18 +163,53 @@ struct TrackpadSurface: UIViewRepresentable {
             UIView.animate(withDuration: 0.25) { self.hint?.alpha = 0 }
         }
 
+        /// 触摸板边缘窄条宽度（pt）：单指手势起点落在这里即进入边缘滚动。
+        /// 取视图宽的 12%，最小 28、最大 56pt，避免小触控区里边缘吞掉正常移动区。
+        private func edgeWidth(for view: UIView?) -> CGFloat {
+            let w = view?.bounds.width ?? 320
+            return min(56, max(28, w * 0.12))
+        }
+
+        /// 单指平移：中间区域移动指针；起点在左/右边缘窄条则改为「先推光标到屏幕对应侧，
+        /// 再上下滑动发滚轮」——iPad 分屏时左边缘滚左侧、右边缘滚右侧。
+        /// 边缘模式只发 wheel、不发指针位移，避免滚动时把光标带离目标侧。
         @objc func handleMove(_ g: UIPanGestureRecognizer) {
             switch g.state {
             case .began:
                 lastMove = .zero
                 residualX = 0
                 residualY = 0
+                edgeScrollResidual = 0
                 hideHint()
+                let startX = g.location(in: g.view).x
+                let ew = edgeWidth(for: g.view)
+                let viewW = g.view?.bounds.width ?? 0
+                if startX <= ew {
+                    edgeScrollSide = -1
+                    hid.movePointerToSide(left: true)
+                } else if startX >= viewW - ew {
+                    edgeScrollSide = 1
+                    hid.movePointerToSide(left: false)
+                } else {
+                    edgeScrollSide = 0
+                }
             case .changed:
                 let t = g.translation(in: g.view)
                 let stepX = t.x - lastMove.x
                 let stepY = t.y - lastMove.y
                 lastMove = t
+
+                if edgeScrollSide != 0 {
+                    // 边缘滚动：按纵向位移发 wheel，方向约定与底部滚轮键一致
+                    // （默认上滑=滚轮下滑，自然滚动开关可反转）。
+                    let scale = CGFloat(hid.scrollSensitivity) / 4.0
+                    let direction: CGFloat = hid.naturalScrolling ? -1 : 1
+                    let raw = stepY * scale * direction + edgeScrollResidual
+                    let d = Int(raw.rounded(.toNearestOrAwayFromZero))
+                    edgeScrollResidual = raw - CGFloat(d)
+                    if d != 0 { hid.enqueue(wheel: d) }
+                    return
+                }
 
                 let s = CGFloat(hid.sensitivity)
                 let rawX = stepX * s + residualX
@@ -179,25 +221,41 @@ struct TrackpadSurface: UIViewRepresentable {
                 hid.enqueue(dx: ix, dy: iy)
             default:
                 lastMove = .zero
+                edgeScrollSide = 0
             }
         }
 
-        /// 双指按住拖动 = 按住左键并移动指针（拖拽 App 图标 / 选中文字等）。
-        /// began 按下左键、changed 发指针位移（跟手方向）、抬手/取消松开左键。
-        /// 滚动已移到底部滚轮键，双指不再发 wheel。
+        /// 双指按住拖动 = 按住左键并移动指针（拖拽选中文字 / 文件等）。
+        /// 防误触：began 不再立即按下左键，累计位移超过阈值（8pt）才真正进入拖动；
+        /// 轻点或微小移动不会按住左键，避免在 iPad 主屏 app 图标上误触发拖动。
+        /// 滚动已移到底部滚轮键与左右边缘，双指不再发 wheel。
         @objc func handleDrag(_ g: UIPanGestureRecognizer) {
             switch g.state {
             case .began:
                 lastDrag = .zero
                 residualDragX = 0
                 residualDragY = 0
-                dragActive = true
+                dragArmed = false
                 hideHint()
-                hid.setButton(0x01, pressed: true)
-                KeyClickPlayer.shared.play()
-                HapticPlayer.shared.play()
             case .changed:
                 let t = g.translation(in: g.view)
+
+                // 尚未越过阈值：只累计位移，不按下左键、不发位移。
+                // 用「距手势起点的总位移」判断，跳过阈值之前的这段位移（不补发），
+                // 触发后从当前位置开始跟手，避免阈值前微动把 app 图标拖动。
+                if !dragArmed {
+                    if hypot(t.x, t.y) >= Self.dragThreshold {
+                        dragArmed = true
+                        lastDrag = t
+                        residualDragX = 0
+                        residualDragY = 0
+                        hid.setButton(0x01, pressed: true)
+                        KeyClickPlayer.shared.play()
+                        HapticPlayer.shared.play()
+                    }
+                    return
+                }
+
                 let stepX = t.x - lastDrag.x
                 let stepY = t.y - lastDrag.y
                 lastDrag = t
@@ -213,9 +271,9 @@ struct TrackpadSurface: UIViewRepresentable {
                 if ix != 0 || iy != 0 { hid.enqueue(dx: ix, dy: iy) }
             default:
                 lastDrag = .zero
-                if dragActive {
+                if dragArmed {
                     hid.setButton(0x01, pressed: false)
-                    dragActive = false
+                    dragArmed = false
                 }
             }
         }
@@ -242,7 +300,7 @@ struct TrackpadSurface: UIViewRepresentable {
             HapticPlayer.shared.play()
         }
 
-        /// 三指上滑 80pt：发送 Command+H（回主屏幕）。
+        /// 三指上滑 80pt：发送 Command+M（最小化当前程序 / 回桌面）。
         /// homeFired 保证一次手势只触发一次，抬手后复位。
         /// 横向占优时交给 handleAppSwipe，避免同一次左右滑误触发回桌面。
         @objc func handleHomeSwipe(_ g: UIPanGestureRecognizer) {

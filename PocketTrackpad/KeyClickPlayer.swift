@@ -19,7 +19,9 @@ final class KeyClickPlayer: ObservableObject {
     static let shared = KeyClickPlayer()
 
     private static let volumeKey = "PocketTrackpad.keyClickVolume.v1"
-    private static let enabledKey = "PocketTrackpad.keyClickEnabled.v1"
+    // v2 key：默认关闭按键音。老用户旧 key 里存着 true，继续读会让「默认关闭」无效；
+    // 换新 key 让所有用户拿到新默认值（个人如需可到设置里重新打开）。
+    private static let enabledKey = "PocketTrackpad.keyClickEnabled.v2"
 
     /// 音量 0...1，0 即静音。设置页滑块与键盘页的音量按钮共用这一个值。
     @Published var volume: Double {
@@ -84,7 +86,7 @@ final class KeyClickPlayer: ObservableObject {
         } else {
             volume = 0.6
         }
-        isEnabled = UserDefaults.standard.object(forKey: Self.enabledKey) as? Bool ?? true
+        isEnabled = UserDefaults.standard.object(forKey: Self.enabledKey) as? Bool ?? false
         loadPlayers()
     }
 

@@ -175,8 +175,8 @@ enum HIDSpec {
 
     // MARK: - 键鼠复合设备（选项 B，实验性）
     //
-    // 目标：三指上滑时发 Command + H（modifier 0x08 + keycode 0x0B），
-    // 让 iPadOS 回到主屏幕。为此 Report Map 里要有 Keyboard Application Collection。
+    // 目标：三指上滑时发 Command + M（modifier 0x08 + keycode 0x10），
+    // 让 iPadOS 最小化当前程序 / 返回桌面。为此 Report Map 里要有 Keyboard Application Collection。
     //
     // 这里刻意 **不引入 Report ID、也不新增第二个 Report 特征**：
     // HID 1.11 允许一个描述符里有多个顶层 Collection 且不带 Report ID，
@@ -201,9 +201,12 @@ enum HIDSpec {
     static let modRightAlt: UInt8     = 0x40
     static let modRightGUI: UInt8     = 0x80
 
-    /// Command(Left GUI) 位与 H 键的 HID 键码（三指上滑回桌面用）。
+    /// Command(Left GUI) 位与 M 键的 HID 键码（三指上滑最小化当前程序 / 回桌面用）。
+    /// M = 0x10（HID Keyboard/Keypad Page：A=0x04 ... H=0x0B ... M=0x10）。
+    /// 用 Command+M 而非 Command+H：用户实测 Command+H 在其 iPadOS 上表现为关闭程序，
+    /// 改成 Command+M（最小化窗口 / 返回桌面）以符合「最小化不关闭」的预期。
     static let commandModifier: UInt8 = modLeftGUI
-    static let homeKeycode: UInt8 = 0x0B
+    static let homeKeycode: UInt8 = 0x10
     /// Tab 键 HID 键码（三指左右滑切换 App：Cmd+Tab / Cmd+Shift+Tab）。
     static let tabKeycode: UInt8 = 0x2B
 

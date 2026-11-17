@@ -1543,3 +1543,48 @@ Windows / Android / iPad（标准蓝牙键盘 + 鼠标）
 | `project.yml` | 资源改为在 `sources` 里用 `buildPhase: resources` 声明（target 级 `resources:` 键无效） |
 | `preview/ui-preview.html` | 键盘页喇叭按钮、设置页按键音分组、音量交互同步 |
 
+
+## 三十五、默认参数调整与手势修正（v0.0.58）
+
+本轮按用户要求调整四项默认值、三指上滑键位，并修正双指拖拽误触、新增边缘滚动。
+
+### 默认值调整（均用版本化新 key，老用户升级即生效）
+
+- **指针默认速度 1.4× → 1.8×**：`sensitivity` 换新 key `PocketTrackpad.sensitivity.v2`。
+  老用户旧 key 里存着 1.4，继续读会让改动无效，换 key 后所有人拿到 1.8× 新默认值。
+- **按键音默认关闭**：`KeyClickPlayer.isEnabled` 换新 key `keyClickEnabled.v2`，默认 false。
+- **振动反馈默认关闭**：`HapticPlayer.isEnabled` 换新 key `hapticEnabled.v2`，默认 false。
+- **键鼠复合模式默认开启**：`compositeDevice` 换新 key `compositeDevice.v2`，默认 true；
+  同时移除早期「首次运行强制切回纯鼠标」的一次性迁移（否则会把 v2 的 true 又改回 false）。
+
+### 三指上滑：Command+H → Command+M
+
+用户反馈 Command+H 在其 iPadOS 上表现为「关闭当前程序」，改成 Command+M（最小化当前程序 /
+返回桌面，App 保留后台）。HID 键码 `homeKeycode` 从 0x0B（H）改为 0x10（M），
+`commandModifier` 不变（0x08 Left GUI）。界面 / 日志 / 预览文案全部同步。
+
+### 双指拖拽加防误触阈值
+
+`handleDrag` 不再在 `.began` 立即按下左键：累计位移超过 8pt 才 `setButton(true)` 进入拖动，
+阈值之前的微动丢弃不补发。轻点或微小移动不会按住左键，避免在 iPad 主屏 app 图标上误拖动。
+抬起时只在实际按下过的情况下松开左键。
+
+### 触摸板左右边缘滚动（先移光标再滚）
+
+单指手势起点落在触摸板左 / 右边缘窄条（视图宽 12%，28~56pt）时进入边缘滚动模式：
+
+- `.began` 先调 `hid.movePointerToSide(left:)`，发 90 帧 × 127 的饱和水平位移把光标推到
+  屏幕对应侧（沿用宏归位经验值，HID 相对位移无绝对定位能力）；
+- `.changed` 只按纵向位移发 wheel，方向约定与底部滚轮键一致（默认上滑 = 滚轮下滑，
+  自然滚动开关可反转），不再发指针位移，避免把光标带离目标侧；
+- iPad 分屏时左边缘滚左侧、右边缘滚右侧。三个滚动入口并存：底部滚轮键 + 左右边缘。
+
+| 文件 | 改动 |
+| --- | --- |
+| `PocketTrackpad/HIDDescriptor.swift` | `homeKeycode` 0x0B → 0x10；注释同步 Command+M |
+| `PocketTrackpad/HIDPeripheral.swift` | 三项默认值换 v2 key、移除强制切纯鼠标迁移、`movePointerToSide`、`goHome` 改 Command+M |
+| `PocketTrackpad/KeyClickPlayer.swift` | 默认关闭，换 v2 key |
+| `PocketTrackpad/HapticPlayer.swift` | 默认关闭，换 v2 key |
+| `PocketTrackpad/TrackpadSurface.swift` | 双指 8pt 阈值防误触；单指边缘滚动；提示文案同步 |
+| `PocketTrackpad/ContentView.swift` | 三指上滑 / 滚动说明文案同步 |
+| `preview/ui-preview.html` | 默认值、手势说明、元素清单同步（JS 语法校验通过） |

@@ -84,7 +84,9 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
     /// 改写这个名字。因此界面不再回显整机名，只在设置页给出改名步骤。
 
     // 设置页的三项参数做本地持久化，重开 App 不需重调。
-    private static let sensKey = "PocketTrackpad.sensitivity"
+    // v2 key：默认速度从 1.4× 调到 1.8×。老用户 UserDefaults 里存着旧 key 的 1.4，
+    // 若继续读旧 key 则默认值改动对他们无效；换新 key 让所有人拿到新默认值。
+    private static let sensKey = "PocketTrackpad.sensitivity.v2"
     private static let scrollKey = "PocketTrackpad.scrollSensitivity"
     // 方向默认值已反转（上滑 = 滚轮下滑）。换新 key，避免侧载覆盖安装后
     // 残留的旧 UserDefaults 值把方向带回旧行为。
@@ -96,7 +98,7 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
     }
 
     @Published var sensitivity: Double =
-        HIDPeripheral.savedDouble(HIDPeripheral.sensKey, fallback: 1.4) {
+        HIDPeripheral.savedDouble(HIDPeripheral.sensKey, fallback: 1.8) {
             didSet { UserDefaults.standard.set(sensitivity, forKey: HIDPeripheral.sensKey) }
         }
 
@@ -114,10 +116,12 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
 
     // MARK: - 键鼠复合模式（选项 B，实验性）
     //
-    // 打开后 Report Map 里多一个 Keyboard Collection，三指上滑可发 Command+H。
+    // 打开后 Report Map 里多一个 Keyboard Collection，三指上滑可发 Command+M（最小化 / 回桌面）。
     // 主机在配对时会缓存 Report Map，无法热更新：切换开关必须移除整个 GATT
     // 数据库、重新广播，并由用户在主机侧「忽略此设备」重新配对。
-    private static let compositeKey = "PocketTrackpad.compositeDevice.v1"
+    // v2 key：默认开启键鼠复合模式。旧 key 里老用户被迁移逻辑写成了 false，
+    // 继续读旧 key 会让「默认开启」对他们无效；换新 key 让所有人从 true 起步。
+    private static let compositeKey = "PocketTrackpad.compositeDevice.v2"
 
     @Published var compositeDevice: Bool =
         (UserDefaults.standard.object(forKey: HIDPeripheral.compositeKey) as? Bool) ?? true {
@@ -168,7 +172,7 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
             statusText = "已启用键鼠复合，请重新广播并配对"
             note("已开启键鼠复合模式：输入报告 12 字节 = 键盘 8 + 鼠标 4（键盘字段在前）")
             note("本版描述符键盘 Collection 排最前，iPad 更可能按实体键盘对待（隐藏软键盘）")
-            note("三指上滑会发送 Command+H；iPad 可能把本设备识别为键盘而弹出配对验证")
+            note("三指上滑会发送 Command+M（最小化 / 回桌面）；iPad 可能把本设备识别为键盘而弹出配对验证")
             note("若鼠标失效：关掉本开关 → 按「\(HIDSpec.ipadIgnorePath)」忽略 → 重新广播配对，即回到纯鼠标")
         } else {
             statusText = "已回退纯鼠标，请重新广播并配对"
@@ -202,6 +206,10 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
     private var pendingX = 0
     private var pendingY = 0
     private var pendingWheel = 0
+    /// 边缘滚动定位：剩余要发的饱和水平位移帧数 / 每帧 dx。
+    /// 走独立计数、在 tick() 里直接写 pending（不经 enqueue），因此不会被录进宏。
+    private var edgeLocateFramesLeft = 0
+    private var edgeLocateDx: Int = 0
     /// 键盘状态由 tick() 统一合进 60Hz 报告流：按下期间持续带键码，到期自动释放。
     /// 这样按下与释放走同一条链路，不会被 queuedPacket 覆盖导致按键卡住。
     /// modifier 不再写死 Command，全键盘可发任意 Ctrl / Shift / Option / Command 组合。
@@ -220,9 +228,6 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
     /// 滑动触控区时若此数持续增长，说明 App 侧发送正常、问题在 iPadOS 解析；
     /// 若不增长，说明手势没进到发送链路，问题在 App 侧。
     @Published private(set) var sentFrames = 0
-    /// 一次性迁移标记：把历史上默认开启的复合模式切回纯鼠标（iPad 上更稳定）。
-    /// 只迁移一次，用户之后手动开回复合不会被反复重置。
-    private static let plainMouseMigratedKey = "PocketTrackpad.plainMouseMigrated.v1"
     /// 一次性迁移标记：彻底清除「避开上次设备」这个有害机制（iOS 无法拒绝指定
     /// central，「连上就拆」只会把用户想连回的 iPad 拒之门外，导致订阅永远为 0）。
     private static let avoidanceClearedKey = "PocketTrackpad.avoidanceCleared.v1"
@@ -295,18 +300,11 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
 
     // MARK: - 生命周期
 
-    /// 升级后一次性迁移：复合模式自引入起默认开启，部分 iPadOS 会把它当键盘接管、
-    /// 忽略鼠标位移，造成「已连接却完全无反应」。首次运行本版时自动切回纯鼠标
-    /// （iPad 上验证稳定的配置）；只迁移一次，用户之后可到设置里手动开回复合。
+    /// 升级后一次性迁移。
+    /// 注意：早期版本曾在这里把复合模式强制切回纯鼠标（规避部分 iPadOS 把设备当键盘
+    /// 接管、忽略鼠标位移的问题）。现按用户要求恢复「键鼠复合模式默认开启」，故移除该迁移。
+    /// 复合模式已换 v2 key 默认 true，老用户升级后即为开启；如需纯鼠标可在设置里手动关。
     func applyStartupMigration() {
-        let migrated = UserDefaults.standard.bool(forKey: Self.plainMouseMigratedKey)
-        if !migrated {
-            UserDefaults.standard.set(true, forKey: Self.plainMouseMigratedKey)
-            if compositeDevice {
-                compositeDevice = false
-                note("兼容性升级：已自动从复合模式切回纯鼠标（iPad 上更稳定）。如需全键盘/三指回桌面，可到设置里重新开启键鼠复合模式")
-            }
-        }
         // 彻底清除「避开上次设备」：iOS 无法拒绝指定 central，"连上就拆"只会把
         // 用户想连回的 iPad 拒之门外（订阅永远 0、连不上）。关闭持久化开关并清空残留。
         let avoidanceCleared = UserDefaults.standard.bool(forKey: Self.avoidanceClearedKey)
@@ -440,6 +438,8 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         pendingX = 0
         pendingY = 0
         pendingWheel = 0
+        edgeLocateFramesLeft = 0
+        edgeLocateDx = 0
         pendingModifier = 0
         pendingKeycode = 0
         keyReleaseAt = nil
@@ -480,6 +480,8 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         pendingX = 0
         pendingY = 0
         pendingWheel = 0
+        edgeLocateFramesLeft = 0
+        edgeLocateDx = 0
         pendingModifier = 0
         pendingKeycode = 0
         keyReleaseAt = nil
@@ -609,7 +611,7 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         mark("4 已构造 4 个 CBMutableService（HID / Device Info / Battery / Generic Access）")
         note("开始注册 GATT 服务（HID / Device Info / Battery / Generic Access）")
         note(compositeDevice
-             ? "当前模式：键鼠复合（输入报告 12 字节，三指上滑 = Command+H）"
+             ? "当前模式：键鼠复合（输入报告 12 字节，三指上滑 = Command+M 最小化）"
              : "当前模式：纯鼠标（输入报告 4 字节，与 v0.0.7 相同）")
         addNextService()
     }
@@ -938,6 +940,14 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
             if settleFramesLeft == 0 { homingCompleted = true }
         }
 
+        // 边缘滚动定位：每帧发饱和水平位移把光标推到屏幕左 / 右侧，直接写 pending
+        // （不经 enqueue，不进录制）。与归位 / 静默互斥：录制回放的归位优先级更高。
+        if !didHome, homingFramesLeft == 0, settleFramesLeft == 0, edgeLocateFramesLeft > 0 {
+            edgeLocateFramesLeft -= 1
+            pendingX = edgeLocateDx
+            pendingY = 0
+        }
+
         // 回放注入与发送共用同一个 CADisplayLink（本 tick）：注入一帧位移立刻
         // flush 一帧，逐帧复现录制时的帧序列。此前回放用独立 playbackLink，与
         // 本 tick 相位不定，同一位移每次被拆成的帧序列都不同，叠加 iPadOS 的
@@ -1026,13 +1036,29 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         isHoming = false
     }
 
-    /// 三指上滑：发一次 Command + H，让 iPadOS 回主屏幕。
+    /// 触摸板左右边缘滚动的定位步骤：先用饱和 dx 把光标推到屏幕左 / 右侧，
+    /// 使随后的滚轮事件作用在该侧的窗口 / 区域（iPad 分屏时左边缘滚左侧、右边缘滚右侧）。
+    /// HID 是相对位移、无绝对定位能力，沿用宏归位的经验值：90 帧 × 127 计数，
+    /// 足以从屏幕任意位置饱和到边缘。走独立计数在 tick() 里直接写 pending，
+    /// 不经 enqueue，因此不会被录进宏（这是导航操作，不应污染录制轨迹）。
+    func movePointerToSide(left: Bool) {
+        edgeLocateDx = left ? -127 : 127
+        edgeLocateFramesLeft = 90
+        if link == nil {
+            let l = CADisplayLink(target: self, selector: #selector(tick))
+            l.add(to: .main, forMode: .common)
+            link = l
+        }
+        note("触摸板\(left ? "左" : "右")边缘滚动：光标已推向屏幕\(left ? "左" : "右")侧")
+    }
+
+    /// 三指上滑：发一次 Command + M，最小化当前程序 / 返回桌面（App 保留后台，不关闭）。
     /// 走与全键盘相同的 sendKey 链路，按下和释放由 tick() 统一管理。
     func goHome() {
-        note("三指上滑 → 发送 Command + H（回主屏幕）")
+        note("三指上滑 → 发送 Command + M（最小化当前程序 / 回桌面）")
         sendKey(HIDSpec.homeKeycode,
                 modifiers: HIDSpec.commandModifier,
-                label: "三指上滑 · Command + H",
+                label: "三指上滑 · Command + M",
                 reason: "三指上滑未生效")
     }
 

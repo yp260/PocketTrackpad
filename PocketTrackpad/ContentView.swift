@@ -315,7 +315,7 @@ struct SettingsView: View {
                     Slider(value: $hid.scrollSensitivity, in: 0.3...3.0, step: 0.1)
                 }
                 Toggle("自然滚动", isOn: $hid.naturalScrolling)
-                Text("默认：滚轮键向上滑 = 滚轮下滑。打开自然滚动后方向整体反转（跟手）。滚动用底部滚轮键（双指已改为拖拽），设置会自动保存。")
+                Text("默认：向上滑 = 滚轮下滑。打开自然滚动后方向整体反转（跟手）。三种滚动入口：底部滚轮键、触摸板左边缘（滚屏幕左侧）、触摸板右边缘（滚屏幕右侧）——边缘滑动会先把光标推到屏幕对应侧再滚动，适合 iPad 分屏。双指已改为拖拽（需滑动超过 8pt 才按下左键，轻点不会拖动图标）。设置会自动保存。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -371,7 +371,7 @@ struct SettingsView: View {
 
             Section {
                 Toggle("键鼠复合模式", isOn: $hid.compositeDevice)
-                LabeledRow(title: "三指上滑", detail: "回桌面（Command + H）")
+                LabeledRow(title: "三指上滑", detail: "最小化 / 回桌面（Command + M）")
                 LabeledRow(title: "三指左右滑", detail: "切换 App（Cmd+Tab / Cmd+Shift+Tab）")
                 LabeledRow(title: "全键盘", detail: "两页键位 + 下方小触控区（可移动指针）")
                 LabeledRow(title: "输入报告",
@@ -379,7 +379,7 @@ struct SettingsView: View {
             } header: {
                 Text("实验功能 · 全键盘与手势")
             } footer: {
-                Text("开启后本设备同时声明为鼠标和键盘，全键盘、三指手势都依赖这个开关。三指上滑回桌面（Command+H），三指左右滑切换 App（右滑 Cmd+Tab 下一个 / 左滑 Cmd+Shift+Tab 上一个）——iPadOS 原生多指手势只对妙控板 2 私有协议开放，本 App 是把三指手势转成键盘快捷键的模拟实现。切换开关会自动断开并移除 GATT 服务：请按「\(HIDSpec.ipadIgnorePath)」忽略，回到主页面点「开始广播」，再重新配对。若指针或点击失效，关掉本开关、同样忽略设备重新配对即可回到纯鼠标，不需要重装 App。Command 快捷键只对 iPadOS 有效。")
+                Text("开启后本设备同时声明为鼠标和键盘，全键盘、三指手势都依赖这个开关。三指上滑最小化当前程序 / 回桌面（Command+M，App 保留后台不关闭），三指左右滑切换 App（右滑 Cmd+Tab 下一个 / 左滑 Cmd+Shift+Tab 上一个）——iPadOS 原生多指手势只对妙控板 2 私有协议开放，本 App 是把三指手势转成键盘快捷键的模拟实现。切换开关会自动断开并移除 GATT 服务：请按「\(HIDSpec.ipadIgnorePath)」忽略，回到主页面点「开始广播」，再重新配对。若指针或点击失效，关掉本开关、同样忽略设备重新配对即可回到纯鼠标，不需要重装 App。Command 快捷键只对 iPadOS 有效。")
                     .font(.caption)
             }
 

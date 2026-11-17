@@ -13,7 +13,9 @@ final class HapticPlayer: ObservableObject {
 
     static let shared = HapticPlayer()
 
-    private static let enabledKey = "PocketTrackpad.hapticEnabled.v1"
+    // v2 key：默认关闭振动反馈。老用户旧 key 里存着 true，继续读会让「默认关闭」无效；
+    // 换新 key 让所有用户拿到新默认值（个人如需可到设置里重新打开）。
+    private static let enabledKey = "PocketTrackpad.hapticEnabled.v2"
     private static let strengthKey = "PocketTrackpad.hapticStrength.v1"
 
     /// 强弱档位，rawValue 存 UserDefaults。
@@ -50,7 +52,7 @@ final class HapticPlayer: ObservableObject {
     }
 
     private init() {
-        isEnabled = UserDefaults.standard.object(forKey: Self.enabledKey) as? Bool ?? true
+        isEnabled = UserDefaults.standard.object(forKey: Self.enabledKey) as? Bool ?? false
         let raw = UserDefaults.standard.integer(forKey: Self.strengthKey)
         strength = Strength(rawValue: raw) ?? .light
     }
