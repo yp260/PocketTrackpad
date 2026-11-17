@@ -395,7 +395,7 @@ body.shot .phone { margin:0; }
             <tr><td>4</td><td>右上角「开始广播／停止广播」小按钮</td><td>ContentView.swift:61-69</td></tr>
             <tr><td>5</td><td>状态卡片：状态文字、订阅数、两行引导（已删「重新广播」按钮）</td><td>ContentView.swift:100-125</td></tr>
             <tr><td>6</td><td>引导页「指针与滚动」卡片：指针速度 / 滚动速度（连接前可调）</td><td>ContentView.swift:126-156</td></tr>
-            <tr><td>7</td><td>触控区中央提示：单指移动 · 轻点左键 · 双击左键 · 双指滚动 · 长按右键；复合模式下多一行「三指上滑回桌面 · 三指左右滑切 App」（仅全屏触控区，键盘页小触控区已隐藏提示）</td><td>TrackpadSurface.swift:72-88</td></tr>
+            <tr><td>7</td><td>触控区中央提示：单指移动 · 轻点左键 · 双击左键 · 双指按住拖动=拖拽 · 长按右键 · 滚动用底部滚轮键；复合模式下多一行「三指上滑回桌面 · 三指左右滑切 App」（仅全屏触控区，键盘页小触控区已隐藏提示）</td><td>TrackpadSurface.swift:72-88</td></tr>
             <tr><td>8</td><td>连接日志卡片（108pt，等宽字体，通栏与其他卡片左右对齐）</td><td>ContentView.swift:158-180</td></tr>
             <tr><td>9</td><td>底部按键条高度 76pt（从 116pt 降低）、宽度比 左键:滚轮:右键 = 3:2:3、间距 10pt</td><td>ContentView.swift:334-378</td></tr>
             <tr><td>10</td><td>左键／右键：按住变蓝，松手复原</td><td>ContentView.swift:381-410</td></tr>
@@ -434,7 +434,7 @@ body.shot .phone { margin:0; }
 
       <div class="panel note">
         <b>说明</b>：预览用 HTML/CSS 近似 iOS 系统控件，字体、间距、圆角与真机可能有数像素差异；
-        双指滚动和三指上滑无法用鼠标模拟，只在触控区提示与右侧状态里体现。预览文件与 Swift 源码保持同步，
+        双指拖拽和三指上滑无法用鼠标模拟，只在触控区提示与右侧状态里体现。预览文件与 Swift 源码保持同步，
         真正出包要 push 后由 GitHub Actions 完成。
         <br><b>引导页卡片宽度</b>：SwiftUI 的 VStack 默认按最宽子视图定宽；连接日志初始只有一行短日志时
         会缩成窄卡片并居中，与上方两张卡片不对齐。现在三张卡片都显式撑满父宽度（预览里对应
@@ -452,7 +452,7 @@ body.shot .phone { margin:0; }
         <br><b>Esc / ↑ 位置</b>：主键位第 5 行左右原来的空白 spacer 已换成按键，
         Esc 贴 Z 左侧、↑ 贴 M 右侧，分别顶到键区左右边缘；第 6 行不再重复放这两个键。
         <br><b>小触控区</b>：键区紧贴顶部工具条，其下剩余空间全部是触控区（紧贴键区、无标题与提示文字），
-        复用全屏触控板的全部手势（单指移动 / 点击 / 双指滚动 / 三指上滑），打字时也能移指针。
+        复用全屏触控板的全部手势（单指移动 / 点击 / 双指拖拽 / 三指上滑），打字时也能移指针。
         底部常驻 Ctrl / Opt / Cmd / Shift 一次性粘滞修饰键，组合键先点修饰键再点字符键。底部左键 / 滚轮 / 右键在键盘模式下依旧可用。
         <br><b>本轮精简</b>：底部三键高度从 116pt 降到 76pt，把空间让给触控区；键盘页上方的粘滞长句说明、
         小触控区标题、触控区内三行提示、底部「Esc / ↑」说明文字全部删除。按键标签、分段控件、返回按钮和
@@ -586,7 +586,7 @@ body.shot .phone { margin:0; }
   }
 
   function padHint() {
-    var base = "单指移动指针  ·  轻点左键  ·  双击左键<br>双指滚动  ·  长按右键";
+    var base = "单指移动指针  ·  轻点左键  ·  双击左键<br>双指按住拖动 = 拖拽（图标/选中文字）<br>单指长按右键  ·  滚动用底部滚轮键";
     if (!s.compositeDevice) return base;
     return base + "<br>三指上滑回桌面  ·  三指左右滑切 App";
   }
@@ -805,7 +805,7 @@ body.shot .phone { margin:0; }
         "</div>" +
         "<div class=\"form-row line\" data-code=\"ContentView.swift:228\"><span>自然滚动</span><span class=\"spacer\"></span>" +
           "<button class=\"toggle" + (s.naturalScrolling ? " on" : "") + "\" data-act=\"toggle\" aria-label=\"自然滚动\"></button></div>" +
-        "<div class=\"form-row cap\" data-code=\"ContentView.swift:229-231\">默认：双指或滚轮键向上滑 = 滚轮下滑。打开自然滚动后方向整体反转（跟手）。同时作用于双指滚动和底部滚轮键，设置会自动保存。</div>" +
+        "<div class=\"form-row cap\" data-code=\"ContentView.swift:229-231\">默认：滚轮键向上滑 = 滚轮下滑。打开自然滚动后方向整体反转（跟手）。滚动用底部滚轮键（双指已改为拖拽），设置会自动保存。</div>" +
       "</div>" +
       "<div class=\"sec-head\" data-code=\"ContentView.swift:270\">按键音</div>" +
       "<div class=\"group\" data-code=\"ContentView.swift:270-289\">" +
@@ -822,7 +822,7 @@ body.shot .phone { margin:0; }
       "<div class=\"group\" data-code=\"ContentView.swift:234-240\">" +
         row("左键 / 右键", "按住 = 按下，松手 = 抬起") +
         row("滚轮", "上下拖动 = 滚动，双击 = 按下滚轮键") +
-        row("触控区", "轻点左键 · 双击左键 · 长按右键") +
+        row("触控区", "轻点左键 · 双击左键 · 双指拖拽 · 长按右键") +
         row("全键盘", "触控区顶部「全键盘」一键切换") +
         row("组合键", "Ctrl / Opt / Cmd / ⇧ 为一次性粘滞键") +
       "</div>" +

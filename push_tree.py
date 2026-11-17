@@ -42,7 +42,7 @@ tree = gh("POST", "/git/trees", {
 })
 print("tree =", tree["sha"])
 
-msg = "fix: 撤销触控板模式——iPad 出现触控板菜单是 iOS 硬限制，三指切 App 改挂复合模式\n\n用户实测 v0.0.49：iPad 未出现「触控板」菜单、三指左右滑不能切 App，确认手动 Cmd+Tab 能切。\n研究确认触控板菜单做不到：1) GAP 服务(0x1800，含外观 2A01)是蓝牙规范要求、由 iOS 系统强制管理，\n第三方 App 无法真正注册/覆盖，写的 Touchpad(0x03C9) 主机根本读不到；2) Apple 官方明确 iPad「触控板」\n菜单与原生三指/四指手势只对 Magic Trackpad 私有协议开放，第三方 BLE 设备拿不到。上一版说「有机会」过于乐观。\n三指切 App 失效主因：触控板模式把 Appearance 声明成 Touchpad 后 iPad 按触控板归类，不再把键盘报告当系统\n快捷键处理，掐断了 Cmd+Tab 通道（手动全键盘能切证明链路本身是好的）。\n修复：\n- 彻底撤销 trackpadMode 开关及其持久化、互斥联动、applyTrackpadModeChange、诊断条角色标识；\n- HIDDescriptor 删除 appearanceTouchpad；case 2A01 恢复 Mouse/Keyboard/Combo 三态；\n- 三指左右滑切 App 保留，改挂「键鼠复合模式」（与三指上滑 goHome 同一条已验证的键盘通道），\n  switchApp 的 Cmd+Tab / Cmd+Shift+Tab 与 Tab 键码 0x2B 不变；\n- 设置页把「三指左右滑」并入复合模式「实验功能·全键盘与手势」分组，删触控板 Section；\n- 顶栏「触控板模式」改「触控区」避免与已撤销开关混淆；preview/ui-preview.html 同步。\n重要：撤销后 iPad 缓存的仍是旧 Touchpad 归类，必须按辅助触控路径忽略设备重配，才会重读回 Keyboard 声明。\n报告格式不变，配对流程不变。"
+msg = "feat: 双指手势改为拖拽（按住左键+移动）——滚动移到底部滚轮键\n\n用户要求把双指滑动改成「在 iPad 上双指按住并拖动」；确认目标是拖拽对象（拖 App 图标 / 选中文字），\n并确认滚动只保留底部滚轮键。\n实现：\n- TrackpadSurface：2 指 pan 由 handleScroll(wheel) 改为 handleDrag——began 按下左键(setButton 0x01)、\n  changed 发指针位移（用 pointer sensitivity、跟手方向，与自然滚动无关）、抬手/取消松开左键；\n  移除双指滚动的 lastScroll/residualWheel 状态。\n- 底部滚轮键的 SwiftUI DragGesture 保持独立，继续发 wheel，滚动速度/自然滚动只作用于它。\n- 宏录制：buttonDown / 逐帧 move / buttonUp 走既有 recordEvent 链路，回放可复现拖拽。\n- 触控区提示、滚动设置说明、设置页手势列表、preview/ui-preview.html 同步。\n报告格式与配对不变。注意：翻页/滚网页现在要用底部滚轮键，双指改为拖拽。"
 
 commit = gh("POST", "/git/commits", {
     "message": msg, "tree": tree["sha"], "parents": [BASE]

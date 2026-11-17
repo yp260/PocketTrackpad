@@ -2,8 +2,8 @@ import SwiftUI
 import UIKit
 
 /// 用 UIKit 手势识别器实现触控区：SwiftUI 原生手势无法可靠区分
-/// 单指平移 / 双指滚动 / 轻点 / 长按，这里用 UIPanGestureRecognizer 的
-/// minimumNumberOfTouches / maximumNumberOfTouches 做硬隔离。
+/// 单指平移 / 双指拖拽 / 轻点 / 长按，这里用 UIPanGestureRecognizer 的
+/// minimumNumberOfTouches / maximumNumberOfTouches 做硬隔离。滚动在底部滚轮键。
 struct TrackpadSurface: UIViewRepresentable {
 
     @EnvironmentObject var hid: HIDPeripheral
@@ -31,13 +31,15 @@ struct TrackpadSurface: UIViewRepresentable {
         move.delegate = context.coordinator
         view.addGestureRecognizer(move)
 
-        let scroll = UIPanGestureRecognizer(target: context.coordinator,
-                                            action: #selector(Coordinator.handleScroll(_:)))
-        scroll.minimumNumberOfTouches = 2
-        scroll.maximumNumberOfTouches = 2
-        scroll.cancelsTouchesInView = false
-        scroll.delegate = context.coordinator
-        view.addGestureRecognizer(scroll)
+        // 双指按住拖动：按下左键并移动指针（拖拽图标 / 选中文字等）。
+        // 与单指平移 / 三指手势靠触点数硬隔离。滚动已移到底部滚轮键。
+        let drag = UIPanGestureRecognizer(target: context.coordinator,
+                                          action: #selector(Coordinator.handleDrag(_:)))
+        drag.minimumNumberOfTouches = 2
+        drag.maximumNumberOfTouches = 2
+        drag.cancelsTouchesInView = false
+        drag.delegate = context.coordinator
+        view.addGestureRecognizer(drag)
 
         let doubleTap = UITapGestureRecognizer(target: context.coordinator,
                                                action: #selector(Coordinator.handleDoubleTap(_:)))
@@ -108,7 +110,7 @@ struct TrackpadSurface: UIViewRepresentable {
     }
 
     private static func hintText(composite: Bool) -> String {
-        let base = "单指移动指针  ·  轻点左键  ·  双击左键\n双指滚动  ·  长按右键"
+        let base = "单指移动指针  ·  轻点左键  ·  双击左键\n双指按住拖动 = 拖拽（图标/选中文字）\n单指长按右键  ·  滚动用底部滚轮键"
         return composite ? base + "\n三指上滑回桌面  ·  三指左右滑切 App" : base
     }
 
@@ -127,10 +129,12 @@ struct TrackpadSurface: UIViewRepresentable {
         weak var hint: UILabel?
 
         private var lastMove: CGPoint = .zero
-        private var lastScroll: CGPoint = .zero
         private var residualX: CGFloat = 0
         private var residualY: CGFloat = 0
-        private var residualWheel: CGFloat = 0
+        private var lastDrag: CGPoint = .zero
+        private var residualDragX: CGFloat = 0
+        private var residualDragY: CGFloat = 0
+        private var dragActive = false
         private var didHideHint = false
         private var homeStartY: CGFloat = 0
         private var homeFired = false
@@ -178,27 +182,41 @@ struct TrackpadSurface: UIViewRepresentable {
             }
         }
 
-        @objc func handleScroll(_ g: UIPanGestureRecognizer) {
+        /// 双指按住拖动 = 按住左键并移动指针（拖拽 App 图标 / 选中文字等）。
+        /// began 按下左键、changed 发指针位移（跟手方向）、抬手/取消松开左键。
+        /// 滚动已移到底部滚轮键，双指不再发 wheel。
+        @objc func handleDrag(_ g: UIPanGestureRecognizer) {
             switch g.state {
             case .began:
-                lastScroll = .zero
-                residualWheel = 0
+                lastDrag = .zero
+                residualDragX = 0
+                residualDragY = 0
+                dragActive = true
                 hideHint()
+                hid.setButton(0x01, pressed: true)
+                KeyClickPlayer.shared.play()
+                HapticPlayer.shared.play()
             case .changed:
                 let t = g.translation(in: g.view)
-                let stepY = t.y - lastScroll.y
-                lastScroll = t
+                let stepX = t.x - lastDrag.x
+                let stepY = t.y - lastDrag.y
+                lastDrag = t
 
-                let s = CGFloat(hid.scrollSensitivity) / 6.0
-                // 默认（自然滚动关）：上滑 -> 负 wheel（滚轮下滑），下滑 -> 正 wheel（滚轮上滑）。
-                // 打开自然滚动后整体取反；底部滚轮键使用完全相同的定义。
-                let direction: CGFloat = hid.naturalScrolling ? -1 : 1
-                let raw = stepY * s * direction + residualWheel
-                let iw = Int(raw.rounded(.toNearestOrAwayFromZero))
-                residualWheel = raw - CGFloat(iw)
-                hid.enqueue(wheel: iw)
+                // 拖拽跟手：用指针灵敏度，方向与自然滚动无关（这是移动不是滚动）。
+                let s = CGFloat(hid.sensitivity)
+                let rawX = stepX * s + residualDragX
+                let rawY = stepY * s + residualDragY
+                let ix = Int(rawX.rounded(.toNearestOrAwayFromZero))
+                let iy = Int(rawY.rounded(.toNearestOrAwayFromZero))
+                residualDragX = rawX - CGFloat(ix)
+                residualDragY = rawY - CGFloat(iy)
+                if ix != 0 || iy != 0 { hid.enqueue(dx: ix, dy: iy) }
             default:
-                lastScroll = .zero
+                lastDrag = .zero
+                if dragActive {
+                    hid.setButton(0x01, pressed: false)
+                    dragActive = false
+                }
             }
         }
 

@@ -347,7 +347,7 @@ struct SettingsView: View {
                     Slider(value: $hid.scrollSensitivity, in: 0.3...3.0, step: 0.1)
                 }
                 Toggle("自然滚动", isOn: $hid.naturalScrolling)
-                Text("默认：双指或滚轮键向上滑 = 滚轮下滑。打开自然滚动后方向整体反转（跟手）。同时作用于双指滚动和底部滚轮键，设置会自动保存。")
+                Text("默认：滚轮键向上滑 = 滚轮下滑。打开自然滚动后方向整体反转（跟手）。滚动用底部滚轮键（双指已改为拖拽），设置会自动保存。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -771,7 +771,7 @@ private struct WheelButton: View {
                         abs(value.translation.width) > tapThreshold {
                         moved = true
                     }
-                    // 默认上滑 = 滚轮下滑；与触控区双指滚动共用倍率、方向和自然滚动开关。
+                    // 默认上滑 = 滚轮下滑；倍率、方向和自然滚动开关只作用于这个滚轮键（双指已改为拖拽）。
                     let scale = CGFloat(hid.scrollSensitivity) / 4.0
                     let direction: CGFloat = hid.naturalScrolling ? -1 : 1
                     let raw = step * scale * direction + residual
