@@ -9,9 +9,10 @@ Windows / Android / iPad。解决两个 iOS 蓝牙外设的硬限制：
 
 ## 硬件
 
-- 任意带 WiFi + BLE 的 ESP32 开发板，推荐 **ESP32-C3**（如 `esp32-c3-devkitm-1`，约 9~20 元）。
-  换板只需改 `platformio.ini` 的 `board`。
-- 一根 USB 数据线（用于烧录与供电）。
+- **ESP32-S3-DevKitC-1**（原厂，ESP32-S3-WROOM-1 模组，512KB SRAM，无 PSRAM，双 USB 口）。
+  其他带 WiFi + BLE 的 ESP32（C3 / 普通 ESP32）也能用，换板只需改 `platformio.ini` 的 `board`。
+- 一根 USB 数据线：接板子**底部左边那个 USB-UART 口**（串口日志走 UART0，TX=GPIO43 / RX=GPIO44）。
+  右边那个是原生 USB-OTG，本固件不用。
 
 ## 编译与烧录（本地）
 
@@ -30,15 +31,16 @@ pio device monitor -b 115200
 到 Actions 页面下载 `firmware.bin` 产物，用 `esptool` 烧录：
 
 ```bash
-esptool.py --chip esp32c3 --port COMx write_flash 0x0 firmware.bin
+esptool.py --chip esp32s3 --port COMx write_flash 0x0 firmware.bin
 ```
 
 ## 使用流程
 
 1. 上电后 ESP32 会发出名为 **`PT-Bridge`** 的开放 WiFi 热点（无密码）。
 2. iPhone 在「设置 → 无线局域网」连上 `PT-Bridge`。
-3. 打开 PocketTrackpad App，设置里开启「启用硬件桥（ESP32）」，再点右上角「连接硬件桥」。
-4. 状态变「已连接硬件桥」后，在 Windows / Android 的蓝牙里搜索，会看到 **PT-Pad**，
+3. 打开 PocketTrackpad App，设置里开启「桥接（WiFi 转发）」，把地址填成热点网关 `192.168.4.1`
+   （端口 5000，默认即是），再点右上角「连接桥接」。
+4. 状态变「已连接桥接」后，在 Windows / Android 的蓝牙里搜索，会看到 **PT-Pad**，
    配对后即可像用鼠标+键盘一样控制。
 
 ## 与 iPhone 端的协议
@@ -53,4 +55,5 @@ esptool.py --chip esp32c3 --port COMx write_flash 0x0 firmware.bin
 - 报告布局（12 字节顺序）与 iOS 端 `PocketTrackpad/HIDDescriptor.swift` 的 `compositeReportMap`
   必须保持一致；任一侧改动都要同步另一侧。
 - Windows 首次配对可能弹提示，配对一次即可。
-- ESP32 同时跑 WiFi（AP）与 BLE（HID），ESP32-C3 原生支持共存，无需额外配置。
+- ESP32-S3 同时跑 WiFi（AP）与 BLE（HID），芯片原生支持 2.4GHz 共存，无需额外配置。
+- S3 有两个 USB 口：烧录与看日志请用底部**左边**的 USB-UART 口（原生 USB-OTG 那个口本固件不启用，接了不会有串口输出，容易误判为「烧录失败」）。如果第一次烧录没反应，换到左边口再试。

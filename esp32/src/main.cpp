@@ -1,4 +1,4 @@
-// PocketTrackpad 硬件桥固件（ESP32-C3，NimBLE-Arduino 1.4.3）
+// PocketTrackpad 硬件桥固件（ESP32-S3-DevKitC-1，NimBLE-Arduino 1.4.3）
 //
 // 角色：iPhone 把 12 字节复合 HID 报告通过 WiFi UDP 发给本设备，
 // 本设备以「标准 BLE HID」转发给 Windows / Android / iPad。

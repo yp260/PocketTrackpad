@@ -42,7 +42,7 @@ tree = gh("POST", "/git/trees", {
 })
 print("tree =", tree["sha"])
 
-msg = "feat: 删除 Windows 直连功能——连 Windows 统一走桥接方案\n\n用户反馈 Windows 直连（原生 BLE HID 双报告拓扑）没法用，要求直接删除。\n彻底移除 windowsMode 及其全部支撑代码，保留桥接（WiFi 转发）作为连 Windows 的唯一方式。\n实现：\n- HIDDescriptor：删除 win* 双报告描述符、Report ID 常量、winMouseReport/winKeyboardReport 组装函数、appearanceCombo。\n- HIDPeripheral：删除 windowsMode 持久化开关、inputReport2/keyboardSubscribed/databaseWindowsMode 字段、\n  GATT 双报告拓扑与模式迁移检查、switchToiPadMode、sendKey/flush/readValue/didReceiveRead/订阅回调的 windows 分支。\n- ContentView：删除设置页「Windows 直连」开关、未连接页 windowsMode 分支与一键切回按钮、各处引导文案，\n  改为引导桥接方案。\n- 文档：README.md、windows/README.md、BridgeTransport 注释同步，windows/README 重写为桥接单一方案。\n报告格式与 iPad 配对不变；纯鼠标 / 键鼠复合 / 桥接三种模式不受影响。"
+msg = "feat: ESP32 硬件桥固件适配 ESP32-S3-DevKitC-1\n\n用户买了原厂 ESP32-S3-DevKitC-1（ESP32-S3-WROOM-1 模组，512KB SRAM 无 PSRAM，双 USB 口），把硬件桥固件从 ESP32-C3 迁到 S3。\n- platformio.ini：default_env / env 改为 esp32-s3-devkitc-1，board=esp32-s3-devkitc-1；串口走 UART0（TX=GPIO43/RX=GPIO44），不加 USB CDC flag；NimBLE-Arduino 锁 1.4.3（1.4.0 起支持 S3）。\n- esp32-build.yml：artifact 路径 esp32-c3 -> esp32-s3-devkitc-1。\n- main.cpp：头部注释去 C3 字样，代码逻辑通用无需改。\n- esp32/README.md：硬件说明、esptool --chip esp32s3、双 USB 口注意（用左边 USB-UART 口）、App 开关名统一为「桥接（WiFi 转发）」。\nApp 端无需改动，UDP 协议与 12 字节报告布局不变。"
 
 commit = gh("POST", "/git/commits", {
     "message": msg, "tree": tree["sha"], "parents": [BASE]
