@@ -43,13 +43,11 @@ tree = gh("POST", "/git/trees", {
 print("tree =", tree["sha"])
 
 msg = json.dumps(
-    "fix: 彻底移除断联自动重播 + 蓝牙图标与跳转修复（v0.0.63）\n\n"
-    "用户实测反馈：断联和重播还是老问题不断；蓝牙设置入口图标没显示，点了只进本 App 设置页，要的是系统蓝牙页。\n"
-    "- 根因：ensureAdvertisingAfterDisconnect 在订阅归零/连接断开时做 stopAdvertising → 0.6s → startAdvertising 自动重播；iPad HID 主机频繁瞬断瞬连，每次都触发一轮重播，界面反复闪跳，延时闭包还和手动开始广播打架。\n"
-    "- 删除 ensureAdvertisingAfterDisconnect 与 advertisingResumeScheduled 字段及复位；新增 handleHostDisconnected 只更新状态、绝不自动重播；重连必须显式点「开始广播」。\n"
-    "- 蓝牙图标：.footnote Image 在拥挤工具栏被压成不可见，改固定 24x24 蓝色圆徽标。\n"
-    "- 跳转：App-Prefs:root=Bluetooth 新版 iOS 失效，改链式尝试 App-Prefs:Bluetooth → App-Prefs:root=Bluetooth → openSettingsURLString，用 open completion.success 判断。\n"
-    "- HIDPeripheral/ContentView + preview/README 同步（JS 语法已校验）。",
+    "fix: 蓝牙入口改黑色椭圆蓝字、跳转直达系统设置首页\n\n"
+    "用户实测反馈：蓝牙跳转还是不行（私有 scheme 真机上始终进不去蓝牙页），放弃直达蓝牙页，改为跳系统设置首页；图标改黑色椭圆胶囊 + 蓝色「蓝牙」字。\n"
+    "- ContentView：删除 openBluetoothSettings/tryOpenBluetooth 整套私有 scheme 链式尝试，新增 openSystemSettings 只用 openSettingsURLString 直达系统「设置」首页。\n"
+    "- 按钮：从 24x24 蓝色圆 + bluetooth 系统图标，改为 34x22 黑色 Capsule + 蓝色粗体「蓝牙」二字，accessibilityLabel 改「打开系统设置」。\n"
+    "- preview/ui-preview.html 同步样式、按钮文案、点击日志与说明；JS 语法已校验通过。",
     ensure_ascii=False
 )
 

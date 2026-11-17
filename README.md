@@ -1733,3 +1733,22 @@ v0.0.58 的「单指起点落在触摸板左 / 右边缘窄条 → 先把光标�
 | `PocketTrackpad/HIDPeripheral.swift` | 删自动重播函数 + 字段 + 复位；新增纯状态版 `handleHostDisconnected()`；改两处调用点 |
 | `PocketTrackpad/ContentView.swift` | 蓝牙图标改蓝色圆徽标；跳转改三级 scheme 链式尝试 |
 | `preview/ui-preview.html` | 蓝牙徽标 CSS/SVG、openbt 日志、元素清单 4/30 项与说明（JS 语法校验通过） |
+
+
+## 四十、蓝牙入口改为黑色椭圆蓝字 + 跳转系统设置首页
+
+用户实测反馈：私有 scheme 蓝牙跳转在真机上始终进不去蓝牙页，放弃直达；图标改黑色椭圆 + 蓝色「蓝牙」字。
+
+### 改动
+- 跳转：删除 `openBluetoothSettings()` / `tryOpenBluetooth()` 整套私有 scheme 链式尝试
+  （`App-Prefs:Bluetooth` → `App-Prefs:root=Bluetooth` → `openSettingsURLString`），
+  改为单一 `openSystemSettings()`，只用 public API `UIApplication.openSettingsURLString`
+  直达系统「设置」首页，由用户自己点进蓝牙。私有 scheme 在真机上始终跳不进蓝牙子页，
+  继续尝试只会带来不确定行为，直接放弃最稳。
+- 图标：从 24×24 蓝色圆 + `bluetooth` 系统图标，改为 34×22 的黑色胶囊
+  （`Capsule().fill(Color.black)`）+ 蓝色粗体「蓝牙」二字；`accessibilityLabel` 改「打开系统设置」。
+
+| 文件 | 改动 |
+| --- | --- |
+| `PocketTrackpad/ContentView.swift` | 删私有 scheme 跳转链、新增 `openSystemSettings()`；按钮改黑色椭圆蓝字 |
+| `preview/ui-preview.html` | btbadge 样式、btSVG 文案、按钮 aria-label/data-code、openbt 日志、元素清单 4/30 项与说明（JS 语法校验通过） |

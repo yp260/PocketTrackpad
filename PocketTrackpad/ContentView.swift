@@ -15,32 +15,11 @@ struct ContentView: View {
     /// 主机订阅了 Input Report（BLE），或 ESP32 硬件桥已连上，都算真正连上。
     private var connected: Bool { hid.isLinkActive }
 
-    /// 跳到系统「设置 > 蓝牙」页。侧载 App 可用私有 scheme，但不同 iOS 版本写法不同：
-    /// 新版（iOS 16+）是 `App-Prefs:Bluetooth`，旧版是 `App-Prefs:root=Bluetooth`。
-    /// 逐个尝试，谁成功停谁；都不行才回退本 App 设置页（public API，永远能开）。
-    /// 注意：iOS 由 App Store 安装时会拦截 App-Prefs，但本 App 为侧载，不受此限。
-    private func openBluetoothSettings() {
-        let candidates = [
-            "App-Prefs:Bluetooth",          // iOS 16+ 有效写法（无 root=）
-            "App-Prefs:root=Bluetooth",      // 旧版写法
-            UIApplication.openSettingsURLString  // 保底：本 App 系统设置页
-        ]
-        tryOpenBluetooth(candidates, index: 0)
-    }
-
-    private func tryOpenBluetooth(_ urls: [String], index: Int) {
-        guard index < urls.count, let url = URL(string: urls[index]) else { return }
-        let isLast = index == urls.count - 1
-        // 私有 scheme 用 canOpenURL 常返回 false（未在 LSApplicationQueriesSchemes 声明），
-        // 因此直接 open，用 completion 的 success 判断是否真的跳走。
-        UIApplication.shared.open(url, options: [:]) { success in
-            if success { return }
-            if !isLast {
-                DispatchQueue.main.async {
-                    self.tryOpenBluetooth(urls, index: index + 1)
-                }
-            }
-        }
+    /// 跳到系统「设置」首页。私有蓝牙 scheme（App-Prefs:Bluetooth 等）在真机上
+    /// 始终进不去蓝牙页，最可靠的是 public API 直接开系统设置首页，用户自己点蓝牙。
+    private func openSystemSettings() {
+        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+        UIApplication.shared.open(url, options: [:], completionHandler: nil)
     }
 
     /// 把全部连接日志（内存里最多 80 行）复制到剪贴板，供用户粘贴发回排障。
@@ -148,17 +127,16 @@ struct ContentView: View {
                             .controlSize(.mini)
                         }
                     }
-                    // 蓝牙图标：一键跳系统蓝牙设置。用固定尺寸的蓝色圆徽标，
-                    // 避免拥挤工具栏里 .footnote 的 Image 被压缩成不可见。
-                    Button { openBluetoothSettings() } label: {
-                        Image(systemName: "bluetooth")
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundStyle(.white)
-                            .frame(width: 24, height: 24)
-                            .background(Circle().fill(Color.blue))
+                    // 蓝牙入口：黑色椭圆胶囊 + 蓝色「蓝牙」字，一键跳系统设置首页。
+                    Button { openSystemSettings() } label: {
+                        Text("蓝牙")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(.blue)
+                            .frame(width: 34, height: 22)
+                            .background(Capsule().fill(Color.black))
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("打开系统蓝牙设置")
+                    .accessibilityLabel("打开系统设置")
                 }
             }
             .navigationDestination(isPresented: $showSettings) {
