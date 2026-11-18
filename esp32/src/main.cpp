@@ -121,6 +121,14 @@ class BridgeServerCallbacks : public NimBLEServerCallbacks {
     }
 };
 
+// 报告特征的订阅回调：打印真实句柄与 subValue，确认 iPad 订阅的 attr_handle=26
+// 是否就是我们的 inputReportChar（还是发错了对象）。
+class ReportCharCallbacks : public NimBLECharacteristicCallbacks {
+    void onSubscribe(NimBLECharacteristic* pChar, ble_gap_conn_desc* desc, uint16_t subValue) override {
+        Serial.printf("[SUB] reportChar handle=%u subValue=%u\n", pChar->getHandle(), subValue);
+    }
+};
+
 // 把一条 HID 报告发给已订阅的主机。
 static void sendHidReport(const uint8_t* data, size_t len) {
     if (inputReportChar == nullptr) return;
@@ -162,10 +170,15 @@ void setup() {
     hid->pnp(0x02 /*USB*/, 0x1234 /*VID*/, 0x0100 /*PID*/, 0x0100 /*版本*/);
     hid->hidInfo(0x00 /*国家码*/, 0x02 /*Normally Connectable*/);
     hid->reportMap((uint8_t*)reportMap, sizeof(reportMap));
-    hid->startServices();
-    // 我们的描述符不带 Report ID，因此 Report Reference 里写 0（与 iOS 端一致）。
+    // 【关键顺序】inputReport() 内部是 createCharacteristic()，必须在 startServices()
+    // 之前创建，否则报告特征不进 GATT 数据库 —— 主机看到的是别的特征、订阅数恒为 0，
+    // notify 发到幽灵特征，表现为「连上却完全没反应」。这是本次「假连接」的真正根因。
+    // 描述符不带 Report ID，因此 Report Reference 里写 0（与 iOS 端一致）。
     inputReportChar = hid->inputReport(0);
+    inputReportChar->setCallbacks(new ReportCharCallbacks());  // 打印订阅句柄
     hid->setBatteryLevel(100);
+    hid->startServices();  // 必须在所有 createCharacteristic 之后
+    Serial.printf("[DIAG] inputReportChar handle=%u\n", inputReportChar->getHandle());
 
     NimBLEAdvertising* pAdv = NimBLEDevice::getAdvertising();
     pAdv->setAppearance(0x03C0);  // 0x03C0 复合 HID（键盘+鼠标）；0x03C1 纯键盘会让 iPad 不出指针
@@ -205,8 +218,9 @@ void loop() {
     if (millis() - g_statAt >= 3000) {
         g_statAt = millis();
         size_t subs = inputReportChar ? inputReportChar->getSubscribedCount() : 0;
-        Serial.printf("[STAT] hello=%u report=%u subscribed=%u\n",
-                      g_helloCount, g_reportCount, (unsigned)subs);
+        Serial.printf("[STAT] hello=%u report=%u subscribed=%u handle=%u\n",
+                      g_helloCount, g_reportCount, (unsigned)subs,
+                      inputReportChar ? inputReportChar->getHandle() : 0);
     }
     delay(1);
 }

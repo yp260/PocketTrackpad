@@ -43,13 +43,15 @@ tree = gh("POST", "/git/trees", {
 print("tree =", tree["sha"])
 
 msg = json.dumps(
-    "fix: ESP32 桥改名 PT-Pad-S3 + 开 bonding，修复 iPad 假连接/不订阅报告\n\n"
-    "诊断实测：report 一路涨到 1412（手机->ESP32 全通），但串口从无 [BLE] 主机已连接、subscribed 恒为 0。\n"
-    "根因两个叠加：\n"
-    "1) 设备名 PT-Pad 与旧 iPhone 软件方案同名，iOS 当已知 HID 自动重连旧记录、不扫新板 -> iPad 假「已连接」，根本没连到 ESP32。改名 PT-Pad-S3 强制重新发现配对。\n"
-    "2) setSecurityAuth(false,false,false) 全关 bonding，iOS 对第三方 HID 不配对就不订阅 Input Report -> subscribed=0、连上也没输入。改 (true,false,false) Just Works 静默配对。\n"
-    "- 保留诊断：onConnect 打 [BLE] 主机已连接，[STAT] 打 hello/report/subscribed。\n"
-    "- esp32/README.md 记录此坑。iPad 需搜新名 PT-Pad-S3 重新配对。",
+    "fix: 修正 inputReport 创建顺序 —— 报告特征未进 GATT 是真凶\n\n"
+    "真机串口决定性证据：[BLE] 主机已连接 + subscribe event attr_handle=26 subscribed:true，\n"
+    "但 [STAT] subscribed=0 —— iPad 订阅的是别的特征，我们 notify 的是幽灵特征。\n"
+    "- 根因：main.cpp 先 startServices() 再 inputReport(0)。NimBLE 1.4.3 的 inputReport() 内部是 createCharacteristic()，\n"
+    "  而 startServices() 只注册调用那一刻已存在的特征（源码 NimBLEService::start 的 'Adding %d characteristics'）。\n"
+    "  晚创建的报告特征不在 GATT 数据库，主机无法订阅，notify 全丢 -> 连上却键鼠无反应。\n"
+    "- 修复：把 inputReport(0)+setCallbacks 移到 startServices() 之前，顺序 reportMap->inputReport->setBatteryLevel->startServices。\n"
+    "- 加 ReportCharCallbacks::onSubscribe 与 [DIAG] handle 打印，下轮可确认句柄一致。\n"
+    "- 保留上轮改名 PT-Pad-S3 + bonding 修复（均已生效：这次 iPad 真连上了）。",
     ensure_ascii=False
 )
 
