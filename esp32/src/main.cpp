@@ -243,7 +243,7 @@ void setup() {
 #if CONFIG_TINYUSB_HID_ENABLED
     usbKeyboard.begin();
     usbMouse.begin();
-    Serial.println("USB HID 已就绪（Windows：把数据线接板子右侧 USB-OTG 口，免驱识别为键鼠）");
+    Serial.println("USB HID 已就绪（Windows：数据线接板子标 OTG 的口，免驱识别为键鼠；若只看到 USB JTAG/serial debug unit，说明 ARDUINO_USB_MODE 配错成 1）");
 #else
     Serial.println("[警告] CONFIG_TINYUSB_HID_ENABLED 未开启，USB HID 不可用（仅 BLE 工作）");
 #endif
