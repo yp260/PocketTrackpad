@@ -69,6 +69,7 @@ esptool.py --chip esp32s3 --port COMx write_flash \
 
 ## 注意
 
+- **platform 必须锁 `espressif32@6.13.0`（arduino-esp32 2.0.17 / IDF 4.4.7）**：NimBLE-Arduino 1.4.3 只兼容 arduino-esp32 2.x。若写成 `platform = espressif32` 不锁版本，CI 会拉到 8.x（arduino 3.3 / IDF 5.5），编译能过但运行时 `NimBLEDevice::init()` 空指针崩溃（串口 `Guru Meditation Error: Core 1 panic'ed (LoadProhibited)`, `EXCVADDR 0x5004c`），表现为 AP 打印出来后立刻无限重启、手机扫不到 `PT-Bridge`。2026-11-18 真机实测确认，已锁定版本修复。
 - 报告布局（12 字节顺序）与 iOS 端 `PocketTrackpad/HIDDescriptor.swift` 的 `compositeReportMap`
   必须保持一致；任一侧改动都要同步另一侧。
 - Windows 首次配对可能弹提示，配对一次即可。
