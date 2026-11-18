@@ -26,6 +26,10 @@
 #include <WiFiUdp.h>
 #include <NimBLEDevice.h>
 #include <NimBLEHIDDevice.h>
+// NimBLE 的 HIDTypes.h 定义了宏 HID_SUBCLASS_NONE (0)，而 TinyUSB 的 hid.h 里有同名枚举值，
+// 两者同时编译会让 hid_subclass_enum_t 声明崩坏（error: expected identifier）。
+// 本固件不用 NimBLE 的 HID 类枚举（只用 report map 字节数组），undef 掉这个污染宏即可共存。
+#undef HID_SUBCLASS_NONE
 // USB HID（ESP32-S3 原生 USB-OTG 口）：给 Windows 做有线键鼠。
 // 用官方 boot 协议类，Windows 原生免驱。与 BLE HID 互不干扰：
 //   - 右边 USB-OTG 口（GPIO19/20）-> USB HID -> Windows 有线
