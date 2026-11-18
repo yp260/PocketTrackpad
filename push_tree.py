@@ -43,11 +43,12 @@ tree = gh("POST", "/git/trees", {
 print("tree =", tree["sha"])
 
 msg = json.dumps(
-    "fix: ESP32 桥 Appearance 改 0x03C0 复合 HID，修复 iPad 配对成功但无鼠标指针\n\n"
-    "真机反馈：手机经桥连接成功、iPad 能搜到并配对 PT-Pad，但完全没有鼠标指针。\n"
-    "- 根因：固件 pAdv->setAppearance(0x03C1) 是纯键盘外观，iPad 只建键盘通道、不创建指针。\n"
-    "- 修复：改 0x03C0（Generic HID 复合设备），iPad 同时建键盘+鼠标通道；不用 0x03C2 纯鼠标以免丢键盘快捷键。Windows 11 只要求广播有 Appearance 元素，不挑值，电脑端不受影响。键盘 Collection 仍在描述符最前（Nordic 针对 iPad 的 workaround）。\n"
-    "- 同步 main.cpp 注释/启动日志与 esp32/README.md；改后 iPad 需在辅助触控→设备里忽略旧配对重配。",
+    "debug: ESP32 桥加运行时诊断计数，定位「连上但没反应」链路卡点\n\n"
+    "真机：手机显示已连接桥接、iPad 显示 PT-Pad 已连接，但键盘鼠标都无反应。\n"
+    "启动日志确认新固件 0x03C0 在跑、BLE 初始化完整无崩溃，问题在报告流动环节。\n"
+    "- main.cpp 加 4 个计数：hello（收握手）、report（收 12 字节报告）、notifyOK/FAIL，每 3 秒打印 [STAT]。\n"
+    "- sendHidReport 改为返回 notify() 结果。\n"
+    "- 判读：hello 不涨=UDP 不通；hello 涨 report 不涨=App 没发报告；report 涨 notifyFAIL 涨=iPad 没订阅；report/notifyOK 涨=固件已发、问题在 iPad 识别。",
     ensure_ascii=False
 )
 

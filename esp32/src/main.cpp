@@ -105,11 +105,18 @@ static const uint8_t reportMap[] = {
 static NimBLEHIDDevice* hid = nullptr;
 static NimBLECharacteristic* inputReportChar = nullptr;
 
-// 把一条 HID 报告发给已订阅的主机。
-static void sendHidReport(const uint8_t* data, size_t len) {
-    if (inputReportChar == nullptr) return;
+// ---- 运行时诊断计数：定位「两端都显示已连接但没反应」卡在哪一环 ----
+static uint32_t g_helloCount = 0;   // 收到 iPhone 的 "PT" hello 次数
+static uint32_t g_reportCount = 0;  // 收到 12 字节 HID 报告次数
+static uint32_t g_notifyOk = 0;     // notify 成功次数
+static uint32_t g_notifyFail = 0;   // notify 失败次数（多为无订阅主机）
+static unsigned long g_statAt = 0;
+
+// 把一条 HID 报告发给已订阅的主机，返回 notify 是否成功。
+static bool sendHidReport(const uint8_t* data, size_t len) {
+    if (inputReportChar == nullptr) return false;
     inputReportChar->setValue((uint8_t*)data, len);
-    inputReportChar->notify();
+    return inputReportChar->notify();
 }
 
 void setup() {
@@ -161,6 +168,7 @@ void loop() {
         if (n <= 0) return;
 
         if (n == 2 && buf[0] == 0x50 && buf[1] == 0x54) {
+            g_helloCount++;
             // iPhone 的 hello 包（"PT"）：回 welcome（"TP"）确认链路，
             // 这样 iPhone 端才会把状态切到「已连接硬件桥」。
             IPAddress rip = udp.remoteIP();
@@ -171,8 +179,20 @@ void loop() {
             udp.endPacket();
         } else if (n == 12) {
             // 12 字节复合 HID 报告（键盘在前），原样转发给主机。
-            sendHidReport(buf, 12);
+            g_reportCount++;
+            if (sendHidReport(buf, 12)) g_notifyOk++;
+            else g_notifyFail++;
         }
+    }
+    // 每 3 秒打印一次诊断计数，定位链路卡点：
+    //   hello 不涨        -> iPhone 没发握手 / UDP 不通
+    //   hello 涨 report 不涨 -> App 没在发 HID 报告（手势没进 flush）
+    //   report 涨 notifyFail 涨 -> iPad 没订阅报告特征（连上但收不到）
+    //   report 涨 notifyOK 涨  -> 固件已发出，问题在 iPad 端识别
+    if (millis() - g_statAt >= 3000) {
+        g_statAt = millis();
+        Serial.printf("[STAT] hello=%u report=%u notifyOK=%u notifyFAIL=%u\n",
+                      g_helloCount, g_reportCount, g_notifyOk, g_notifyFail);
     }
     delay(1);
 }
