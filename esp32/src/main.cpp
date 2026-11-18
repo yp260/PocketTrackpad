@@ -280,14 +280,10 @@ void loop() {
     if (millis() - g_statAt >= 3000) {
         g_statAt = millis();
         size_t subs = inputReportChar ? inputReportChar->getSubscribedCount() : 0;
-#if CONFIG_TINYUSB_HID_ENABLED
-        bool usbReady = usbKeyboard.ready();  // Windows 是否已枚举好 HID
-        Serial.printf("[STAT] hello=%u report=%u bleSubs=%u usbReady=%d\n",
-                      g_helloCount, g_reportCount, (unsigned)subs, usbReady ? 1 : 0);
-#else
+        // USB HID（Windows）枚举状态看 Windows 设备管理器最直接；
+        // USBHIDKeyboard 不暴露 ready()（它内部持有私有 USBHID），故这里只报 BLE 订阅数。
         Serial.printf("[STAT] hello=%u report=%u bleSubs=%u\n",
                       g_helloCount, g_reportCount, (unsigned)subs);
-#endif
     }
     delay(1);
 }
