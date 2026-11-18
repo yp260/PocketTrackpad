@@ -41,6 +41,18 @@
 #include "USBHIDKeyboard.h"
 #include "USBHIDMouse.h"
 
+// 编译期把 ARDUINO_USB_MODE 的最终生效值打进构建日志，用于确认板级 =1 是否已被 build_unflags 剔除。
+// 期望看到 "USB MODE FINAL = 0"（TinyUSB/USB-OTG，HID 走这条）；若为 1 则是 JTAG 串口、HID 失效。
+#ifndef USBCHECK_STR2
+#define USBCHECK_STR2(x) #x
+#define USBCHECK_STR(x) USBCHECK_STR2(x)
+#endif
+#ifndef ARDUINO_USB_MODE
+#pragma message("[USB-CHECK] ARDUINO_USB_MODE NOT DEFINED (defaults to 0 = TinyUSB)")
+#else
+#pragma message("[USB-CHECK] ARDUINO_USB_MODE FINAL = " USBCHECK_STR(ARDUINO_USB_MODE))
+#endif
+
 // ---- 网络 ----
 static const char* AP_SSID = "PT-Bridge";   // iPhone 在「无线局域网」里连接此热点
 static const char* AP_PASS = "";            // 开放网络，无需密码
@@ -240,10 +252,12 @@ void setup() {
     // ---- USB HID（Windows 有线）----
     // native USB 口（S3 的 USB-OTG，GPIO19/20）枚举成标准键鼠，Windows 免驱。
     // 键盘/鼠标共用一个 TinyUSB HID 接口，两个 begin() 只幂等创建信号量，安全。
+    Serial.printf("[USB-DIAG] ARDUINO_USB_MODE=%d (需为0=TinyUSB)，CONFIG_TINYUSB_HID_ENABLED=%d\n",
+                  (int)ARDUINO_USB_MODE, (int)CONFIG_TINYUSB_HID_ENABLED);
 #if CONFIG_TINYUSB_HID_ENABLED
     usbKeyboard.begin();
     usbMouse.begin();
-    Serial.println("USB HID 已就绪（Windows：数据线接板子标 OTG 的口，免驱识别为键鼠；若只看到 USB JTAG/serial debug unit，说明 ARDUINO_USB_MODE 配错成 1）");
+    Serial.println("USB HID 已就绪（VID=303A/PID=0002，Windows 应识别为 HID 键鼠，不再是 JTAG 串口）");
 #else
     Serial.println("[警告] CONFIG_TINYUSB_HID_ENABLED 未开启，USB HID 不可用（仅 BLE 工作）");
 #endif
