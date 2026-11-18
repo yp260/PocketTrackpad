@@ -108,15 +108,13 @@ static NimBLECharacteristic* inputReportChar = nullptr;
 // ---- 运行时诊断计数：定位「两端都显示已连接但没反应」卡在哪一环 ----
 static uint32_t g_helloCount = 0;   // 收到 iPhone 的 "PT" hello 次数
 static uint32_t g_reportCount = 0;  // 收到 12 字节 HID 报告次数
-static uint32_t g_notifyOk = 0;     // notify 成功次数
-static uint32_t g_notifyFail = 0;   // notify 失败次数（多为无订阅主机）
 static unsigned long g_statAt = 0;
 
-// 把一条 HID 报告发给已订阅的主机，返回 notify 是否成功。
-static bool sendHidReport(const uint8_t* data, size_t len) {
-    if (inputReportChar == nullptr) return false;
+// 把一条 HID 报告发给已订阅的主机。
+static void sendHidReport(const uint8_t* data, size_t len) {
+    if (inputReportChar == nullptr) return;
     inputReportChar->setValue((uint8_t*)data, len);
-    return inputReportChar->notify();
+    inputReportChar->notify();
 }
 
 void setup() {
@@ -180,19 +178,16 @@ void loop() {
         } else if (n == 12) {
             // 12 字节复合 HID 报告（键盘在前），原样转发给主机。
             g_reportCount++;
-            if (sendHidReport(buf, 12)) g_notifyOk++;
-            else g_notifyFail++;
+            sendHidReport(buf, 12);
         }
     }
     // 每 3 秒打印一次诊断计数，定位链路卡点：
-    //   hello 不涨        -> iPhone 没发握手 / UDP 不通
+    //   hello 不涨         -> iPhone 没发握手 / UDP 不通
     //   hello 涨 report 不涨 -> App 没在发 HID 报告（手势没进 flush）
-    //   report 涨 notifyFail 涨 -> iPad 没订阅报告特征（连上但收不到）
-    //   report 涨 notifyOK 涨  -> 固件已发出，问题在 iPad 端识别
+    //   report 涨          -> 固件已收到并发给 iPad，问题在 iPad 端识别/订阅
     if (millis() - g_statAt >= 3000) {
         g_statAt = millis();
-        Serial.printf("[STAT] hello=%u report=%u notifyOK=%u notifyFAIL=%u\n",
-                      g_helloCount, g_reportCount, g_notifyOk, g_notifyFail);
+        Serial.printf("[STAT] hello=%u report=%u\n", g_helloCount, g_reportCount);
     }
     delay(1);
 }

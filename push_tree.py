@@ -46,9 +46,9 @@ msg = json.dumps(
     "debug: ESP32 桥加运行时诊断计数，定位「连上但没反应」链路卡点\n\n"
     "真机：手机显示已连接桥接、iPad 显示 PT-Pad 已连接，但键盘鼠标都无反应。\n"
     "启动日志确认新固件 0x03C0 在跑、BLE 初始化完整无崩溃，问题在报告流动环节。\n"
-    "- main.cpp 加 4 个计数：hello（收握手）、report（收 12 字节报告）、notifyOK/FAIL，每 3 秒打印 [STAT]。\n"
-    "- sendHidReport 改为返回 notify() 结果。\n"
-    "- 判读：hello 不涨=UDP 不通；hello 涨 report 不涨=App 没发报告；report 涨 notifyFAIL 涨=iPad 没订阅；report/notifyOK 涨=固件已发、问题在 iPad 识别。",
+    "- main.cpp 加 2 个计数：hello（收握手）、report（收 12 字节报告），每 3 秒打印 [STAT]。\n"
+    "- 判读：hello 不涨=UDP 不通；hello 涨 report 不涨=App 没发报告；report 涨=固件已收并发给 iPad，问题在 iPad 识别/订阅。\n"
+    "- 注：NimBLE 1.4.3 的 notify() 返回 void，不能取返回值判断成败。",
     ensure_ascii=False
 )
 
