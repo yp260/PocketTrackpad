@@ -110,6 +110,17 @@ static uint32_t g_helloCount = 0;   // 收到 iPhone 的 "PT" hello 次数
 static uint32_t g_reportCount = 0;  // 收到 12 字节 HID 报告次数
 static unsigned long g_statAt = 0;
 
+// 连接回调： iPad 上「PT-Pad 已连接」可能只是旧配对缓存，实际 BLE 链路未必连到本板。
+// 这行日志能确认主机是否真的连上 ESP32 的 GATT 服务。
+class BridgeServerCallbacks : public NimBLEServerCallbacks {
+    void onConnect(NimBLEServer* pServer) override {
+        Serial.println("[BLE] 主机已连接（GATT 链路建立）");
+    }
+    void onDisconnect(NimBLEServer* pServer) override {
+        Serial.println("[BLE] 主机已断开");
+    }
+};
+
 // 把一条 HID 报告发给已订阅的主机。
 static void sendHidReport(const uint8_t* data, size_t len) {
     if (inputReportChar == nullptr) return;
@@ -141,6 +152,7 @@ void setup() {
     NimBLEDevice::setSecurityAuth(false, false, false);
 
     NimBLEServer* pServer = NimBLEDevice::createServer();
+    pServer->setCallbacks(new BridgeServerCallbacks());  // 打印主机连接/断开
     hid = new NimBLEHIDDevice(pServer);
     hid->manufacturer("PocketTrackpad");
     hid->pnp(0x02 /*USB*/, 0x1234 /*VID*/, 0x0100 /*PID*/, 0x0100 /*版本*/);
@@ -182,12 +194,15 @@ void loop() {
         }
     }
     // 每 3 秒打印一次诊断计数，定位链路卡点：
-    //   hello 不涨         -> iPhone 没发握手 / UDP 不通
-    //   hello 涨 report 不涨 -> App 没在发 HID 报告（手势没进 flush）
-    //   report 涨          -> 固件已收到并发给 iPad，问题在 iPad 端识别/订阅
+    //   hello 不涨              -> iPhone 没发握手 / UDP 不通
+    //   hello 涨 report 不涨     -> App 没在发 HID 报告
+    //   report 涨 subscribed=0   -> 主机没连上/没订阅报告特征（iPad 端问题）
+    //   report 涨 subscribed>0   -> 报告已发出，问题在 iPad 解析报告内容
     if (millis() - g_statAt >= 3000) {
         g_statAt = millis();
-        Serial.printf("[STAT] hello=%u report=%u\n", g_helloCount, g_reportCount);
+        size_t subs = inputReportChar ? inputReportChar->getSubscribedCount() : 0;
+        Serial.printf("[STAT] hello=%u report=%u subscribed=%u\n",
+                      g_helloCount, g_reportCount, (unsigned)subs);
     }
     delay(1);
 }

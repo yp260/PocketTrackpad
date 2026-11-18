@@ -43,12 +43,12 @@ tree = gh("POST", "/git/trees", {
 print("tree =", tree["sha"])
 
 msg = json.dumps(
-    "debug: ESP32 桥加运行时诊断计数，定位「连上但没反应」链路卡点\n\n"
-    "真机：手机显示已连接桥接、iPad 显示 PT-Pad 已连接，但键盘鼠标都无反应。\n"
-    "启动日志确认新固件 0x03C0 在跑、BLE 初始化完整无崩溃，问题在报告流动环节。\n"
-    "- main.cpp 加 2 个计数：hello（收握手）、report（收 12 字节报告），每 3 秒打印 [STAT]。\n"
-    "- 判读：hello 不涨=UDP 不通；hello 涨 report 不涨=App 没发报告；report 涨=固件已收并发给 iPad，问题在 iPad 识别/订阅。\n"
-    "- 注：NimBLE 1.4.3 的 notify() 返回 void，不能取返回值判断成败。",
+    "debug: ESP32 桥加连接回调 + 订阅数诊断，锁定 iPad 端卡点\n\n"
+    "第一轮诊断实测：hello 0->24、report 0->1412 一路在涨，证明手机端/UDP/固件转发全通，问题在 iPad 端。\n"
+    "新诊断确认 iPad 是否真的连上 ESP32 GATT（而非旧配对缓存的假「已连接」）以及是否订阅了报告特征。\n"
+    "- main.cpp 加 BridgeServerCallbacks（onConnect/onDisconnect 打印），[STAT] 增加 subscribed=inputReportChar->getSubscribedCount()。\n"
+    "- 判读：report 涨 subscribed=0 且无[BLE]主机已连接=iPad 没连上本板；subscribed=0 但有连接=iPad 没订阅报告；subscribed>0=iPad 收到但解析问题。\n"
+    "- 已核对 ESP32 reportMap 与 iOS compositeReportMap 字节完全一致，排除格式差异。",
     ensure_ascii=False
 )
 
