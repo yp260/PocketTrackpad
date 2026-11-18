@@ -1,7 +1,7 @@
 # PocketTrackpad 硬件桥固件（ESP32）
 
 把 iPhone 采集到的触控板/键盘输入，通过 WiFi UDP 收进来，再以**标准 BLE HID**（带正确 GAP
-Appearance = `0x03C1` HID Keyboard，v0.0.18 起键盘 Collection 排描述符最前）转发给
+Appearance = `0x03C0` Generic HID 复合设备，键盘 Collection 排描述符最前）转发给
 Windows / Android / iPad。解决两个 iOS 蓝牙外设的硬限制：
 1. Windows 搜不到 / 配对失败（iOS 无法设置 GAP Appearance）；
 2. iPad 不把复合设备当实体键盘（软键盘不隐藏、输入法候选词不能用数字选词）——
@@ -69,6 +69,7 @@ esptool.py --chip esp32s3 --port COMx write_flash \
 
 ## 注意
 
+- **Appearance 必须用 `0x03C0`（复合 HID），不可用 `0x03C1`（纯键盘）**：2026-11-18 真机实测——用 `0x03C1` 时 iPad 能配对成功但「完全没有指针」，因为 iPad 只把它当键盘、不创建鼠标指针通道。改成 `0x03C0`（Generic HID 复合设备）后 iPad 同时建键盘+鼠标通道。也不可退到 `0x03C2`（纯鼠标），那样键盘报告不再被当系统快捷键。Windows 11 从 2023-09 起只要求广播里「有」Appearance 元素、不挑具体值，`0x03C0` 同样能发现配对。改 Appearance 后 iPad 必须在「辅助功能→触控→辅助触控→设备」里忽略旧配对重新配，否则沿用缓存的旧声明。
 - **platform 必须锁 `espressif32@6.13.0`（arduino-esp32 2.0.17 / IDF 4.4.7）**：NimBLE-Arduino 1.4.3 只兼容 arduino-esp32 2.x。若写成 `platform = espressif32` 不锁版本，CI 会拉到 8.x（arduino 3.3 / IDF 5.5），编译能过但运行时 `NimBLEDevice::init()` 空指针崩溃（串口 `Guru Meditation Error: Core 1 panic'ed (LoadProhibited)`, `EXCVADDR 0x5004c`），表现为 AP 打印出来后立刻无限重启、手机扫不到 `PT-Bridge`。2026-11-18 真机实测确认，已锁定版本修复。
 - 报告布局（12 字节顺序）与 iOS 端 `PocketTrackpad/HIDDescriptor.swift` 的 `compositeReportMap`
   必须保持一致；任一侧改动都要同步另一侧。

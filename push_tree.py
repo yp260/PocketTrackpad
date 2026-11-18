@@ -43,11 +43,11 @@ tree = gh("POST", "/git/trees", {
 print("tree =", tree["sha"])
 
 msg = json.dumps(
-    "fix: 蓝牙入口改黑色椭圆蓝字、跳转直达系统设置首页\n\n"
-    "用户实测反馈：蓝牙跳转还是不行（私有 scheme 真机上始终进不去蓝牙页），放弃直达蓝牙页，改为跳系统设置首页；图标改黑色椭圆胶囊 + 蓝色「蓝牙」字。\n"
-    "- ContentView：删除 openBluetoothSettings/tryOpenBluetooth 整套私有 scheme 链式尝试，新增 openSystemSettings 只用 openSettingsURLString 直达系统「设置」首页。\n"
-    "- 按钮：从 24x24 蓝色圆 + bluetooth 系统图标，改为 34x22 黑色 Capsule + 蓝色粗体「蓝牙」二字，accessibilityLabel 改「打开系统设置」。\n"
-    "- preview/ui-preview.html 同步样式、按钮文案、点击日志与说明；JS 语法已校验通过。",
+    "fix: ESP32 桥 Appearance 改 0x03C0 复合 HID，修复 iPad 配对成功但无鼠标指针\n\n"
+    "真机反馈：手机经桥连接成功、iPad 能搜到并配对 PT-Pad，但完全没有鼠标指针。\n"
+    "- 根因：固件 pAdv->setAppearance(0x03C1) 是纯键盘外观，iPad 只建键盘通道、不创建指针。\n"
+    "- 修复：改 0x03C0（Generic HID 复合设备），iPad 同时建键盘+鼠标通道；不用 0x03C2 纯鼠标以免丢键盘快捷键。Windows 11 只要求广播有 Appearance 元素，不挑值，电脑端不受影响。键盘 Collection 仍在描述符最前（Nordic 针对 iPad 的 workaround）。\n"
+    "- 同步 main.cpp 注释/启动日志与 esp32/README.md；改后 iPad 需在辅助触控→设备里忽略旧配对重配。",
     ensure_ascii=False
 )
 

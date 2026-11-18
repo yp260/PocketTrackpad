@@ -12,8 +12,11 @@
 //   [modifier, reserved, key1..key6, buttons, dx, dy, wheel]
 // 其中 buttons: bit0=左 bit1=右 bit2=中；dx/dy/wheel 为有符号 8 位相对量。
 //
-// Appearance = HID Keyboard (0x03C1)：让主机把设备当键盘对待。
-// iPad 上这样才可能隐藏软键盘、候选词带数字；Windows 上键盘类配对最成熟。
+// Appearance = Generic HID / 复合设备 (0x03C0)：同时声明键盘 + 鼠标。
+// 注意不可用 0x03C1（纯键盘）——iPad 会把设备只当键盘、不创建鼠标指针；
+// 也不可用 0x03C2（纯鼠标）——部分主机不再把键盘报告当系统快捷键。
+// 0x03C0 是键盘+鼠标复合设备的标准外观值，iPad 出指针、windows 11 也认
+// （Win11 只要求广播里「有」Appearance 元素，不挑具体值）。
 //
 // 配套 iPhone 端：PocketTrackpad/HIDDescriptor.swift 的 compositeReportMap，
 // 以及 PocketTrackpad/BridgeTransport.swift 的 UDP 协议（hello 0x5054 / welcome 0x5450）。
@@ -111,7 +114,7 @@ static void sendHidReport(const uint8_t* data, size_t len) {
 
 void setup() {
     Serial.begin(115200);
-    Serial.println("\nPocketTrackpad ESP32 硬件桥启动（键盘在前 / Appearance=Keyboard）");
+    Serial.println("\nPocketTrackpad ESP32 硬件桥启动（键盘在前 / Appearance=Composite 0x03C0）");
 
     // ---- WiFi 热点：iPhone 连上来后通过 UDP 发输入报告 ----
     WiFi.softAP(AP_SSID, AP_PASS);
@@ -123,8 +126,10 @@ void setup() {
     Serial.printf("UDP 监听端口: %u\n", UDP_PORT);
 
     // ---- BLE HID：以标准键盘+鼠标复合设备被主机发现 ----
-    // 关键：GAP Appearance = 0x03C1 (HID Keyboard)，这是 iOS 外设做不到、
-    // 而 ESP32 可以做的。键盘类设备在 Windows / iPadOS 上的配对流程最成熟。
+    // 关键：GAP Appearance = 0x03C0 (Generic HID / 复合)，这是 iOS 外设做不到、
+    // 而 ESP32 可以做的。必须用复合值：0x03C1 纯键盘会让 iPad 不出指针，
+    // 实测「连上了但完全没有指针」即此因。Report Map 里键盘 Collection 在前，
+    // 符合 iPad 对复合设备的排列要求（Nordic 官方针对 iPad 的 workaround）。
     // 注意：1.4.3 的 Appearance 只能设在广播对象上，NimBLEDevice 没有对应静态方法。
     NimBLEDevice::init("PT-Pad");
     // 不强制配对（bonding/mitm/secure 全 false）。Windows 可能仍弹出配对提示，配对一次即可。
@@ -142,10 +147,10 @@ void setup() {
     hid->setBatteryLevel(100);
 
     NimBLEAdvertising* pAdv = NimBLEDevice::getAdvertising();
-    pAdv->setAppearance(0x03C1);
+    pAdv->setAppearance(0x03C0);  // 0x03C0 复合 HID（键盘+鼠标）；0x03C1 纯键盘会让 iPad 不出指针
     pAdv->addServiceUUID(NimBLEUUID((uint16_t)0x1812));  // HID Service
     pAdv->start();
-    Serial.println("BLE HID 广播中：PT-Pad（键盘 + 鼠标，Appearance=Keyboard）");
+    Serial.println("BLE HID 广播中：PT-Pad（键盘 + 鼠标，Appearance=Composite 0x03C0）");
 }
 
 void loop() {
