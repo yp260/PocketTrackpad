@@ -43,15 +43,17 @@ tree = gh("POST", "/git/trees", {
 print("tree =", tree["sha"])
 
 msg = json.dumps(
-    "fix: 修正 inputReport 创建顺序 —— 报告特征未进 GATT 是真凶\n\n"
-    "真机串口决定性证据：[BLE] 主机已连接 + subscribe event attr_handle=26 subscribed:true，\n"
-    "但 [STAT] subscribed=0 —— iPad 订阅的是别的特征，我们 notify 的是幽灵特征。\n"
-    "- 根因：main.cpp 先 startServices() 再 inputReport(0)。NimBLE 1.4.3 的 inputReport() 内部是 createCharacteristic()，\n"
-    "  而 startServices() 只注册调用那一刻已存在的特征（源码 NimBLEService::start 的 'Adding %d characteristics'）。\n"
-    "  晚创建的报告特征不在 GATT 数据库，主机无法订阅，notify 全丢 -> 连上却键鼠无反应。\n"
-    "- 修复：把 inputReport(0)+setCallbacks 移到 startServices() 之前，顺序 reportMap->inputReport->setBatteryLevel->startServices。\n"
-    "- 加 ReportCharCallbacks::onSubscribe 与 [DIAG] handle 打印，下轮可确认句柄一致。\n"
-    "- 保留上轮改名 PT-Pad-S3 + bonding 修复（均已生效：这次 iPad 真连上了）。",
+    "feat: 新增 USB HID 有线通道给 Windows，BLE 通道保留给 iPad（双通道）\n\n"
+    "iPad 走 BLE 已真机验证通过（subscribed=1、report 持续在涨）。Windows 端搜不到：\n"
+    "根因是 ESP32-S3 硬件只有 BLE、不支持经典蓝牙 BR/EDR（乐鑫官方文档确认，任何固件都加不出），\n"
+    "而该 Windows 的老 Broadcom BCM20702(BT4.0) 适配器搜不到纯 BLE HID。\n"
+    "- 方案：用 S3 原生 USB-OTG 口做 USB HID（标准 boot 键鼠，Windows 免驱、零延迟）。\n"
+    "- main.cpp 引入 USBHIDKeyboard/USBHIDMouse；sendHidReport 把 12 字节报告同时发 BLE 和 USB：\n"
+    "  前 8 字节 KeyReport(modifiers,reserved,keys[6]) 用 sendReport，后 4 字节 buttons/dx/dy/wheel 用 move+press/release。\n"
+    "- platformio.ini 加 -D ARDUINO_USB_MODE=1 -D CONFIG_TINYUSB_ENABLED=1 -D CONFIG_TINYUSB_HID_ENABLED=1；\n"
+    "  ARDUINO_USB_CDC_ON_BOOT 保持 0，确保 Serial 仍走 UART0 左口日志。\n"
+    "- 两口分工：左 USB-UART 烧录+日志，右 USB-OTG 接 Windows 当键鼠。[STAT] 加 bleSubs/usbReady。\n"
+    "- BLE 侧代码（inputReport 顺序、bonding、0x03C0、改名 PT-Pad-S3）全部保留不动。",
     ensure_ascii=False
 )
 

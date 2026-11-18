@@ -26,6 +26,16 @@
 #include <WiFiUdp.h>
 #include <NimBLEDevice.h>
 #include <NimBLEHIDDevice.h>
+// USB HID（ESP32-S3 原生 USB-OTG 口）：给 Windows 做有线键鼠。
+// 用官方 boot 协议类，Windows 原生免驱。与 BLE HID 互不干扰：
+//   - 右边 USB-OTG 口（GPIO19/20）-> USB HID -> Windows 有线
+//   - BLE 广播 -> iPad 无线（iPad 那条链路完全不动）
+//   - 左边 USB-UART 口（TX43/RX44）-> Serial 日志（ARDUINO_USB_CDC_ON_BOOT 保持 0）
+// 只有 CONFIG_TINYUSB_HID_ENABLED=1 时这些类才存在（platformio.ini 里开启）。
+#include "USB.h"
+#include "USBHID.h"
+#include "USBHIDKeyboard.h"
+#include "USBHIDMouse.h"
 
 // ---- 网络 ----
 static const char* AP_SSID = "PT-Bridge";   // iPhone 在「无线局域网」里连接此热点
@@ -105,6 +115,15 @@ static const uint8_t reportMap[] = {
 static NimBLEHIDDevice* hid = nullptr;
 static NimBLECharacteristic* inputReportChar = nullptr;
 
+// ---- USB HID（Windows 有线）对象 ----
+// 键盘用 sendReport(KeyReport) 直接发原始 8 字节报告（与 BLE 报告前 8 字节同布局）；
+// 鼠标用 move() + press/release 同步 buttons，避免内部状态与主机不同步。
+#if CONFIG_TINYUSB_HID_ENABLED
+static USBHIDKeyboard usbKeyboard;
+static USBHIDMouse usbMouse;
+static uint8_t g_usbMouseButtons = 0;  // 我们自己跟踪 buttons，避免与 USBHIDMouse 内部状态打架
+#endif
+
 // ---- 运行时诊断计数：定位「两端都显示已连接但没反应」卡在哪一环 ----
 static uint32_t g_helloCount = 0;   // 收到 iPhone 的 "PT" hello 次数
 static uint32_t g_reportCount = 0;  // 收到 12 字节 HID 报告次数
@@ -129,11 +148,39 @@ class ReportCharCallbacks : public NimBLECharacteristicCallbacks {
     }
 };
 
-// 把一条 HID 报告发给已订阅的主机。
+// 把一条 12 字节复合 HID 报告同时发给两条通道：
+//   1) BLE -> iPad（无线，已订阅才发）
+//   2) USB HID -> Windows（有线，主机枚举后才发）
+// 报告布局：[modifier, reserved, key1..key6, buttons, dx, dy, wheel]
 static void sendHidReport(const uint8_t* data, size_t len) {
-    if (inputReportChar == nullptr) return;
-    inputReportChar->setValue((uint8_t*)data, len);
-    inputReportChar->notify();
+    // ---- 通道 1：BLE（iPad）----
+    if (inputReportChar != nullptr && inputReportChar->getSubscribedCount() > 0) {
+        inputReportChar->setValue((uint8_t*)data, len);
+        inputReportChar->notify();
+    }
+
+#if CONFIG_TINYUSB_HID_ENABLED
+    // ---- 通道 2：USB HID（Windows）----
+    // 报告前 8 字节正好是 KeyReport {modifiers, reserved, keys[6]}，逐字段拷贝。
+    // Windows 键鼠是两条独立报告（键盘 report id=1 / 鼠标 report id=2），
+    // 由 USBHIDKeyboard/USBHIDMouse 各自发送，主机原生识别。
+    KeyReport kr;
+    kr.modifiers = data[0];
+    kr.reserved  = data[1];
+    memcpy(kr.keys, data + 2, 6);
+    usbKeyboard.sendReport(&kr);
+
+    // 后 4 字节是鼠标：[buttons, dx, dy, wheel]
+    // buttons: bit0=左 bit1=右 bit2=中（与 Arduino MOUSE_LEFT/RIGHT/MIDDLE 一致）
+    uint8_t want = data[8] & 0x07;
+    // 只在按钮变化时 press/release，避免每包都触发按钮事件。
+    if ((want & MOUSE_LEFT)   != (g_usbMouseButtons & MOUSE_LEFT))   { if (want & MOUSE_LEFT)   usbMouse.press(MOUSE_LEFT);   else usbMouse.release(MOUSE_LEFT); }
+    if ((want & MOUSE_RIGHT)  != (g_usbMouseButtons & MOUSE_RIGHT))  { if (want & MOUSE_RIGHT)  usbMouse.press(MOUSE_RIGHT);  else usbMouse.release(MOUSE_RIGHT); }
+    if ((want & MOUSE_MIDDLE) != (g_usbMouseButtons & MOUSE_MIDDLE)) { if (want & MOUSE_MIDDLE) usbMouse.press(MOUSE_MIDDLE); else usbMouse.release(MOUSE_MIDDLE); }
+    g_usbMouseButtons = want;
+    // 相对位移：dx=data[9], dy=data[10], wheel=data[11]
+    usbMouse.move((int8_t)data[9], (int8_t)data[10], (int8_t)data[11], 0);
+#endif
 }
 
 void setup() {
@@ -185,6 +232,17 @@ void setup() {
     pAdv->addServiceUUID(NimBLEUUID((uint16_t)0x1812));  // HID Service
     pAdv->start();
     Serial.println("BLE HID 广播中：PT-Pad-S3（键盘 + 鼠标，Appearance=Composite 0x03C0，bonding 开）");
+
+    // ---- USB HID（Windows 有线）----
+    // native USB 口（S3 的 USB-OTG，GPIO19/20）枚举成标准键鼠，Windows 免驱。
+    // 键盘/鼠标共用一个 TinyUSB HID 接口，两个 begin() 只幂等创建信号量，安全。
+#if CONFIG_TINYUSB_HID_ENABLED
+    usbKeyboard.begin();
+    usbMouse.begin();
+    Serial.println("USB HID 已就绪（Windows：把数据线接板子右侧 USB-OTG 口，免驱识别为键鼠）");
+#else
+    Serial.println("[警告] CONFIG_TINYUSB_HID_ENABLED 未开启，USB HID 不可用（仅 BLE 工作）");
+#endif
 }
 
 void loop() {
@@ -218,9 +276,14 @@ void loop() {
     if (millis() - g_statAt >= 3000) {
         g_statAt = millis();
         size_t subs = inputReportChar ? inputReportChar->getSubscribedCount() : 0;
-        Serial.printf("[STAT] hello=%u report=%u subscribed=%u handle=%u\n",
-                      g_helloCount, g_reportCount, (unsigned)subs,
-                      inputReportChar ? inputReportChar->getHandle() : 0);
+#if CONFIG_TINYUSB_HID_ENABLED
+        bool usbReady = usbKeyboard.ready();  // Windows 是否已枚举好 HID
+        Serial.printf("[STAT] hello=%u report=%u bleSubs=%u usbReady=%d\n",
+                      g_helloCount, g_reportCount, (unsigned)subs, usbReady ? 1 : 0);
+#else
+        Serial.printf("[STAT] hello=%u report=%u bleSubs=%u\n",
+                      g_helloCount, g_reportCount, (unsigned)subs);
+#endif
     }
     delay(1);
 }

@@ -1,11 +1,17 @@
 # PocketTrackpad 硬件桥固件（ESP32）
 
-把 iPhone 采集到的触控板/键盘输入，通过 WiFi UDP 收进来，再以**标准 BLE HID**（带正确 GAP
-Appearance = `0x03C0` Generic HID 复合设备，键盘 Collection 排描述符最前）转发给
-Windows / Android / iPad。解决两个 iOS 蓝牙外设的硬限制：
-1. Windows 搜不到 / 配对失败（iOS 无法设置 GAP Appearance）；
-2. iPad 不把复合设备当实体键盘（软键盘不隐藏、输入法候选词不能用数字选词）——
+把 iPhone 采集到的触控板/键盘输入，通过 WiFi UDP 收进来，转成标准 HID，同时走**两条通道**发给目标设备：
+
+- **BLE HID**（无线）：Appearance = `0x03C0` Generic HID 复合设备，键盘 Collection 排描述符最前，
+  给 **iPad**（这台老 Broadcom 4.0 适配器的 Windows 搜不到纯 BLE HID，所以 Windows 改走下面这条）。
+- **USB HID**（有线）：ESP32-S3 原生 USB-OTG 口枚举成标准键鼠（boot 协议，Windows 免驱），
+  给 **Windows**。收到一条 12 字节报告时两条通道同时发，iPad/Windows 各自解析。
+
+解决两个 iOS 蓝牙外设的硬限制：
+1. iPad 不把复合设备当实体键盘（软键盘不隐藏、输入法候选词不能用数字选词）——
    描述符排列与 Appearance 都由 ESP32 补齐后，行为与实体键鼠一体键盘一致。
+2. Windows 端：ESP32-S3 是 BLE-only 芯片（硬件不支持经典蓝牙 BR/EDR），而这台 Windows 的
+   老 Broadcom 4.0 适配器搜不到纯 BLE HID。改用原生 USB HID 后 Windows 免驱、零延迟。
 
 ## 硬件
 
@@ -15,8 +21,10 @@ Windows / Android / iPad。解决两个 iOS 蓝牙外设的硬限制：
   直接烧录即可正常启动。若将来要用到 PSRAM，需在 `platformio.ini` 配 `board_build.arduino.memory_type=qio_opi`
   + `board_upload.flash_size=16MB` + `board_build.partitions=default_16MB.csv` + `-DBOARD_HAS_PSRAM`，
   但本项目没有收益，不建议开启（PSRAM 模式配错反而会导致启动失败）。
-- 一根 USB 数据线：接板子**底部左边那个 USB-UART 口**（串口日志走 UART0，TX=GPIO43 / RX=GPIO44）。
-  右边那个是原生 USB-OTG，本固件不用。
+- **两根 USB 数据线**（或两个口同时接）：
+  - **底部左边 USB-UART 口**（TX=GPIO43 / RX=GPIO44）：烧录 + 看串口日志，接电脑任意 USB 口。
+  - **右边原生 USB-OTG 口**（GPIO19/20）：USB HID 键鼠，接 **Windows** 那台电脑，免驱识别为键鼠。
+  - 注意：烧录必须走左边口（upload 用 UART，不走 native USB）；Windows 键鼠必须接右边口（左边是串口芯片，不会出 HID）。
 
 ## 编译与烧录（本地）
 
@@ -75,6 +83,8 @@ esptool.py --chip esp32s3 --port COMx write_flash \
 - **platform 必须锁 `espressif32@6.13.0`（arduino-esp32 2.0.17 / IDF 4.4.7）**：NimBLE-Arduino 1.4.3 只兼容 arduino-esp32 2.x。若写成 `platform = espressif32` 不锁版本，CI 会拉到 8.x（arduino 3.3 / IDF 5.5），编译能过但运行时 `NimBLEDevice::init()` 空指针崩溃（串口 `Guru Meditation Error: Core 1 panic'ed (LoadProhibited)`, `EXCVADDR 0x5004c`），表现为 AP 打印出来后立刻无限重启、手机扫不到 `PT-Bridge`。2026-11-18 真机实测确认，已锁定版本修复。
 - 报告布局（12 字节顺序）与 iOS 端 `PocketTrackpad/HIDDescriptor.swift` 的 `compositeReportMap`
   必须保持一致；任一侧改动都要同步另一侧。
-- Windows 首次配对可能弹提示，配对一次即可。
-- ESP32-S3 同时跑 WiFi（AP）与 BLE（HID），芯片原生支持 2.4GHz 共存，无需额外配置。
+- **【Windows 走 USB HID，不走蓝牙】ESP32-S3 硬件不支持经典蓝牙 BR/EDR**（乐鑫官方文档明确：S3 只有 BLE，Bluedroid/NimBLE 都仅支持 LE，任何固件/库都加不出经典蓝牙），而这台 Windows 的老 Broadcom BCM20702（BT4.0）适配器搜不到纯 BLE HID。2026-11-18 实测 iPad 走 BLE 完全正常、Windows 死活搜不到后确认。解决：用 S3 原生 USB-OTG 口做 **USB HID**（真正的有线键鼠，Windows 免驱、零延迟）。`platformio.ini` 必须加 `-D ARDUINO_USB_MODE=1 -D CONFIG_TINYUSB_ENABLED=1 -D CONFIG_TINYUSB_HID_ENABLED=1`，缺一个则 `USBHIDKeyboard/USBHIDMouse` 类被 `#if CONFIG_TINYUSB_HID_ENABLED` 剔除、USB HID 失效。`ARDUINO_USB_CDC_ON_BOOT` 必须保持 0，否则 `Serial` 被改成 USB CDC、左边 UART 口就没日志了。收到报告时 BLE 与 USB 两条通道同时发：`[STAT]` 里 `bleSubs` 是 iPad 订阅数、`usbReady` 是 Windows 枚举状态。
+- **两个 USB 口分工**：左边 USB-UART = 烧录 + 日志；右边 USB-OTG = Windows 键鼠。Windows 键鼠线必须接右边口；接左边口只会出现串口、不会被识别为键鼠。
+- ESP32-S3 同时跑 WiFi（AP）+ BLE（HID）+ USB HID，三者互不冲突：BLE 用射频、USB 用有线、WiFi 用射频，芯片原生支持 2.4GHz 共存。
+- iPad 首次配对需在「辅助功能→触控→辅助触控→设备」里忽略旧记录重配；Windows 走 USB HID 无需配对，插线即用。
 - S3 有两个 USB 口：烧录与看日志请用底部**左边**的 USB-UART 口（原生 USB-OTG 那个口本固件不启用，接了不会有串口输出，容易误判为「烧录失败」）。如果第一次烧录没反应，换到左边口再试。
