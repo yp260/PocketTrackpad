@@ -147,9 +147,13 @@ void setup() {
     // 实测「连上了但完全没有指针」即此因。Report Map 里键盘 Collection 在前，
     // 符合 iPad 对复合设备的排列要求（Nordic 官方针对 iPad 的 workaround）。
     // 注意：1.4.3 的 Appearance 只能设在广播对象上，NimBLEDevice 没有对应静态方法。
-    NimBLEDevice::init("PT-Pad");
-    // 不强制配对（bonding/mitm/secure 全 false）。Windows 可能仍弹出配对提示，配对一次即可。
-    NimBLEDevice::setSecurityAuth(false, false, false);
+    // 设备名带 S3 后缀：iOS 会把同名 HID 当作「已知设备」自动重连旧记录、
+    // 不再扫描新板子，导致「显示已连接实际没连」。换名强制 iPad 重新发现配对。
+    NimBLEDevice::init("PT-Pad-S3");
+    // 必须开 bonding：iOS/iPadOS 对第三方 BLE HID 要求先配对存长期密钥，
+    // 才会订阅 Input Report 特征（否则 subscribed=0、连上却收不到任何输入）。
+    // mitm=false：ESP32 无屏幕/键盘无法输 PIN，用 Just Works 静默配对。
+    NimBLEDevice::setSecurityAuth(true /*bonding*/, false /*mitm*/, false /*sc*/);
 
     NimBLEServer* pServer = NimBLEDevice::createServer();
     pServer->setCallbacks(new BridgeServerCallbacks());  // 打印主机连接/断开
@@ -167,7 +171,7 @@ void setup() {
     pAdv->setAppearance(0x03C0);  // 0x03C0 复合 HID（键盘+鼠标）；0x03C1 纯键盘会让 iPad 不出指针
     pAdv->addServiceUUID(NimBLEUUID((uint16_t)0x1812));  // HID Service
     pAdv->start();
-    Serial.println("BLE HID 广播中：PT-Pad（键盘 + 鼠标，Appearance=Composite 0x03C0）");
+    Serial.println("BLE HID 广播中：PT-Pad-S3（键盘 + 鼠标，Appearance=Composite 0x03C0，bonding 开）");
 }
 
 void loop() {

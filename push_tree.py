@@ -43,12 +43,13 @@ tree = gh("POST", "/git/trees", {
 print("tree =", tree["sha"])
 
 msg = json.dumps(
-    "debug: ESP32 桥加连接回调 + 订阅数诊断，锁定 iPad 端卡点\n\n"
-    "第一轮诊断实测：hello 0->24、report 0->1412 一路在涨，证明手机端/UDP/固件转发全通，问题在 iPad 端。\n"
-    "新诊断确认 iPad 是否真的连上 ESP32 GATT（而非旧配对缓存的假「已连接」）以及是否订阅了报告特征。\n"
-    "- main.cpp 加 BridgeServerCallbacks（onConnect/onDisconnect 打印），[STAT] 增加 subscribed=inputReportChar->getSubscribedCount()。\n"
-    "- 判读：report 涨 subscribed=0 且无[BLE]主机已连接=iPad 没连上本板；subscribed=0 但有连接=iPad 没订阅报告；subscribed>0=iPad 收到但解析问题。\n"
-    "- 已核对 ESP32 reportMap 与 iOS compositeReportMap 字节完全一致，排除格式差异。",
+    "fix: ESP32 桥改名 PT-Pad-S3 + 开 bonding，修复 iPad 假连接/不订阅报告\n\n"
+    "诊断实测：report 一路涨到 1412（手机->ESP32 全通），但串口从无 [BLE] 主机已连接、subscribed 恒为 0。\n"
+    "根因两个叠加：\n"
+    "1) 设备名 PT-Pad 与旧 iPhone 软件方案同名，iOS 当已知 HID 自动重连旧记录、不扫新板 -> iPad 假「已连接」，根本没连到 ESP32。改名 PT-Pad-S3 强制重新发现配对。\n"
+    "2) setSecurityAuth(false,false,false) 全关 bonding，iOS 对第三方 HID 不配对就不订阅 Input Report -> subscribed=0、连上也没输入。改 (true,false,false) Just Works 静默配对。\n"
+    "- 保留诊断：onConnect 打 [BLE] 主机已连接，[STAT] 打 hello/report/subscribed。\n"
+    "- esp32/README.md 记录此坑。iPad 需搜新名 PT-Pad-S3 重新配对。",
     ensure_ascii=False
 )
 
