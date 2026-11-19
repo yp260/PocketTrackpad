@@ -43,16 +43,17 @@ tree = gh("POST", "/git/trees", {
 print("tree =", tree["sha"])
 
 msg = json.dumps(
-    "fix(esp32): 显式调用 USB.begin()，修复 TinyUSB 栈未启动导致 Windows 只认 JTAG\n\n"
-    "现象：ARDUINO_USB_MODE=0 已确认编译生效、串口也打印 'USB HID 已就绪'，\n"
-    "但 Windows OTG 口仍是 'USB JTAG/serial debug unit' (303A:1001)，没有 HID 键鼠。\n"
-    "根因（串口实证）：usbKeyboard.begin()/usbMouse.begin() 内部只创建信号量，\n"
-    "不启动 TinyUSB 栈。arduino-esp32 2.0.17 的 main.cpp 仅在\n"
-    "ARDUINO_USB_ON_BOOT(=CDC/MSC/DFU_ON_BOOT 任一为1) && !ARDUINO_USB_MODE 时自动 USB.begin()。\n"
-    "我们 CDC_ON_BOOT=0（Serial 走 UART0），所以 USB.begin() 从未被调用，\n"
-    "TinyUSB 没接管 GPIO19/20，USB 口停留在 ROM 的 JTAG 角色。\n"
-    "- main.cpp: setup() 里在 usbKeyboard/usbMouse.begin() 之前显式调用 USB.begin()。\n"
-    "- 其余配置（USB_MODE=0、build_unflags、TinyUSB 开关、BLE 侧代码）全部不动。",
+    "feat(ios): 添加用户指定的鼠标 App 图标\n\n"
+    "此前项目没有任何 AppIcon 资源，生成的 IPA 桌面图标为空。\n"
+    "- Assets.xcassets/AppIcon.appiconset/: 新增 Icon-1024.png + Contents.json。\n"
+    "  图标为用户提供的深灰鼠标图（带弯曲线缆/滚轮/按键分割线）。原图 201x239\n"
+    "  的透明底被拍平成棋盘格，已用边缘泛洪抠除棋盘格、保留内部白色分隔线，\n"
+    "  再居中铺到 1024x1024 浅灰底上。\n"
+    "- project.yml: Assets.xcassets 显式进 Resources 构建阶段；设置\n"
+    "  ASSETCATALOG_COMPILER_APPICON_NAME=AppIcon，避免自定义 Info.plist 下\n"
+    "  actool 不知道哪个是主图标。\n"
+    "- Info.plist: 新增 CFBundleIconName=AppIcon。\n"
+    "- 功能代码、Report Map、ESP32 桥接、GATT 拓扑全部不动。",
     ensure_ascii=False
 )
 
