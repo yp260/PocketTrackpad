@@ -431,68 +431,9 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         mark("7 运行中（已主动断开）")
     }
 
-    /// 拆掉 GATT 数据库并释放 manager。iOS 没有公开的 disconnect(central:) 接口，
-    /// 这是让当前主机真正掉线的唯一办法；随后 start() 会重建服务并重新广播。
-    private func tearDownGATT() {
-        manager?.stopAdvertising()
-        manager?.removeAllServices()
-        manager?.delegate = nil
-        manager = nil
-
-        isAdvertising = false
-        subscribers = 0
-        inputSubscribed = false
-        bootSubscribed = false
-        inputReport = nil
-        bootReport = nil
-        servicesToAdd.removeAll()
-        databaseBuilt = false
-        serviceFailed = false
-        advertisingFallbackUsed = false
-        buttonBits = 0
-        pendingX = 0
-        pendingY = 0
-        pendingWheel = 0
-        pendingModifier = 0
-        pendingKeycode = 0
-        keyReleaseAt = nil
-        emptyKeyFramesLeft = 0
-        queuedPacket = nil
-        readyToUpdate = true
-        cancelHoming()
-        refreshKeyboardReady()
-    }
-
-    /// 「断开连接」（主界面右上角按钮）：干净地断掉当前链路。
-    ///
-    /// 历史教训：v0.0.60 曾在这里叠加「8 秒避开上次设备」窗口，旧 iPad 一回连就拆
-    /// GATT 重播，导致界面闪一下又断开、谁都连不上。现已彻底移除避开 / 拒绝逻辑。
-    /// - 按钮先干净断开（tearDownGATT），再延迟自动重建广播（原「开始广播」按钮已
-    ///   移除，这是用户主动断开后恢复广播的唯一途径）；
-    /// - 任何设备连上都正常接受，没有避开窗口。
-    ///
-    /// 桥接模式则断开 UDP，用户点「连接桥接」再重连。
-    func selectNewDevice() {
-        bridge.disconnect()
-        if bridgeMode {
-            statusText = "桥接已断开"
-            note("已断开 ESP32 硬件桥；点右上角「连接桥接」可重连")
-            mark("7 运行中（桥接已断开）")
-            return
-        }
-        tearDownGATT()
-        statusText = "已断开连接"
-        note("已断开：GATT 服务已移除，正在自动重建广播")
-        note("换设备根治仍须在旧 iPad「\(HIDSpec.ipadIgnorePath)」忽略本设备")
-        mark("7 运行中（已主动断开）")
-        // 「开始广播」按钮已移除，断开后自动重建，避免用户失去恢复广播的入口。
-        // 延迟一点让 tearDown 完全生效，再重建 GATT 并广播。
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
-            guard let self = self, !self.bridgeMode else { return }
-            self.note("自动重建广播完成，等待 iPad 连接")
-            self.start()
-        }
-    }
+    // 「断开连接」入口已按用户要求彻底移除（含主界面按钮与溢出「···」菜单）。
+    // 换设备 / 刷新配对统一走 iPad「辅助触控 → 设备」忽略旧设备重连；
+    // 原 selectNewDevice()/tearDownGATT() 仅为该按钮服务，故一并删除。
 
     // MARK: - GATT 数据库
 
@@ -651,8 +592,8 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
     /// 「自动恢复广播」，本意是 iPad 忽略设备后能重新搜到。但实测它正是「断联 / 重播
     /// 不断」的元凶：iPad 作为 HID 主机会频繁发生「连接 → 订阅 → 瞬断 → 重连」抖动，
     /// 每次 subscribers 归零都触发一轮 stop→start，界面在「已连接 / 等待配对」之间反复
-    /// 闪跳。这里仍保持不自动重播：与用户主动点「断开连接」不同，主机侧被动瞬断
-    /// 若不分青红皂白重播，会陷入「订阅→瞬断→重播」死循环。系统层面已配对的主机
+    /// 闪跳。这里仍保持不自动重播：主机侧被动瞬断若不分青红皂白重播，
+    /// 会陷入「订阅→瞬断→重播」死循环。系统层面已配对的主机
     /// 仍可能主动回连（iOS 无法拒绝），那是系统行为；根治只能在主机侧忽略本设备。
     private func handleHostDisconnected() {
         guard !bridgeMode else { return }
