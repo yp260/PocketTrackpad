@@ -526,16 +526,11 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
                             permissions: encRead)
         bootReport = boot
 
-        // Boot Keyboard Input / Output Report：Apple DTS 论坛确认 iPadOS 只完整
-        // 接管匹配「Keyboard」配置的设备；实体键盘都带这两个特征（v0.0.18 补齐）。
-        // Report Protocol 下键盘输入仍走上面的 2A4D，这两个特征只用于让 iPadOS
-        // 把本设备归类为键盘（隐藏软键盘、候选词带数字）。
-        let bootKbdIn = makeChar(HIDSpec.bootKeyboardInput,
-                                 properties: [.read, .notify],
-                                 permissions: encRead)
-        let bootKbdOut = makeChar(HIDSpec.bootKeyboardOutput,
-                                  properties: [.read, .write],
-                                  permissions: encRW)
+        // v0.0.81 回归修复：去掉 11-14 22:07 加入的 Boot Keyboard Input/Output
+        // 与 GAP 0x1800 服务，回到用户确认「键鼠复合能用」时的 3 服务 / 6 特征拓扑。
+        // 键鼠能力由 Report Map 里的 Keyboard + Mouse Collection 提供，不依赖这两个
+        // Boot 特征；GAP 0x1800 由 iOS 系统强制管理，App 用 128 位注册它注册不上，
+        // 还多占一个服务，是之后「搜不到 / 假连接 / 配对不成功」的可疑引入点。
 
         let hid = CBMutableService(type: HIDSpec.hidService, primary: true)
         // Descriptor 是静态元数据，允许带值；Characteristic 不允许。
@@ -545,14 +540,9 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
                               permissions: encRead, descriptors: [reportRef])
         inputReport = report
 
-        if compositeDevice {
-            hid.characteristics = [info, control, map, mode, report, boot, bootKbdIn, bootKbdOut]
-        } else {
-            // 纯鼠标：只挂鼠标特征、不挂 Boot Keyboard。配合 Appearance=Mouse，
-            // 让 iPadOS 干净地把它当鼠标接管（早期 v0.0.7 验证可用的配置）。
-            // 挂 Boot Keyboard + 声明 Keyboard 会让 iPadOS 按键盘接管并忽略鼠标位移。
-            hid.characteristics = [info, control, map, mode, report, boot]
-        }
+        // 复合 / 纯鼠标都用同一组 6 个特征（info/control/map/mode/report/boot）。
+        // 键鼠复合与纯鼠标的区别只在 Report Map 和报告字节数，不在 GATT 特征数量。
+        hid.characteristics = [info, control, map, mode, report, boot]
 
         // ---- Device Information 0x180A ----
         let dis = CBMutableService(type: HIDSpec.deviceInformation, primary: true)
@@ -571,17 +561,9 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
                      permissions: plainRead)
         ]
 
-        // ---- Generic Access 0x1800（v0.0.18：补 Appearance = Keyboard）----
-        // iOS 不允许 App 在广播包里放 Appearance AD Type，但 0x1800 服务可用
-        // 128 位形式注册。主机绑定阶段会读 2A01，读到 Keyboard (0x03C1) 后
-        // 更可能把本设备当实体键盘对待。若当前 iOS 版本拒绝注册 0x1800，
-        // 只在日志报错，不影响 HID 主链路（didAdd 对失败服务逐个放行）。
-        let gap = CBMutableService(type: HIDSpec.genericAccess, primary: false)
-        gap.characteristics = [
-            makeChar(HIDSpec.appearance, properties: [.read], permissions: plainRead)
-        ]
-
-        return [hid, dis, bas, gap]
+        // 不再注册 Generic Access 0x1800：该服务由 iOS 系统强制管理，
+        // App 无法真正注册/覆盖，回退到早期能用时的 3 服务拓扑。
+        return [hid, dis, bas]
     }
 
     private func buildDatabaseIfNeeded() {
@@ -590,8 +572,8 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         serviceFailed = false
         mark("3 蓝牙 poweredOn，构建 GATT 数据库")
         servicesToAdd = makeServices()
-        mark("4 已构造 4 个 CBMutableService（HID / Device Info / Battery / Generic Access）")
-        note("开始注册 GATT 服务（HID / Device Info / Battery / Generic Access）")
+        mark("4 已构造 3 个 CBMutableService（HID / Device Info / Battery）")
+        note("开始注册 GATT 服务（HID / Device Info / Battery）—— 已回退到早期能用配置")
         note(compositeDevice
              ? "当前模式：键鼠复合（输入报告 12 字节，三指上滑 = Command+M 最小化）"
              : "当前模式：纯鼠标（输入报告 4 字节，与 v0.0.7 相同）")
