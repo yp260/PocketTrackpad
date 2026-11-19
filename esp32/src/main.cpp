@@ -255,6 +255,13 @@ void setup() {
     Serial.printf("[USB-DIAG] ARDUINO_USB_MODE=%d (需为0=TinyUSB)，CONFIG_TINYUSB_HID_ENABLED=%d\n",
                   (int)ARDUINO_USB_MODE, (int)CONFIG_TINYUSB_HID_ENABLED);
 #if CONFIG_TINYUSB_HID_ENABLED
+    // 【关键】必须显式调用 USB.begin()！
+    // usbKeyboard.begin()/usbMouse.begin() 内部只创建信号量，不启动 TinyUSB 栈。
+    // arduino-esp32 的 main.cpp 仅在 ARDUINO_USB_ON_BOOT(=CDC/MSC/DFU_ON_BOOT 任一为1)
+    // 且 ARDUINO_USB_MODE=0 时才自动 USB.begin()。我们 CDC_ON_BOOT=0（Serial 走 UART0），
+    // 所以此前 USB.begin() 从未被调用，TinyUSB 没接管 GPIO19/20，USB 口一直是 ROM 的
+    // "USB JTAG/serial debug unit" (303A:1001)。这里显式启动，才能枚举成 HID 键鼠。
+    USB.begin();
     usbKeyboard.begin();
     usbMouse.begin();
     Serial.println("USB HID 已就绪（VID=303A/PID=0002，Windows 应识别为 HID 键鼠，不再是 JTAG 串口）");

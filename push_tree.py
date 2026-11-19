@@ -43,17 +43,16 @@ tree = gh("POST", "/git/trees", {
 print("tree =", tree["sha"])
 
 msg = json.dumps(
-    "feat: 新增 USB HID 有线通道给 Windows，BLE 通道保留给 iPad（双通道）\n\n"
-    "iPad 走 BLE 已真机验证通过（subscribed=1、report 持续在涨）。Windows 端搜不到：\n"
-    "根因是 ESP32-S3 硬件只有 BLE、不支持经典蓝牙 BR/EDR（乐鑫官方文档确认，任何固件都加不出），\n"
-    "而该 Windows 的老 Broadcom BCM20702(BT4.0) 适配器搜不到纯 BLE HID。\n"
-    "- 方案：用 S3 原生 USB-OTG 口做 USB HID（标准 boot 键鼠，Windows 免驱、零延迟）。\n"
-    "- main.cpp 引入 USBHIDKeyboard/USBHIDMouse；sendHidReport 把 12 字节报告同时发 BLE 和 USB：\n"
-    "  前 8 字节 KeyReport(modifiers,reserved,keys[6]) 用 sendReport，后 4 字节 buttons/dx/dy/wheel 用 move+press/release。\n"
-    "- platformio.ini 加 -D ARDUINO_USB_MODE=1 -D CONFIG_TINYUSB_ENABLED=1 -D CONFIG_TINYUSB_HID_ENABLED=1；\n"
-    "  ARDUINO_USB_CDC_ON_BOOT 保持 0，确保 Serial 仍走 UART0 左口日志。\n"
-    "- 两口分工：左 USB-UART 烧录+日志，右 USB-OTG 接 Windows 当键鼠。[STAT] 加 bleSubs/usbReady。\n"
-    "- BLE 侧代码（inputReport 顺序、bonding、0x03C0、改名 PT-Pad-S3）全部保留不动。",
+    "fix(esp32): 显式调用 USB.begin()，修复 TinyUSB 栈未启动导致 Windows 只认 JTAG\n\n"
+    "现象：ARDUINO_USB_MODE=0 已确认编译生效、串口也打印 'USB HID 已就绪'，\n"
+    "但 Windows OTG 口仍是 'USB JTAG/serial debug unit' (303A:1001)，没有 HID 键鼠。\n"
+    "根因（串口实证）：usbKeyboard.begin()/usbMouse.begin() 内部只创建信号量，\n"
+    "不启动 TinyUSB 栈。arduino-esp32 2.0.17 的 main.cpp 仅在\n"
+    "ARDUINO_USB_ON_BOOT(=CDC/MSC/DFU_ON_BOOT 任一为1) && !ARDUINO_USB_MODE 时自动 USB.begin()。\n"
+    "我们 CDC_ON_BOOT=0（Serial 走 UART0），所以 USB.begin() 从未被调用，\n"
+    "TinyUSB 没接管 GPIO19/20，USB 口停留在 ROM 的 JTAG 角色。\n"
+    "- main.cpp: setup() 里在 usbKeyboard/usbMouse.begin() 之前显式调用 USB.begin()。\n"
+    "- 其余配置（USB_MODE=0、build_unflags、TinyUSB 开关、BLE 侧代码）全部不动。",
     ensure_ascii=False
 )
 
