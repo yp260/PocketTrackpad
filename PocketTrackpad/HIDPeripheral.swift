@@ -148,9 +148,13 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
                     disconnect()
                     note("已启用桥接模式：iPhone 只采集输入，经 WiFi 发给 ESP32 硬件桥")
                     note("手机先连 ESP32 的 PT-Bridge 热点，地址保持默认 192.168.4.1")
-                    note("再到电脑系统蓝牙配对 PT-Pad，电脑端无需安装任何软件")
+                    note("Windows 用数据线接板子标 OTG 的口（免驱键鼠）；iPad 走蓝牙连 PT-Pad-S3")
                 } else {
-                    note("已关闭桥接模式：恢复本机直接广播（iPad 直连）")
+                    // 关键修复：开启桥接时 disconnect() 已移除 GATT 服务、释放 manager、
+                    // 停止广播。关闭桥接必须显式 start() 重建外设并重新广播，
+                    // 否则本机不再对外广播 BLE，iPad 完全搜不到 / 连不上。
+                    note("已关闭桥接模式：正在重建本机 BLE 广播（iPad 直连）")
+                    start()
                 }
                 refreshKeyboardReady()
             }
@@ -349,7 +353,7 @@ final class HIDPeripheral: NSObject, ObservableObject, CBPeripheralManagerDelega
         statusText = "正在连接 ESP32 硬件桥"
         note("桥接模式：iPhone 采集输入 → WiFi UDP → ESP32 → 电脑 / 平板蓝牙键鼠")
         note("当前桥接端地址：\(bridge.currentHost):\(bridge.currentPort)")
-        note("手机需先连 ESP32 的 PT-Bridge 热点，再到电脑系统蓝牙配对 PT-Pad")
+        note("手机需先连 ESP32 的 PT-Bridge 热点；Windows 用数据线接 OTG 口，iPad 蓝牙连 PT-Pad-S3")
         bridge.connect()
     }
 
