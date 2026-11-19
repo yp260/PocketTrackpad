@@ -24,9 +24,15 @@ struct PocketTrackpadApp: App {
                     hid.applyStartupMigration()
                     // 锁屏后 iOS 会停止 BLE 广播，因此使用期间保持屏幕常亮。
                     UIApplication.shared.isIdleTimerDisabled = true
-                    // 不自动启动蓝牙，改由界面上的「开始广播」按钮触发。
-                    // 万一某一步仍触发系统异常，App 至少能停在界面上显示上次
-                    // 运行到哪个阶段，而不是一打开就被杀掉、什么线索都看不到。
+                    // 广播改为 App 启动自动进行：原来的「开始广播」按钮对用户连接
+                    // 成败毫无影响（iPad 是否发现/配对由系统层决定），且每次启动都要
+                    // 手动点一次是多余的。延迟一点再启动，让界面先渲染完，即便蓝牙
+                    // 初始化异常也不会拖垮 App 启动（历史上有过一打开就被杀的教训）。
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        if !hid.bridgeMode {
+                            hid.start()
+                        }
+                    }
                 }
                 .onDisappear {
                     UIApplication.shared.isIdleTimerDisabled = false

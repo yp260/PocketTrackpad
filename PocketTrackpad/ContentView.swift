@@ -100,8 +100,8 @@ struct ContentView: View {
                                 .lineLimit(1)
                         }
                         // 「断开连接」从设置页移回主界面，占据原「断开」按钮位置。
-                        // 只干净地断开（拆 GATT、停广播），不再自动重播，也不再拆链避让；
-                        // 断开后右上角变成「开始广播」，用户明确点它才重建并广播。
+                        // 干净地断开当前链路（拆 GATT、停广播），随后 App 自动重建广播；
+                        // 不再拆链避让，任何设备都能重新发现并连接。
                         Button("断开连接") {
                             hid.selectNewDevice()
                         }
@@ -110,18 +110,12 @@ struct ContentView: View {
                         .controlSize(.mini)
                         .accessibilityLabel("断开当前连接")
                     } else {
-                        // 只保留「开始 / 连接」入口。断开与停止广播实测会被系统自动回连 /
-                        // 自动恢复广播抵消，没有实际意义，故从工具栏移除。
+                        // 广播改为 App 启动自动进行，原来的「开始广播」按钮已移除：
+                        // 它对 iPad 能否发现/配对毫无影响，留在界面上只会误导。
+                        // 仅桥接模式保留「连接桥接」入口（UDP 链路需显式建立）。
                         if hid.bridgeMode {
                             Button { hid.startBridge() } label: {
                                 Text("连接桥接").font(.caption2)
-                            }
-                            .buttonStyle(.bordered)
-                            .controlSize(.mini)
-                        } else {
-                            // 正在广播但未连上点时，点它可重启广播（不会停止）。
-                            Button { hid.start() } label: {
-                                Text("开始广播").font(.caption2)
                             }
                             .buttonStyle(.bordered)
                             .controlSize(.mini)
@@ -199,10 +193,10 @@ struct ContentView: View {
                             .font(.caption2)
                             .foregroundStyle(.tertiary)
                     } else {
-                        Text("iPad 上打开 设置 > 蓝牙，在「其他设备」里选择你的 iPhone（可能显示为 PT-Pad）完成配对。")
+                        Text("iPad 上进入 设置 > 辅助功能 > 触控 > 辅助触控 > 设备，找到你的 iPhone（可能显示为 PT-Pad）完成配对。")
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                        Text("用右上角的「开始广播」启动蓝牙；连接成功后会自动出现全屏触控区。")
+                        Text("App 打开后会自动广播，无需手动操作；连上后自动进入全屏触控区。")
                             .font(.caption2)
                             .foregroundStyle(.tertiary)
                     }
@@ -450,7 +444,7 @@ struct SettingsView: View {
             } header: {
                 Text("实验功能 · 全键盘与手势")
             } footer: {
-                Text("开启后本设备同时声明为鼠标和键盘，全键盘、三指手势都依赖这个开关。三指上滑最小化当前程序 / 回桌面（Command+M，App 保留后台不关闭），三指左右滑切换 App（右滑 Cmd+Tab 下一个 / 左滑 Cmd+Shift+Tab 上一个）——iPadOS 原生多指手势只对妙控板 2 私有协议开放，本 App 是把三指手势转成键盘快捷键的模拟实现。切换开关会自动断开并移除 GATT 服务：请按「\(HIDSpec.ipadIgnorePath)」忽略，回到主页面点「开始广播」，再重新配对。若指针或点击失效，关掉本开关、同样忽略设备重新配对即可回到纯鼠标，不需要重装 App。Command 快捷键只对 iPadOS 有效。")
+                Text("开启后本设备同时声明为鼠标和键盘，全键盘、三指手势都依赖这个开关。三指上滑最小化当前程序 / 回桌面（Command+M，App 保留后台不关闭），三指左右滑切换 App（右滑 Cmd+Tab 下一个 / 左滑 Cmd+Shift+Tab 上一个）——iPadOS 原生多指手势只对妙控板 2 私有协议开放，本 App 是把三指手势转成键盘快捷键的模拟实现。切换开关会自动断开并重新广播（GATT 服务重建）：请按「\(HIDSpec.ipadIgnorePath)」忽略旧配对，等待 iPad 重新发现后再配对。若指针或点击失效，关掉本开关、同样忽略设备重新配对即可回到纯鼠标，不需要重装 App。Command 快捷键只对 iPadOS 有效。")
                     .font(.caption)
             }
 
@@ -462,7 +456,7 @@ struct SettingsView: View {
             } header: {
                 Text("关于")
             } footer: {
-                Text("【为什么 iPad 蓝牙列表里找不到本设备？】本 App 让 iPhone 以「蓝牙 HID 键鼠」身份连接 iPad。iPadOS 把 HID 键鼠当系统输入设备，归到「辅助触控」框架管理，不列在「设置 → 蓝牙 → 我的设备」里——这是系统行为，不是没连上。能正常使用恰好证明连接是好的。\n\n【怎么断开 / 忽略？】① 最快：点主界面右上角「断开连接」——干净地拆掉当前连接并停广播，右上角随即变成「开始广播」，点它才重新广播；旁边的蓝牙图标可一键跳系统蓝牙设置。② 彻底忽略 / 换设备 / 刷新配对缓存：\(HIDSpec.ipadIgnorePath)。注意不在蓝牙列表里，那里找不到。③ 若还想清得更干净：最后再去做 iPad 设置 → 通用 → 传输或还原 iPad → 还原 → 还原网络设置（会同时清掉 WiFi 密码，需重输）。\n\n【为什么显示 iPhone 名而不是 PT-Pad？】iPad 读的是对端 GAP 整机名，App 无权改写；广播名 PT-Pad 只在搜索时短暂出现。要让它好认，可把 iPhone 名称改成「按键精灵」，再到「辅助触控 → 设备」里忽略旧配对重连一次。")
+                Text("【为什么 iPad 蓝牙列表里找不到本设备？】本 App 让 iPhone 以「蓝牙 HID 键鼠」身份连接 iPad。iPadOS 把 HID 键鼠当系统输入设备，归到「辅助触控」框架管理，不列在「设置 → 蓝牙 → 我的设备」里——这是系统行为，不是没连上。能正常使用恰好证明连接是好的。\n\n【怎么断开 / 忽略？】① 最快：点主界面右上角「断开连接」——干净地拆掉当前连接，App 会自动重建广播；旁边的蓝牙图标可一键跳系统蓝牙设置。② 彻底忽略 / 换设备 / 刷新配对缓存：\(HIDSpec.ipadIgnorePath)。注意不在蓝牙列表里，那里找不到。③ 若还想清得更干净：最后再去做 iPad 设置 → 通用 → 传输或还原 iPad → 还原 → 还原网络设置（会同时清掉 WiFi 密码，需重输）。\n\n【为什么显示 iPhone 名而不是 PT-Pad？】iPad 读的是对端 GAP 整机名，App 无权改写；广播名 PT-Pad 只在搜索时短暂出现。要让它好认，可把 iPhone 名称改成「按键精灵」，再到「辅助触控 → 设备」里忽略旧配对重连一次。")
                     .font(.caption)
             }
         }
